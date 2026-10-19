@@ -46,7 +46,7 @@ Backend: solo `backend/app/modules/<modulo>/` (más una migración en `backend/a
 - ¿Cambia el modelo de datos? Sigue la skill `crear-migracion`.
 - Frontend: lee `DESIGN.md` y cierra con su checklist. Solo componentes de `src/components/ui` (clases `sta-*`), solo tokens de `design/` y tipos de `src/api/schema.d.ts` (regenéralos con `npm run gen:api` si el backend cambió).
 
-Haz commits pequeños con Conventional Commits en español: `feat(<modulo>): <descripción>`.
+Haz commits pequeños con Conventional Commits en español: `feat(<modulo>): <descripción>`. Sin líneas de coautoría de agentes (`Co-Authored-By: …`) ni firmas «Generated with …» en el mensaje.
 
 ## 4. Tests
 

@@ -109,7 +109,7 @@ Reglas entre módulos:
 El paso a paso para agentes está en la skill [`tomar-issue`](.agents/skills/tomar-issue/SKILL.md).
 
 1. Rama `feat/<n>-<slug>` desde `main` actualizado (`n` = número del issue; slug en kebab-case sin tildes). Ejemplo: `feat/12-registro-clientes`.
-2. Commits con Conventional Commits en español: `tipo(alcance): descripción`, en minúscula y sin punto final. Tipos: `feat`, `fix`, `test`, `refactor`, `docs`, `chore`, `build`, `ci`. El alcance es el módulo. Ejemplos: `feat(vuelos): calcula la llegada en hora local del destino`, `fix(reservas): libera las sillas al vencer la reserva`.
+2. Commits con Conventional Commits en español: `tipo(alcance): descripción`, en minúscula y sin punto final. Tipos: `feat`, `fix`, `test`, `refactor`, `docs`, `chore`, `build`, `ci`. El alcance es el módulo. Ejemplos: `feat(vuelos): calcula la llegada en hora local del destino`, `fix(reservas): libera las sillas al vencer la reserva`. Ningún commit lleva líneas de coautoría de agentes (`Co-Authored-By: Claude …`, `Co-authored-by: Codex …`) ni firmas como «Generated with …»: si tu herramienta las agrega sola, quítalas antes de hacer el commit. Aplica también al mensaje del squash.
 3. PR con la plantilla de `.github/pull_request_template.md`, `Closes #n` en la descripción y el título en formato Conventional Commits (será el mensaje del squash).
 4. Para mergear: CI en verde y 1 aprobación. El líder revisa todos los PRs.
 5. Squash merge. Borra la rama después.
