@@ -1,0 +1,60 @@
+name: sta
+
+services:
+  db:
+    image: postgres:16
+    env_file: .env
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  backend:
+    build: ./backend
+    env_file: .env
+    # Migra, crea el root si no existe y arranca con recarga en caliente.
+    command: >
+      sh -c "uv run alembic upgrade head
+      && uv run python -m app.seed
+      && uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - ./backend:/app
+    depends_on:
+      db:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
+      interval: 3s
+      timeout: 5s
+      retries: 40
+
+  frontend:
+    build: ./frontend
+    env_file: .env
+    command: npm run dev -- --host 0.0.0.0 --port 5173
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+    volumes:
+      # design/ queda en la misma ruta relativa que en el repo (../design desde frontend/).
+      - ./frontend:/app/frontend
+      - ./design:/app/design
+      # node_modules vive en un volumen aparte para no mezclarse con el del anfitrión.
+      - frontend-node-modules:/app/frontend/node_modules
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "${MAILPIT_PORT:-8025}:8025"
+
+volumes:
+  db-data:
+  frontend-node-modules:
