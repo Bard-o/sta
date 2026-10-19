@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: Tests, lint y contrato
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preparar .env de ejemplo
+        run: cp .env.example .env
+
+      # Los contenedores corren con uid 1000 y el runner usa otro: se abre el checkout para
+      # que puedan escribir (cachés de ruff y pytest, schema.d.ts regenerado).
+      - name: Permisos del checkout
+        run: chmod -R a+rwX .
+
+      - name: Construir imágenes
+        run: docker compose build backend frontend
+
+      # ---------- Backend ----------
+      - name: "Backend: uv.lock al día con pyproject.toml"
+        run: docker compose run --rm -T --no-deps backend uv lock --check
+
+      - name: "Backend: formato (ruff format)"
+        run: docker compose run --rm -T --no-deps backend uv run ruff format --check .
+
+      - name: "Backend: lint (ruff check)"
+        run: docker compose run --rm -T --no-deps backend uv run ruff check .
+
+      - name: "Alembic: un solo head"
+        run: |
+          heads="$(docker compose run --rm -T --no-deps backend uv run alembic heads)"
+          echo "$heads"
+          total="$(printf '%s\n' "$heads" | grep -c '(head)' || true)"
+          if [ "$total" -ne 1 ]; then
+            echo "::error::Alembic tiene $total heads y debe tener exactamente uno. Regenera tu migración sobre el head de main (skill crear-migracion)."
+            exit 1
+          fi
+
+      - name: "Backend: tests (pytest)"
+        run: docker compose run --rm -T backend uv run pytest
+
+      - name: "Alembic: las migraciones cubren los modelos"
+        run: docker compose run --rm -T backend sh -c "uv run alembic upgrade head && uv run alembic check"
+
+      # ---------- Frontend ----------
+      - name: "Frontend: lint (eslint)"
+        run: docker compose run --rm -T --no-deps frontend npm run lint
+
+      - name: "Frontend: formato (prettier)"
+        run: docker compose run --rm -T --no-deps frontend npm run format:check
+
+      - name: "Frontend: tipos (tsc)"
+        run: docker compose run --rm -T --no-deps frontend npm run typecheck
+
+      - name: "Frontend: tests (vitest)"
+        run: docker compose run --rm -T --no-deps frontend npm test
+
+      - name: "Diseño: tokens.css al día con tokens.json"
+        run: docker compose run --rm -T --no-deps frontend npm run tokens:check
+
+      # ---------- Contrato ----------
+      - name: "Contrato: tipos generados de la API al día"
+        run: |
+          docker compose up -d --wait backend
+          docker compose run --rm -T --no-deps frontend npm run gen:api
+          if ! git diff --exit-code -- frontend/src/api/schema.d.ts; then
+            echo "::error::frontend/src/api/schema.d.ts no coincide con /openapi.json. Corre 'docker compose run --rm frontend npm run gen:api' y haz commit del resultado."
+            exit 1
+          fi
+
+      - name: Logs de los servicios
+        if: failure()
+        run: docker compose logs --no-color
+
+      - name: Apagar servicios
+        if: always()
+        run: docker compose down -v
