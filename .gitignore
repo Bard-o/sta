@@ -1,0 +1,4 @@
+docs/fuentes/
+.env
+.env.*
+!.env.example

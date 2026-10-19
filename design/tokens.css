@@ -1,0 +1,109 @@
+/* AVIANCO — generado desde tokens.json. No editar a mano: cambie tokens.json y regenere. */
+:root, [data-theme="noche"] {
+  --backdrop: #14171a;
+  --backdrop-glow-warm: rgba(214,146,56,0.62);
+  --backdrop-glow-cool: rgba(72,126,132,0.55);
+  --glass: rgba(34,37,42,0.70);
+  --glass-strong: rgba(22,24,27,0.82);
+  --glass-inset: rgba(255,255,255,0.06);
+  --glass-hover: rgba(255,255,255,0.10);
+  --glass-edge: rgba(255,255,255,0.12);
+  --glass-highlight: rgba(255,255,255,0.14);
+  --scrim: rgba(8,9,10,0.55);
+  --field: rgba(0,0,0,0.30);
+  --control-line: #959aa3;
+  --ink: #f3f4f5;
+  --ink-muted: #b3b8bf;
+  --ink-faint: #999ea6;
+  --accent: #f5c518;
+  --on-accent: #15171a;
+  --accent-text: #f5c518;
+  --accent-soft: rgba(245,197,24,0.10);
+  --success: #72e39e;
+  --success-soft: rgba(114,227,158,0.10);
+  --danger: #ffb4a9;
+  --danger-soft: rgba(255,165,152,0.10);
+  --info: #a0d3ff;
+  --info-soft: rgba(160,211,255,0.10);
+  --focus: #f5c518;
+  --invert: #f3f4f5;
+  --on-invert: #15171a;
+  --seat-current: var(--invert);
+  --on-seat-current: var(--on-invert);
+  --seat-taken: rgba(255,255,255,0.10);
+  --shadow-glass: 0 18px 48px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.10);
+  --shadow-float: 0 24px 64px rgba(0,0,0,0.60), inset 0 1px 0 rgba(255,255,255,0.12);
+  --shadow-accent: 0 6px 20px rgba(245,197,24,0.28);
+}
+[data-theme="dia"] {
+  --backdrop: #e7e3dc;
+  --backdrop-glow-warm: rgba(240,178,84,0.50);
+  --backdrop-glow-cool: rgba(120,170,176,0.42);
+  --glass: rgba(255,255,255,0.56);
+  --glass-strong: rgba(255,255,255,0.84);
+  --glass-inset: rgba(255,255,255,0.55);
+  --glass-hover: rgba(255,255,255,0.75);
+  --glass-edge: rgba(255,255,255,0.75);
+  --glass-highlight: rgba(255,255,255,0.95);
+  --scrim: rgba(40,36,30,0.35);
+  --field: rgba(255,255,255,0.72);
+  --control-line: #7b8088;
+  --ink: #15171a;
+  --ink-muted: #50555c;
+  --ink-faint: #6b7078;
+  --accent: #f5c518;
+  --on-accent: #15171a;
+  --accent-text: #7a5a00;
+  --accent-soft: rgba(245,197,24,0.28);
+  --success: #17683a;
+  --success-soft: rgba(23,104,58,0.10);
+  --danger: #a1221b;
+  --danger-soft: rgba(161,34,27,0.09);
+  --info: #1f5fa8;
+  --info-soft: rgba(31,95,168,0.10);
+  --focus: #15171a;
+  --invert: #15171a;
+  --on-invert: #f3f4f5;
+  --seat-current: var(--invert);
+  --on-seat-current: var(--on-invert);
+  --seat-taken: rgba(21,23,26,0.10);
+  --shadow-glass: 0 18px 44px rgba(60,48,30,0.16), inset 0 1px 0 rgba(255,255,255,0.90);
+  --shadow-float: 0 24px 60px rgba(60,48,30,0.24), inset 0 1px 0 rgba(255,255,255,0.95);
+  --shadow-accent: 0 6px 18px rgba(180,130,0,0.28);
+}
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+  --radius-pill: 999px;
+  --blur-sm: 12px;
+  --blur-md: 24px;
+  --blur-lg: 40px;
+  --font-display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --font-sans: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+.display-xl { font-family: var(--font-display); font-size: 52px; line-height: 56px; font-weight: 600; letter-spacing: -0.01em; }
+.display-lg { font-family: var(--font-display); font-size: 36px; line-height: 40px; font-weight: 600; }
+.title-lg { font-family: var(--font-display); font-size: 30px; line-height: 36px; font-weight: 600; }
+.title-md { font-family: var(--font-display); font-size: 20px; line-height: 26px; font-weight: 600; }
+.price { font-family: var(--font-display); font-size: 24px; line-height: 28px; font-weight: 600; }
+.code { font-family: var(--font-display); font-size: 15px; line-height: 20px; font-weight: 600; letter-spacing: 0.04em; }
+.body { font-family: var(--font-sans); font-size: 15px; line-height: 22px; font-weight: 400; }
+.body-strong { font-family: var(--font-sans); font-size: 15px; line-height: 22px; font-weight: 600; }
+.label { font-family: var(--font-sans); font-size: 13px; line-height: 18px; font-weight: 500; }
+.caption { font-family: var(--font-sans); font-size: 12px; line-height: 16px; font-weight: 500; }
+.overline { font-family: var(--font-sans); font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.08em; }
+@font-face { font-family: "Barlow"; src: url("fonts/Barlow-Regular.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Barlow"; src: url("fonts/Barlow-Medium.woff2") format("woff2"); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: "Barlow"; src: url("fonts/Barlow-SemiBold.woff2") format("woff2"); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: "Barlow Condensed"; src: url("fonts/BarlowCondensed-Medium.woff2") format("woff2"); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: "Barlow Condensed"; src: url("fonts/BarlowCondensed-SemiBold.woff2") format("woff2"); font-weight: 600; font-style: normal; font-display: swap; }
