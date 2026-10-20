@@ -81,10 +81,763 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/auth/restablecimiento": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Solicitar Restablecimiento
+     * @description Envía el enlace para restablecer la contraseña si el correo existe (HU-05, RF-07).
+     *
+     *     Responde lo mismo exista o no el correo.
+     */
+    post: operations["solicitar_restablecimiento"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/auth/restablecimiento/confirmar": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Confirmar Restablecimiento
+     * @description Define la contraseña nueva con el token del enlace y cierra todas las sesiones (HU-05).
+     */
+    post: operations["confirmar_restablecimiento"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/usuarios/registro": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Registrar Cliente
+     * @description Registra un cliente, inicia su sesión y envía el enlace de verificación (HU-01).
+     */
+    post: operations["registrar_cliente"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/usuarios/verificacion": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Verificar Correo
+     * @description Marca el correo como verificado con el token del enlace (HU-02, HU-07).
+     */
+    post: operations["verificar_correo"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/usuarios/me/verificacion/reenviar": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Reenviar Verificacion
+     * @description Envía un enlace nuevo e invalida el anterior (HU-02).
+     */
+    post: operations["reenviar_verificacion"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/usuarios/me/contrasena": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Cambiar Contrasena
+     * @description Cambia la contraseña indicando la actual (HU-06). Único modo para el root.
+     */
+    put: operations["cambiar_contrasena"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/usuarios/me/perfil": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Obtener Perfil
+     * @description Perfil del cliente o administrador de la sesión (HU-07).
+     */
+    get: operations["obtener_perfil"];
+    /**
+     * Actualizar Perfil
+     * @description Actualiza el perfil. Un correo nuevo queda pendiente hasta verificarse (HU-07).
+     */
+    put: operations["actualizar_perfil"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/usuarios/me/imagen": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Obtener Imagen Perfil
+     * @description Imagen de perfil de la sesión (la URL que trae `imagen_url`).
+     */
+    get: operations["obtener_imagen_perfil"];
+    /**
+     * Subir Imagen Perfil
+     * @description Sube o reemplaza la imagen de perfil (HU-01, HU-07).
+     */
+    put: operations["subir_imagen_perfil"];
+    post?: never;
+    /**
+     * Eliminar Imagen Perfil
+     * @description Quita la imagen de perfil.
+     */
+    delete: operations["eliminar_imagen_perfil"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/usuarios/me/suscripcion": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Cambiar Suscripcion
+     * @description Suscribe o da de baja al cliente del correo de noticias (HU-08, RF-09).
+     */
+    put: operations["cambiar_suscripcion"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/usuarios/suscripcion/baja": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Dar Baja Suscripcion
+     * @description Baja de noticias con el enlace del correo, sin iniciar sesión (HU-08, RF-56).
+     */
+    post: operations["dar_baja_suscripcion"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/usuarios/me/desactivacion": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Consultar Desactivacion
+     * @description Indica si la cuenta se puede desactivar y qué lo impide (HU-09).
+     */
+    get: operations["consultar_desactivacion"];
+    put?: never;
+    /**
+     * Desactivar Cuenta
+     * @description Desactiva la cuenta (borrado lógico) y cierra la sesión (HU-09, RF-10).
+     */
+    post: operations["desactivar_cuenta"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/administradores": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Listar Administradores
+     * @description Administradores con su estado (HU-11).
+     */
+    get: operations["listar_administradores"];
+    put?: never;
+    /**
+     * Crear Administrador
+     * @description Crea un administrador con contraseña temporal (HU-10, RF-02).
+     */
+    post: operations["crear_administrador"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/administradores/{admin_id}/desactivar": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Desactivar Administrador
+     * @description Desactiva un administrador y cierra sus sesiones (HU-11).
+     */
+    post: operations["desactivar_administrador"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/administradores/{admin_id}/reactivar": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Reactivar Administrador
+     * @description Reactiva un administrador desactivado (HU-11).
+     */
+    post: operations["reactivar_administrador"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/administradores/me/registro": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Completar Registro Administrador
+     * @description Completa los datos del administrador y cambia la contraseña temporal (HU-12).
+     */
+    post: operations["completar_registro_administrador"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/ciudades": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Listar Ciudades
+     * @description Catálogo de ciudades (RF-12). Público: lo usan el formulario de vuelos y la búsqueda.
+     */
+    get: operations["listar_ciudades"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/vuelos": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Listar Vuelos
+     * @description Vuelos para el administrador (HU-15, HU-16, HU-18).
+     *
+     *     Programados por salida ascendente; realizados y cancelados por fecha descendente.
+     */
+    get: operations["listar_vuelos"];
+    put?: never;
+    /**
+     * Programar Vuelo
+     * @description Programa un vuelo, publica su noticia y lo audita (HU-13).
+     */
+    post: operations["programar_vuelo"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/vuelos/vista-previa": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Previsualizar Vuelo
+     * @description Valida el vuelo y calcula tipo, capacidad y llegada sin guardarlo (HU-13).
+     */
+    post: operations["previsualizar_vuelo"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/vuelos/recurrentes": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Programar Vuelos Recurrentes
+     * @description Crea un vuelo independiente por cada fecha de la serie (HU-14).
+     */
+    post: operations["programar_vuelos_recurrentes"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/vuelos/recurrentes/vista-previa": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Previsualizar Vuelos Recurrentes
+     * @description Fechas que se crearían y las que se omitirían, sin guardar nada (HU-14).
+     */
+    post: operations["previsualizar_vuelos_recurrentes"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/vuelos/{vuelo_id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Obtener Vuelo
+     * @description Detalle público de un vuelo, con precio vigente y disponibilidad por clase (HU-19).
+     */
+    get: operations["obtener_vuelo"];
+    /**
+     * Editar Vuelo
+     * @description Edita un vuelo sin ventas ni reservas activas y conserva su código (HU-15).
+     */
+    put: operations["editar_vuelo"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/vuelos/{vuelo_id}/gestion": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Obtener Vuelo Gestion
+     * @description Vuelo con ocupación y bloqueos de edición, para el formulario de edición (HU-15).
+     */
+    get: operations["obtener_vuelo_gestion"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/vuelos/{vuelo_id}/cancelar": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Cancelar Vuelo
+     * @description Cancela un vuelo sin tiquetes vendidos y anula sus reservas (HU-16, RF-19).
+     */
+    post: operations["cancelar_vuelo"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/vuelos/{vuelo_id}/pasajeros": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Listar Pasajeros Vuelo
+     * @description Pasajeros con clase y silla, y ocupación por clase (HU-18).
+     */
+    get: operations["listar_pasajeros_vuelo"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/vuelos/{vuelo_id}/promociones": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Crear Promocion
+     * @description Crea una promoción, publica su noticia y la audita (HU-17, RF-23).
+     */
+    post: operations["crear_promocion"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/promociones": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Listar Promociones
+     * @description Promociones de todos los vuelos, las más recientes primero (HU-17).
+     */
+    get: operations["listar_promociones"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/noticias": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Listar Noticias
+     * @description Noticias de la más reciente a la más antigua; público (HU-19, RF-55).
+     */
+    get: operations["listar_noticias"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/noticias/carrusel": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Obtener Carrusel
+     * @description Hasta 10 elementos: promociones vigentes y luego vuelos recientes (HU-19, RF-22).
+     */
+    get: operations["obtener_carrusel"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
   schemas: {
+    /** AdministradorEntrada */
+    AdministradorEntrada: {
+      /** Nombre Usuario */
+      nombre_usuario: string;
+      /** Contrasena Temporal */
+      contrasena_temporal: string;
+    };
+    /** AdministradorSalida */
+    AdministradorSalida: {
+      /** Id */
+      id: number;
+      /** Nombre Usuario */
+      nombre_usuario: string;
+      /**
+       * Nombres
+       * @description null mientras el registro esté incompleto.
+       */
+      nombres: string | null;
+      /** Apellidos */
+      apellidos: string | null;
+      /**
+       * Estado
+       * @enum {string}
+       */
+      estado: "activo" | "inactivo" | "registro_incompleto";
+      /**
+       * Creado En
+       * Format: date-time
+       */
+      creado_en: string;
+    };
+    /** BloqueoDesactivacion */
+    BloqueoDesactivacion: {
+      /**
+       * Tipo
+       * @enum {string}
+       */
+      tipo: "compra" | "reserva";
+      /**
+       * Codigo Reserva
+       * @description Código de la compra; null en una reserva.
+       */
+      codigo_reserva: string | null;
+      /** Vuelo Id */
+      vuelo_id: number;
+      /** Vuelo Codigo */
+      vuelo_codigo: string;
+      /** Origen */
+      origen: string;
+      /** Destino */
+      destino: string;
+      /**
+       * Salida
+       * Format: date-time
+       */
+      salida: string;
+    };
+    /** Body_subir_imagen_perfil */
+    Body_subir_imagen_perfil: {
+      /**
+       * Imagen
+       * @description JPG o PNG, máximo 2 MB.
+       */
+      imagen: string;
+    };
+    /** CambioContrasenaEntrada */
+    CambioContrasenaEntrada: {
+      /** Contrasena Actual */
+      contrasena_actual: string;
+      /** Contrasena Nueva */
+      contrasena_nueva: string;
+      /** Confirmacion */
+      confirmacion: string;
+    };
+    /** CancelacionVueloSalida */
+    CancelacionVueloSalida: {
+      vuelo: components["schemas"]["VueloAdmin"];
+      /** Reservas Anuladas */
+      reservas_anuladas: number;
+    };
+    /** Capacidad */
+    Capacidad: {
+      /** Primera */
+      primera: number;
+      /** Economica */
+      economica: number;
+      /** Total */
+      total: number;
+    };
+    /** Ciudad */
+    Ciudad: {
+      /** Codigo */
+      codigo: string;
+      /** Nombre */
+      nombre: string;
+      /** Pais */
+      pais: string;
+      /**
+       * Zona Horaria
+       * @description Zona IANA, p. ej. Europe/Madrid.
+       */
+      zona_horaria: string;
+      /**
+       * Tipo
+       * @enum {string}
+       */
+      tipo: "nacional" | "internacional";
+      /**
+       * Habilitada Internacional
+       * @description Ciudad colombiana con rutas internacionales (RF-14). False en el exterior.
+       */
+      habilitada_internacional: boolean;
+      /**
+       * Imagen Url
+       * @description Imagen del banco por ciudad destino (SUP-30).
+       */
+      imagen_url: string;
+    };
+    /** CiudadNoticia */
+    CiudadNoticia: {
+      /** Codigo */
+      codigo: string;
+      /** Nombre */
+      nombre: string;
+      /** Zona Horaria */
+      zona_horaria: string;
+    };
+    /** CiudadResumen */
+    CiudadResumen: {
+      /** Codigo */
+      codigo: string;
+      /** Nombre */
+      nombre: string;
+      /** Zona Horaria */
+      zona_horaria: string;
+    };
+    /** ClaseDetalle */
+    ClaseDetalle: {
+      /** Precio Base */
+      precio_base: number;
+      /**
+       * Precio Vigente
+       * @description Con el descuento de la promoción vigente (RF-24).
+       */
+      precio_vigente: number;
+      promocion: components["schemas"]["PromocionResumen"] | null;
+      /** Disponibles */
+      disponibles: number;
+      /** Agotada */
+      agotada: boolean;
+    };
+    /** DesactivacionSalida */
+    DesactivacionSalida: {
+      /** Puede Desactivar */
+      puede_desactivar: boolean;
+      /**
+       * Bloqueos
+       * @description Tiquetes o reservas activas en vuelos futuros que impiden desactivar (HU-09).
+       */
+      bloqueos: components["schemas"]["BloqueoDesactivacion"][];
+    };
     /** ErrorDetalle */
     ErrorDetalle: {
       /** Codigo */
@@ -99,6 +852,21 @@ export interface components {
     /** ErrorRespuesta */
     ErrorRespuesta: {
       error: components["schemas"]["ErrorDetalle"];
+    };
+    /** FechaOmitida */
+    FechaOmitida: {
+      /**
+       * Fecha
+       * Format: date
+       */
+      fecha: string;
+      /**
+       * Codigo
+       * @enum {string}
+       */
+      codigo: "vuelo_duplicado" | "salida_en_pasado";
+      /** Motivo */
+      motivo: string;
     };
     /** Health */
     Health: {
@@ -123,11 +891,539 @@ export interface components {
       /** Contrasena */
       contrasena: string;
     };
+    /** MensajeSalida */
+    MensajeSalida: {
+      /** Mensaje */
+      mensaje: string;
+    };
+    /** Noticia */
+    Noticia: {
+      /** Id */
+      id: number;
+      /**
+       * Tipo
+       * @enum {string}
+       */
+      tipo: "vuelo" | "promocion";
+      /**
+       * Titulo
+       * @description P. ej. «Nuevo vuelo Pereira → Cartagena».
+       */
+      titulo: string;
+      /**
+       * Publicada En
+       * Format: date-time
+       */
+      publicada_en: string;
+      /**
+       * Vigente
+       * @description Vuelo todavía programado y, si es de promoción, promoción vigente.
+       */
+      vigente: boolean;
+      /**
+       * Vuelo Id
+       * @description Abre el detalle: GET /api/v1/vuelos/{vuelo_id}.
+       */
+      vuelo_id: number;
+      /** Vuelo Codigo */
+      vuelo_codigo: string;
+      origen: components["schemas"]["CiudadNoticia"];
+      destino: components["schemas"]["CiudadNoticia"];
+      /**
+       * Salida
+       * Format: date-time
+       * @description UTC.
+       */
+      salida: string;
+      /**
+       * Precio Economica
+       * @description Precio base del vuelo.
+       */
+      precio_economica: number;
+      /** Precio Primera */
+      precio_primera: number;
+      /**
+       * Imagen Url
+       * @description Imagen de la ciudad destino (SUP-30).
+       */
+      imagen_url: string;
+      promocion: components["schemas"]["PromocionNoticia"] | null;
+    };
+    /** Ocupacion */
+    Ocupacion: {
+      primera: components["schemas"]["OcupacionClase"];
+      economica: components["schemas"]["OcupacionClase"];
+    };
+    /** OcupacionClase */
+    OcupacionClase: {
+      /** Capacidad */
+      capacidad: number;
+      /**
+       * Vendidas
+       * @description Tiquetes comprados activos.
+       */
+      vendidas: number;
+      /**
+       * Reservadas
+       * @description Sillas en reservas vigentes.
+       */
+      reservadas: number;
+      /** Disponibles */
+      disponibles: number;
+    };
+    /** PaginaNoticias */
+    PaginaNoticias: {
+      /** Items */
+      items: components["schemas"]["Noticia"][];
+      /** Total */
+      total: number;
+      /** Pagina */
+      pagina: number;
+      /** Por Pagina */
+      por_pagina: number;
+    };
+    /** PaginaPromociones */
+    PaginaPromociones: {
+      /** Items */
+      items: components["schemas"]["Promocion"][];
+      /** Total */
+      total: number;
+      /** Pagina */
+      pagina: number;
+      /** Por Pagina */
+      por_pagina: number;
+    };
+    /** PaginaVuelosAdmin */
+    PaginaVuelosAdmin: {
+      /** Items */
+      items: components["schemas"]["VueloAdmin"][];
+      /** Total */
+      total: number;
+      /** Pagina */
+      pagina: number;
+      /** Por Pagina */
+      por_pagina: number;
+    };
+    /** PasajeroVuelo */
+    PasajeroVuelo: {
+      /** Nombres */
+      nombres: string;
+      /** Apellidos */
+      apellidos: string;
+      /**
+       * Clase
+       * @enum {string}
+       */
+      clase: "economica" | "primera";
+      /**
+       * Silla
+       * @description Fila y letra, p. ej. 12C (SUP-26).
+       */
+      silla: string;
+      /** Numero Silla */
+      numero_silla: number;
+    };
+    /** PasajerosVueloSalida */
+    PasajerosVueloSalida: {
+      vuelo: components["schemas"]["Vuelo"];
+      ocupacion: components["schemas"]["Ocupacion"];
+      /** Pasajeros */
+      pasajeros: components["schemas"]["PasajeroVuelo"][];
+    };
+    /**
+     * PerfilEntrada
+     * @description HU-07. El documento y el nombre de usuario no se editan.
+     */
+    PerfilEntrada: {
+      /** Nombres */
+      nombres: string;
+      /** Apellidos */
+      apellidos: string;
+      /**
+       * Fecha Nacimiento
+       * Format: date
+       * @description No puede ser futura.
+       */
+      fecha_nacimiento: string;
+      /** Lugar Nacimiento */
+      lugar_nacimiento: string;
+      /** Direccion Facturacion */
+      direccion_facturacion: string;
+      /**
+       * Genero
+       * @enum {string}
+       */
+      genero: "femenino" | "masculino" | "otro";
+      /** Email */
+      email: string;
+      /** Telefono */
+      telefono?: string | null;
+    };
+    /** PerfilSalida */
+    PerfilSalida: {
+      /** Id */
+      id: number;
+      /** Nombre Usuario */
+      nombre_usuario: string;
+      /**
+       * Rol
+       * @enum {string}
+       */
+      rol: "cliente" | "admin";
+      /**
+       * Tipo Documento
+       * @enum {string}
+       */
+      tipo_documento: "CC" | "TI" | "RC" | "CE" | "PA";
+      /** Numero Documento */
+      numero_documento: string;
+      /** Nombres */
+      nombres: string;
+      /** Apellidos */
+      apellidos: string;
+      /**
+       * Fecha Nacimiento
+       * Format: date
+       */
+      fecha_nacimiento: string;
+      /** Lugar Nacimiento */
+      lugar_nacimiento: string;
+      /** Direccion Facturacion */
+      direccion_facturacion: string;
+      /**
+       * Genero
+       * @enum {string}
+       */
+      genero: "femenino" | "masculino" | "otro";
+      /**
+       * Email
+       * @description Correo vigente de la cuenta.
+       */
+      email: string;
+      /** Email Verificado */
+      email_verificado: boolean;
+      /**
+       * Email Pendiente
+       * @description Correo nuevo que espera verificación (HU-07); mientras tanto sigue `email`.
+       */
+      email_pendiente: string | null;
+      /** Telefono */
+      telefono: string | null;
+      /** Imagen Url */
+      imagen_url: string | null;
+      /**
+       * Suscrito Noticias
+       * @description Siempre false para administradores.
+       */
+      suscrito_noticias: boolean;
+    };
+    /** Promocion */
+    Promocion: {
+      /** Id */
+      id: number;
+      /** Porcentaje */
+      porcentaje: number;
+      /** Clases */
+      clases: ("economica" | "primera")[];
+      /**
+       * Inicio
+       * Format: date-time
+       */
+      inicio: string;
+      /**
+       * Fin
+       * Format: date-time
+       */
+      fin: string;
+      /**
+       * Estado
+       * @enum {string}
+       */
+      estado: "programada" | "vigente" | "vencida" | "agotada" | "cancelada";
+      /** Vuelo Id */
+      vuelo_id: number;
+      /** Vuelo Codigo */
+      vuelo_codigo: string;
+      origen: components["schemas"]["CiudadResumen"];
+      destino: components["schemas"]["CiudadResumen"];
+      /**
+       * Salida
+       * Format: date-time
+       */
+      salida: string;
+      /**
+       * Creada En
+       * Format: date-time
+       */
+      creada_en: string;
+    };
+    /** PromocionEntrada */
+    PromocionEntrada: {
+      /**
+       * Porcentaje
+       * @description SUP-38.
+       */
+      porcentaje: number;
+      /** Clases */
+      clases: ("economica" | "primera")[];
+      /**
+       * Inicio
+       * Format: date-time
+       */
+      inicio: string;
+      /**
+       * Fin
+       * Format: date-time
+       */
+      fin: string;
+    };
+    /** PromocionNoticia */
+    PromocionNoticia: {
+      /** Porcentaje */
+      porcentaje: number;
+      /** Clases */
+      clases: ("economica" | "primera")[];
+      /**
+       * Inicio
+       * Format: date-time
+       */
+      inicio: string;
+      /**
+       * Fin
+       * Format: date-time
+       */
+      fin: string;
+      /**
+       * Estado
+       * @enum {string}
+       */
+      estado: "programada" | "vigente" | "vencida" | "agotada" | "cancelada";
+      /**
+       * Precio Economica
+       * @description Precio con descuento; null si la promoción no aplica a la clase.
+       */
+      precio_economica: number | null;
+      /** Precio Primera */
+      precio_primera: number | null;
+    };
+    /** PromocionResumen */
+    PromocionResumen: {
+      /** Id */
+      id: number;
+      /** Porcentaje */
+      porcentaje: number;
+      /** Clases */
+      clases: ("economica" | "primera")[];
+      /**
+       * Inicio
+       * Format: date-time
+       */
+      inicio: string;
+      /**
+       * Fin
+       * Format: date-time
+       */
+      fin: string;
+      /**
+       * Estado
+       * @enum {string}
+       */
+      estado: "programada" | "vigente" | "vencida" | "agotada" | "cancelada";
+    };
+    /**
+     * RegistroAdministradorEntrada
+     * @description HU-12: mismos datos del cliente más el cambio de la contraseña temporal.
+     */
+    RegistroAdministradorEntrada: {
+      /** Nombres */
+      nombres: string;
+      /** Apellidos */
+      apellidos: string;
+      /**
+       * Fecha Nacimiento
+       * Format: date
+       * @description No puede ser futura.
+       */
+      fecha_nacimiento: string;
+      /** Lugar Nacimiento */
+      lugar_nacimiento: string;
+      /** Direccion Facturacion */
+      direccion_facturacion: string;
+      /**
+       * Genero
+       * @enum {string}
+       */
+      genero: "femenino" | "masculino" | "otro";
+      /** Email */
+      email: string;
+      /** Telefono */
+      telefono?: string | null;
+      /**
+       * Tipo Documento
+       * @enum {string}
+       */
+      tipo_documento: "CC" | "TI" | "RC" | "CE" | "PA";
+      /** Numero Documento */
+      numero_documento: string;
+      /** Contrasena Temporal */
+      contrasena_temporal: string;
+      /** Contrasena Nueva */
+      contrasena_nueva: string;
+      /** Confirmacion */
+      confirmacion: string;
+    };
+    /**
+     * RegistroClienteEntrada
+     * @description HU-01. La imagen de perfil se sube después con PUT /usuarios/me/imagen.
+     */
+    RegistroClienteEntrada: {
+      /** Nombres */
+      nombres: string;
+      /** Apellidos */
+      apellidos: string;
+      /**
+       * Fecha Nacimiento
+       * Format: date
+       * @description No puede ser futura.
+       */
+      fecha_nacimiento: string;
+      /** Lugar Nacimiento */
+      lugar_nacimiento: string;
+      /** Direccion Facturacion */
+      direccion_facturacion: string;
+      /**
+       * Genero
+       * @enum {string}
+       */
+      genero: "femenino" | "masculino" | "otro";
+      /** Email */
+      email: string;
+      /** Telefono */
+      telefono?: string | null;
+      /**
+       * Tipo Documento
+       * @enum {string}
+       */
+      tipo_documento: "CC" | "TI" | "RC" | "CE" | "PA";
+      /** Numero Documento */
+      numero_documento: string;
+      /** Nombre Usuario */
+      nombre_usuario: string;
+      /** Contrasena */
+      contrasena: string;
+      /**
+       * Acepta Politica
+       * @description Debe ser true (Ley 1581 de 2012).
+       */
+      acepta_politica: boolean;
+    };
+    /** RestablecimientoConfirmacion */
+    RestablecimientoConfirmacion: {
+      /** Token */
+      token: string;
+      /** Contrasena Nueva */
+      contrasena_nueva: string;
+      /** Confirmacion */
+      confirmacion: string;
+    };
+    /** RestablecimientoSolicitud */
+    RestablecimientoSolicitud: {
+      /** Email */
+      email: string;
+    };
     /**
      * Rol
      * @enum {string}
      */
     Rol: "root" | "admin" | "cliente";
+    /** SerieVistaPrevia */
+    SerieVistaPrevia: {
+      /**
+       * Tipo
+       * @enum {string}
+       */
+      tipo: "nacional" | "internacional";
+      capacidad: components["schemas"]["Capacidad"];
+      /**
+       * Fechas
+       * @description Fechas en las que se crearía un vuelo.
+       */
+      fechas: string[];
+      /** Omitidas */
+      omitidas: components["schemas"]["FechaOmitida"][];
+    };
+    /** SerieVuelosEntrada */
+    SerieVuelosEntrada: {
+      /**
+       * Origen
+       * @description Código de aeropuerto.
+       */
+      origen: string;
+      /**
+       * Destino
+       * @description Código de aeropuerto.
+       */
+      destino: string;
+      /**
+       * Hora Salida
+       * Format: time
+       * @description Hora local del origen.
+       */
+      hora_salida: string;
+      /** Duracion Minutos */
+      duracion_minutos: number;
+      /**
+       * Precio Economica
+       * @description COP, entero.
+       */
+      precio_economica: number;
+      /**
+       * Precio Primera
+       * @description COP, entero.
+       */
+      precio_primera: number;
+      /**
+       * Dias Semana
+       * @description Los 7 días equivalen a diario.
+       */
+      dias_semana: ("lun" | "mar" | "mie" | "jue" | "vie" | "sab" | "dom")[];
+      /**
+       * Desde
+       * Format: date
+       */
+      desde: string;
+      /**
+       * Hasta
+       * Format: date
+       * @description Como máximo 12 meses después de hoy (SUP-37).
+       */
+      hasta: string;
+    };
+    /** SerieVuelosSalida */
+    SerieVuelosSalida: {
+      /** Creados */
+      creados: components["schemas"]["Vuelo"][];
+      /** Omitidas */
+      omitidas: components["schemas"]["FechaOmitida"][];
+    };
+    /** SuscripcionEntrada */
+    SuscripcionEntrada: {
+      /** Noticias */
+      noticias: boolean;
+    };
+    /** SuscripcionSalida */
+    SuscripcionSalida: {
+      /** Noticias */
+      noticias: boolean;
+    };
+    /**
+     * TokenEntrada
+     * @description Token de un enlace enviado por correo (verificación o baja de noticias).
+     */
+    TokenEntrada: {
+      /** Token */
+      token: string;
+    };
     /** UsuarioSalida */
     UsuarioSalida: {
       /** Id */
@@ -139,6 +1435,241 @@ export interface components {
       rol: components["schemas"]["Rol"];
       /** Email Verificado */
       email_verificado: boolean;
+      /**
+       * Registro Completo
+       * @default true
+       */
+      registro_completo: boolean;
+      /** Nombres */
+      nombres: string | null;
+      /** Apellidos */
+      apellidos: string | null;
+    };
+    /** Vuelo */
+    Vuelo: {
+      /** Id */
+      id: number;
+      /**
+       * Codigo
+       * @description STA-nnnnn, nunca se reutiliza (SUP-01).
+       */
+      codigo: string;
+      /**
+       * Tipo
+       * @enum {string}
+       */
+      tipo: "nacional" | "internacional";
+      origen: components["schemas"]["CiudadResumen"];
+      destino: components["schemas"]["CiudadResumen"];
+      /**
+       * Salida
+       * Format: date-time
+       * @description UTC.
+       */
+      salida: string;
+      /**
+       * Llegada
+       * Format: date-time
+       * @description UTC: salida + duración (RF-15).
+       */
+      llegada: string;
+      /** Duracion Minutos */
+      duracion_minutos: number;
+      /**
+       * Precio Economica
+       * @description Precio base, sin promoción.
+       */
+      precio_economica: number;
+      /** Precio Primera */
+      precio_primera: number;
+      capacidad: components["schemas"]["Capacidad"];
+      /**
+       * Estado
+       * @enum {string}
+       */
+      estado: "programado" | "realizado" | "cancelado";
+    };
+    /**
+     * VueloAdmin
+     * @description Vista del administrador (HU-15, HU-16, HU-18).
+     */
+    VueloAdmin: {
+      /** Id */
+      id: number;
+      /**
+       * Codigo
+       * @description STA-nnnnn, nunca se reutiliza (SUP-01).
+       */
+      codigo: string;
+      /**
+       * Tipo
+       * @enum {string}
+       */
+      tipo: "nacional" | "internacional";
+      origen: components["schemas"]["CiudadResumen"];
+      destino: components["schemas"]["CiudadResumen"];
+      /**
+       * Salida
+       * Format: date-time
+       * @description UTC.
+       */
+      salida: string;
+      /**
+       * Llegada
+       * Format: date-time
+       * @description UTC: salida + duración (RF-15).
+       */
+      llegada: string;
+      /** Duracion Minutos */
+      duracion_minutos: number;
+      /**
+       * Precio Economica
+       * @description Precio base, sin promoción.
+       */
+      precio_economica: number;
+      /** Precio Primera */
+      precio_primera: number;
+      capacidad: components["schemas"]["Capacidad"];
+      /**
+       * Estado
+       * @enum {string}
+       */
+      estado: "programado" | "realizado" | "cancelado";
+      ocupacion: components["schemas"]["Ocupacion"];
+      /**
+       * Reservas Activas
+       * @description Reservas vigentes que se anularían al cancelar.
+       */
+      reservas_activas: number;
+      /** Tiquetes Vendidos */
+      tiquetes_vendidos: number;
+      /** Editable */
+      editable: boolean;
+      /** Motivo No Editable */
+      motivo_no_editable: string | null;
+      /**
+       * Cancelable
+       * @description Programado, no ha salido y sin tiquetes vendidos.
+       */
+      cancelable: boolean;
+      /**
+       * Promociones
+       * @description Vigentes y programadas.
+       */
+      promociones: components["schemas"]["PromocionResumen"][];
+    };
+    /**
+     * VueloDetalle
+     * @description Detalle público del vuelo: lo abren las noticias y el carrusel (HU-19).
+     */
+    VueloDetalle: {
+      /** Id */
+      id: number;
+      /**
+       * Codigo
+       * @description STA-nnnnn, nunca se reutiliza (SUP-01).
+       */
+      codigo: string;
+      /**
+       * Tipo
+       * @enum {string}
+       */
+      tipo: "nacional" | "internacional";
+      origen: components["schemas"]["CiudadResumen"];
+      destino: components["schemas"]["CiudadResumen"];
+      /**
+       * Salida
+       * Format: date-time
+       * @description UTC.
+       */
+      salida: string;
+      /**
+       * Llegada
+       * Format: date-time
+       * @description UTC: salida + duración (RF-15).
+       */
+      llegada: string;
+      /** Duracion Minutos */
+      duracion_minutos: number;
+      /**
+       * Precio Economica
+       * @description Precio base, sin promoción.
+       */
+      precio_economica: number;
+      /** Precio Primera */
+      precio_primera: number;
+      capacidad: components["schemas"]["Capacidad"];
+      /**
+       * Estado
+       * @enum {string}
+       */
+      estado: "programado" | "realizado" | "cancelado";
+      economica: components["schemas"]["ClaseDetalle"];
+      primera: components["schemas"]["ClaseDetalle"];
+    };
+    /**
+     * VueloEntrada
+     * @description HU-13 y HU-15. La fecha y la hora son locales del origen.
+     */
+    VueloEntrada: {
+      /**
+       * Origen
+       * @description Código de aeropuerto.
+       */
+      origen: string;
+      /**
+       * Destino
+       * @description Código de aeropuerto.
+       */
+      destino: string;
+      /**
+       * Fecha Salida
+       * Format: date
+       */
+      fecha_salida: string;
+      /**
+       * Hora Salida
+       * Format: time
+       */
+      hora_salida: string;
+      /** Duracion Minutos */
+      duracion_minutos: number;
+      /**
+       * Precio Economica
+       * @description COP, entero.
+       */
+      precio_economica: number;
+      /**
+       * Precio Primera
+       * @description COP, entero.
+       */
+      precio_primera: number;
+    };
+    /**
+     * VueloVistaPrevia
+     * @description Lo que tendría el vuelo al guardarlo, sin guardarlo (wireframe S08).
+     */
+    VueloVistaPrevia: {
+      /**
+       * Tipo
+       * @enum {string}
+       */
+      tipo: "nacional" | "internacional";
+      origen: components["schemas"]["CiudadResumen"];
+      destino: components["schemas"]["CiudadResumen"];
+      /**
+       * Salida
+       * Format: date-time
+       */
+      salida: string;
+      /**
+       * Llegada
+       * Format: date-time
+       */
+      llegada: string;
+      /** Duracion Minutos */
+      duracion_minutos: number;
+      capacidad: components["schemas"]["Capacidad"];
     };
   };
   responses: never;
@@ -263,6 +1794,15 @@ export interface operations {
           "application/json": components["schemas"]["ErrorRespuesta"];
         };
       };
+      /** @description Demasiados intentos */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
     };
   };
   logout: {
@@ -335,6 +1875,2243 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["UsuarioSalida"];
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  solicitar_restablecimiento: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RestablecimientoSolicitud"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MensajeSalida"];
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  confirmar_restablecimiento: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RestablecimientoConfirmacion"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  registrar_cliente: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RegistroClienteEntrada"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["UsuarioSalida"];
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Choca con el estado actual */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  verificar_correo: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["TokenEntrada"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  reenviar_verificacion: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Choca con el estado actual */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  cambiar_contrasena: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CambioContrasenaEntrada"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  obtener_perfil: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PerfilSalida"];
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  actualizar_perfil: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["PerfilEntrada"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PerfilSalida"];
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Choca con el estado actual */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  obtener_imagen_perfil: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "image/png": unknown;
+          "image/jpeg": unknown;
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description No existe */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  subir_imagen_perfil: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "multipart/form-data": components["schemas"]["Body_subir_imagen_perfil"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PerfilSalida"];
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  eliminar_imagen_perfil: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  cambiar_suscripcion: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SuscripcionEntrada"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SuscripcionSalida"];
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  dar_baja_suscripcion: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["TokenEntrada"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  consultar_desactivacion: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DesactivacionSalida"];
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  desactivar_cuenta: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Choca con el estado actual */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  listar_administradores: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministradorSalida"][];
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  crear_administrador: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AdministradorEntrada"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministradorSalida"];
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Choca con el estado actual */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  desactivar_administrador: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        admin_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministradorSalida"];
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description No existe */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Choca con el estado actual */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  reactivar_administrador: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        admin_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministradorSalida"];
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description No existe */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Choca con el estado actual */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  completar_registro_administrador: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RegistroAdministradorEntrada"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["UsuarioSalida"];
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Choca con el estado actual */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  listar_ciudades: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Ciudad"][];
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  listar_vuelos: {
+    parameters: {
+      query?: {
+        estado?: "programado" | "realizado" | "cancelado";
+        /** @description Salida (programados, cancelados) o llegada (realizados), en hora de Colombia. */
+        desde?: string | null;
+        /** @description Salida (programados, cancelados) o llegada (realizados), en hora de Colombia. */
+        hasta?: string | null;
+        /** @description Código o ciudad. */
+        q?: string | null;
+        pagina?: number;
+        por_pagina?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PaginaVuelosAdmin"];
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  programar_vuelo: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["VueloEntrada"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VueloAdmin"];
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Choca con el estado actual */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  previsualizar_vuelo: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["VueloEntrada"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VueloVistaPrevia"];
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  programar_vuelos_recurrentes: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SerieVuelosEntrada"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SerieVuelosSalida"];
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  previsualizar_vuelos_recurrentes: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SerieVuelosEntrada"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SerieVistaPrevia"];
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  obtener_vuelo: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        vuelo_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VueloDetalle"];
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description No existe */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  editar_vuelo: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        vuelo_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["VueloEntrada"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VueloAdmin"];
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description No existe */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Choca con el estado actual */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  obtener_vuelo_gestion: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        vuelo_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VueloAdmin"];
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description No existe */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  cancelar_vuelo: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        vuelo_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CancelacionVueloSalida"];
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description No existe */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Choca con el estado actual */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  listar_pasajeros_vuelo: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        vuelo_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PasajerosVueloSalida"];
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description No existe */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  crear_promocion: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        vuelo_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["PromocionEntrada"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Promocion"];
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description No existe */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Choca con el estado actual */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  listar_promociones: {
+    parameters: {
+      query?: {
+        estado?: ("programada" | "vigente" | "vencida" | "agotada" | "cancelada") | null;
+        pagina?: number;
+        por_pagina?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PaginaPromociones"];
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  listar_noticias: {
+    parameters: {
+      query?: {
+        pagina?: number;
+        por_pagina?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PaginaNoticias"];
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  obtener_carrusel: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Noticia"][];
         };
       };
       /** @description Solicitud inválida */
