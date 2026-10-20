@@ -24,3 +24,14 @@ def test_health(client: TestClient):
     respuesta = client.get("/api/v1/health")
     assert respuesta.status_code == 200
     assert respuesta.json() == {"estado": "ok", "base_de_datos": "ok"}
+
+
+def test_un_stub_del_contrato_responde_501_con_el_formato_unico(client: TestClient):
+    respuesta = client.get("/api/v1/noticias")
+    assert respuesta.status_code == 501
+    assert respuesta.json() == {
+        "error": {
+            "codigo": "no_implementado",
+            "mensaje": "Esta función todavía no está disponible.",
+        }
+    }
