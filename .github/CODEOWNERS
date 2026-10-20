@@ -1,0 +1,39 @@
+# Dueños del código (AGENTS.md, «Estructura y dueños»). La última regla que coincide gana.
+# @Bard-o (líder) está en todas las rutas: su aprobación basta en cualquier PR.
+
+# Por defecto: el líder
+*                                     @Bard-o
+
+# Backend A
+/backend/app/modules/usuarios/        @pandi-5 @Bard-o
+/backend/app/modules/busqueda/        @pandi-5 @Bard-o
+/backend/app/modules/muro/            @pandi-5 @Bard-o
+/backend/app/modules/monedero/        @pandi-5 @Bard-o
+/docs/api/usuarios.md                 @pandi-5 @Bard-o
+
+# Backend B
+/backend/app/modules/noticias/        @jesusvillami @Bard-o
+/backend/app/modules/vuelos/          @jesusvillami @Bard-o
+/backend/app/modules/reservas/        @jesusvillami @Bard-o
+/backend/app/modules/checkin/         @jesusvillami @Bard-o
+/backend/app/modules/auditoria/       @jesusvillami @Bard-o
+
+# Líder
+/backend/app/modules/recomendacion/   @Bard-o
+/backend/app/modules/chatbot/         @Bard-o
+
+# Frontend y sistema de diseño
+/frontend/                            @alejandr0os @Bard-o
+/design/                              @alejandr0os @Bard-o
+/DESIGN.md                            @alejandr0os @Bard-o
+
+# Infraestructura: solo el líder
+/backend/app/core/                    @Bard-o
+/backend/Dockerfile                   @Bard-o
+/frontend/Dockerfile                  @Bard-o
+/frontend/docker-entrypoint.sh        @Bard-o
+/docker-compose.yml                   @Bard-o
+/.github/                             @Bard-o
+/AGENTS.md                            @Bard-o
+/CLAUDE.md                            @Bard-o
+/.agents/                             @Bard-o

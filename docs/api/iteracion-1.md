@@ -564,7 +564,7 @@ Entrada (`RegistroAdministradorEntrada`): los datos personales de HU-01 (sin `no
 |---|---|---|
 | 404 | `no_encontrado` | |
 
-### Módulo noticias · dueño: Backend A
+### Módulo noticias · dueño: Backend B
 
 #### HU-19 Consultar noticias y carrusel
 
@@ -613,7 +613,7 @@ Entrada (`RegistroAdministradorEntrada`): los datos personales de HU-01 (sin `no
 
 Cuando un módulo necesita a otro, llama a estas funciones públicas del `service.py` del dueño. Las firmas ya existen en el código; las de las iteraciones futuras devuelven el valor neutro de «todavía no hay datos». Ninguna hace commit: se ejecutan dentro de la transacción de quien llama, para que todo se aplique o nada (RNF-17).
 
-### `noticias.service` · dueño: Backend A · la llama vuelos
+### `noticias.service` · dueño: Backend B · la llama vuelos
 
 | Función | Cuándo la llama vuelos |
 |---|---|

@@ -84,7 +84,7 @@ Cada módulo tiene un dueño. Un agente solo toca el módulo del issue que está
 |---|---|---|
 | `usuarios` | RF-01 a RF-11 | Backend A |
 | `busqueda` | RF-27 a RF-29 | Backend A |
-| `noticias` | RF-22, RF-25, RF-55, RF-56 | Backend A |
+| `noticias` | RF-22, RF-25, RF-55, RF-56 | Backend B |
 | `muro` | RF-57 a RF-59 | Backend A |
 | `monedero` | RF-46 a RF-48 | Backend A |
 | `vuelos` (incluye promociones) | RF-12 a RF-21, RF-23, RF-24 | Backend B |
