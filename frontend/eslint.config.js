@@ -7,7 +7,8 @@ import globals from "globals";
 import tseslint from "typescript-eslint";
 
 export default defineConfig([
-  globalIgnores(["dist", "node_modules", "src/api/schema.d.ts"]),
+  // Generados: schema.d.ts (npm run gen:api) y el worker de MSW (lo actualiza npm install).
+  globalIgnores(["dist", "node_modules", "src/api/schema.d.ts", "public/mockServiceWorker.js"]),
   {
     files: ["**/*.{ts,tsx}"],
     extends: [

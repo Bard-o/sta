@@ -5,7 +5,9 @@ from fastapi.routing import APIRoute
 
 from app.core import health
 from app.core.errors import RESPUESTAS_ERROR, registrar_manejadores
-from app.modules.usuarios.router import router as auth_router
+from app.modules.noticias.router import router as noticias_router
+from app.modules.usuarios.router import router as usuarios_router
+from app.modules.vuelos.router import router as vuelos_router
 
 API_PREFIX = "/api/v1"
 
@@ -24,7 +26,9 @@ def create_app() -> FastAPI:
     )
     registrar_manejadores(app)
     app.include_router(health.router, prefix=API_PREFIX)
-    app.include_router(auth_router, prefix=API_PREFIX)
+    app.include_router(usuarios_router, prefix=API_PREFIX)
+    app.include_router(vuelos_router, prefix=API_PREFIX)
+    app.include_router(noticias_router, prefix=API_PREFIX)
     return app
 
 

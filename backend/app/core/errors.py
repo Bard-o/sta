@@ -89,6 +89,14 @@ class DemasiadosIntentos(AppError):
     mensaje = "Hiciste demasiados intentos. Espera un momento y vuelve a intentarlo."
 
 
+class NoImplementado(AppError):
+    """Endpoint del contrato que todavía es un stub (docs/api/iteracion-1.md)."""
+
+    status_code = 501
+    codigo = "no_implementado"
+    mensaje = "Esta función todavía no está disponible."
+
+
 # Respuestas de error documentadas en OpenAPI, para que los tipos generados las conozcan.
 RESPUESTAS_ERROR: dict[int | str, dict[str, Any]] = {
     400: {"model": ErrorRespuesta, "description": "Solicitud inválida"},
@@ -96,6 +104,21 @@ RESPUESTAS_ERROR: dict[int | str, dict[str, Any]] = {
     403: {"model": ErrorRespuesta, "description": "El rol no tiene permiso"},
     422: {"model": ErrorRespuesta, "description": "Datos inválidos"},
 }
+
+_DESCRIPCIONES_ERROR = {
+    404: "No existe",
+    409: "Choca con el estado actual",
+    429: "Demasiados intentos",
+}
+
+
+def respuestas_error(*estados: int) -> dict[int | str, dict[str, Any]]:
+    """Errores adicionales de un endpoint para OpenAPI: `responses=respuestas_error(404, 409)`."""
+    return {
+        estado: {"model": ErrorRespuesta, "description": _DESCRIPCIONES_ERROR.get(estado, "Error")}
+        for estado in estados
+    }
+
 
 _ESTADOS_HTTP = {
     400: ("solicitud_invalida", "La solicitud no es válida."),
@@ -114,7 +137,17 @@ _MENSAJES_VALIDACION = {
     "int_parsing": "Debe ser un número entero.",
     "int_type": "Debe ser un número entero.",
     "greater_than": "Debe ser mayor que {gt}.",
+    "greater_than_equal": "Debe ser mayor o igual que {ge}.",
     "less_than": "Debe ser menor que {lt}.",
+    "less_than_equal": "Debe ser menor o igual que {le}.",
+    "string_pattern_mismatch": "El formato no es válido.",
+    "literal_error": "No es una opción válida.",
+    "too_short": "Debe tener al menos {min_length} elemento(s).",
+    "too_long": "Debe tener como máximo {max_length} elemento(s).",
+    "date_from_datetime_parsing": "Debe ser una fecha válida (aaaa-mm-dd).",
+    "time_parsing": "Debe ser una hora válida (hh:mm).",
+    "datetime_from_date_parsing": "Debe ser una fecha y hora válidas.",
+    "timezone_aware": "La fecha y hora deben indicar la zona horaria.",
     "json_invalid": "El cuerpo no es un JSON válido.",
 }
 

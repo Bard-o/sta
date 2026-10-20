@@ -1,5 +1,7 @@
 """Interfaz pública del módulo usuarios. Otros módulos solo llaman a estas funciones."""
 
+from dataclasses import dataclass
+
 from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session
 
@@ -91,3 +93,20 @@ def asegurar_root(db: Session, nombre_usuario: str, contrasena: str) -> bool:
         return False
     crear_usuario(db, nombre_usuario=nombre_usuario, contrasena=contrasena, rol=Rol.ROOT)
     return True
+
+
+@dataclass(frozen=True)
+class SuscriptorNoticias:
+    usuario_id: int
+    email: str
+    nombres: str
+    # Va en el enlace «cancelar suscripción» del correo: POST /usuarios/suscripcion/baja.
+    token_baja: str
+
+
+def suscriptores_noticias(db: Session) -> list[SuscriptorNoticias]:
+    """Clientes activos, con el correo verificado y suscritos a noticias (RF-09, RF-56).
+
+    La usa noticias para enviar el correo de cada noticia nueva.
+    """
+    raise NotImplementedError("HU-08")
