@@ -1,6 +1,6 @@
 # Contrato de la API
 
-Un archivo por módulo (`docs/api/<modulo>.md`) con sus endpoints, reglas y códigos de error. La documentación interactiva, generada desde los `schemas.py`, está en http://localhost:8000/docs y el esquema en http://localhost:8000/openapi.json.
+Un archivo por módulo (`docs/api/<modulo>.md`) con sus endpoints, reglas y códigos de error. El contrato acordado de cada iteración, con todas sus HU y las funciones entre módulos, está en `iteracion-<n>.md`: [iteración 1](iteracion-1.md). La documentación interactiva, generada desde los `schemas.py`, está en http://localhost:8000/docs y el esquema en http://localhost:8000/openapi.json.
 
 ## Convenciones
 

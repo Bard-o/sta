@@ -1,6 +1,6 @@
 # Módulo usuarios
 
-Dueño: Backend A. Requisitos: RF-01 a RF-11. Este archivo cubre por ahora la sesión (RF-06, HU-03, HU-04); el resto de endpoints del módulo se agregan aquí con sus issues.
+Dueño: Backend A. Requisitos: RF-01 a RF-11. Este archivo cubre por ahora la sesión (RF-06, HU-03, HU-04); el resto de endpoints del módulo se agregan aquí con sus issues. El contrato acordado de todo el módulo está en [iteracion-1.md](iteracion-1.md).
 
 ## Sesión
 
