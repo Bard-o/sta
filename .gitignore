@@ -2,3 +2,21 @@ docs/fuentes/
 .env
 .env.*
 !.env.example
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+
+# Node
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Editores y sistema
+.DS_Store
+.idea/
+.vscode/

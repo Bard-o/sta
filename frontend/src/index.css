@@ -1,0 +1,73 @@
+/*
+ * Tailwind v4 solo para maquetar (flex, grid, gap). Colores, radios, sombras, blur y fuentes
+ * apuntan a los tokens de design/tokens.css (importado antes en main.tsx). Las escalas por
+ * defecto de Tailwind se borran para que no existan clases como bg-red-500 o rounded-3xl.
+ */
+@import "tailwindcss";
+
+@theme inline {
+  --color-*: initial;
+  --color-backdrop: var(--backdrop);
+  --color-backdrop-glow-warm: var(--backdrop-glow-warm);
+  --color-backdrop-glow-cool: var(--backdrop-glow-cool);
+  --color-glass: var(--glass);
+  --color-glass-strong: var(--glass-strong);
+  --color-glass-inset: var(--glass-inset);
+  --color-glass-hover: var(--glass-hover);
+  --color-glass-edge: var(--glass-edge);
+  --color-glass-highlight: var(--glass-highlight);
+  --color-scrim: var(--scrim);
+  --color-field: var(--field);
+  --color-control-line: var(--control-line);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-faint: var(--ink-faint);
+  --color-accent: var(--accent);
+  --color-on-accent: var(--on-accent);
+  --color-accent-text: var(--accent-text);
+  --color-accent-soft: var(--accent-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-focus: var(--focus);
+  --color-invert: var(--invert);
+  --color-on-invert: var(--on-invert);
+  --color-seat-current: var(--seat-current);
+  --color-on-seat-current: var(--on-seat-current);
+  --color-seat-taken: var(--seat-taken);
+  --color-transparent: transparent;
+  --color-current: currentColor;
+}
+
+/* Mismos nombres que en tokens.css: `reference` hace que Tailwind use var(--radius-md) sin
+   redefinir la variable (si la redefiniera, se referenciaría a sí misma). */
+@theme reference {
+  --radius-*: initial;
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+  --radius-pill: var(--radius-pill);
+  --shadow-*: initial;
+  --shadow-glass: var(--shadow-glass);
+  --shadow-float: var(--shadow-float);
+  --shadow-accent: var(--shadow-accent);
+  --blur-*: initial;
+  --blur-sm: var(--blur-sm);
+  --blur-md: var(--blur-md);
+  --blur-lg: var(--blur-lg);
+  --font-*: initial;
+  --font-display: var(--font-display);
+  --font-sans: var(--font-sans);
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+}

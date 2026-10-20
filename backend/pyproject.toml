@@ -1,0 +1,44 @@
+[project]
+name = "sta-backend"
+version = "0.1.0"
+description = "API del Sistema de Tiquetes Aéreos (STA) de AVIANCO"
+requires-python = ">=3.13"
+dependencies = [
+    "alembic>=1.20.0",
+    "argon2-cffi>=25.1.0",
+    "fastapi>=0.150.0",
+    "psycopg[binary]>=3.3.6",
+    "pydantic-settings>=2.16.0",
+    "pyjwt>=2.15.1",
+    "sqlalchemy>=2.1.5",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "N", "SIM", "ASYNC", "S", "RUF"]
+ignore = [
+  "RUF001", "RUF002", "RUF003",  # textos en español con tildes y signos tipográficos
+  "N818",  # las excepciones del dominio se nombran en español (NoEncontrado), sin sufijo Error
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["S101", "S105", "S106"]
+"app/core/testing.py" = ["S105", "S106"]
+
+[tool.pytest.ini_options]
+testpaths = ["app"]
+addopts = "-ra --strict-markers"
+
+[dependency-groups]
+dev = [
+    "httpx2>=2.15.1",
+    "pytest>=9.1.1",
+    "ruff>=0.17.1",
+]
