@@ -5,6 +5,8 @@ import { InicioPage } from "@/pages/inicio";
 import { InicioRolPage } from "@/pages/inicio-rol";
 import { LoginPage } from "@/pages/login";
 import { NoEncontradaPage } from "@/pages/no-encontrada";
+import { NoticiasPage } from "@/pages/noticias";
+import { VueloDetallePage } from "@/pages/vuelo-detalle";
 
 export const router = createBrowserRouter([
   {
@@ -12,6 +14,8 @@ export const router = createBrowserRouter([
     children: [
       // Públicas
       { path: "/", element: <InicioPage /> },
+      { path: "/noticias", element: <NoticiasPage /> },
+      { path: "/vuelos/:vueloId", element: <VueloDetallePage /> },
       { element: <SoloVisitantes />, children: [{ path: "/login", element: <LoginPage /> }] },
 
       // Protegidas por rol (RF-11). El servidor vuelve a validar cada petición (RNF-10).
