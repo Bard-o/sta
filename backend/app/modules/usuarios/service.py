@@ -5,8 +5,14 @@ from dataclasses import dataclass
 from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session
 
-from app.core.errors import AppError
-from app.core.security import Rol, hash_contrasena, verificar_contrasena
+from app.core.errors import AppError, DatosInvalidos, NoAutenticado
+from app.core.security import (
+    MENSAJE_POLITICA_CONTRASENA,
+    Rol,
+    cumple_politica_contrasena,
+    hash_contrasena,
+    verificar_contrasena,
+)
 from app.modules.usuarios.models import Usuario
 
 
@@ -21,6 +27,13 @@ class CuentaInactiva(AppError):
     status_code = 403
     codigo = "cuenta_inactiva"
     mensaje = "Cuenta inactiva."
+
+
+class ContrasenaActualIncorrecta(AppError):
+    # HU-06: la contraseña actual no coincide; no se cambia nada.
+    status_code = 422
+    codigo = "contrasena_actual_incorrecta"
+    mensaje = "La contraseña actual es incorrecta."
 
 
 def autenticar(db: Session, identificador: str, contrasena: str) -> Usuario:
@@ -60,6 +73,43 @@ def cerrar_sesiones(db: Session, usuario_id: int) -> None:
         .where(Usuario.id == usuario_id)
         .values(version_sesion=Usuario.version_sesion + 1)
     )
+    db.commit()
+
+
+def _validar_contrasena_nueva(contrasena_nueva: str, confirmacion: str) -> None:
+    """RNF-08 y confirmación (HU-06, HU-05): lanza DatosInvalidos con el campo que falla."""
+    if not cumple_politica_contrasena(contrasena_nueva):
+        raise DatosInvalidos(campos={"contrasena_nueva": MENSAJE_POLITICA_CONTRASENA})
+    if contrasena_nueva != confirmacion:
+        raise DatosInvalidos(campos={"confirmacion": "Las contraseñas no coinciden."})
+
+
+def cambiar_contrasena(
+    db: Session,
+    usuario_id: int,
+    *,
+    contrasena_actual: str,
+    contrasena_nueva: str,
+    confirmacion: str,
+) -> None:
+    """Cambia la contraseña indicando la actual (HU-06, RF-08).
+
+    Las reglas sin estado se validan primero para que el usuario corrija la contraseña nueva
+    antes de preocuparse por la actual. La sesión actual sigue abierta: no se incrementa
+    `version_sesion` (a diferencia del restablecimiento, que cierra todas las sesiones).
+    """
+    usuario = db.get(Usuario, usuario_id)
+    if usuario is None:
+        raise NoAutenticado()
+
+    _validar_contrasena_nueva(contrasena_nueva, confirmacion)
+
+    if not verificar_contrasena(contrasena_actual, usuario.password_hash):
+        raise ContrasenaActualIncorrecta(
+            campos={"contrasena_actual": "La contraseña actual es incorrecta."}
+        )
+
+    usuario.password_hash = hash_contrasena(contrasena_nueva)
     db.commit()
 
 
