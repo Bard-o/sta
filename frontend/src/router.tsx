@@ -1,10 +1,12 @@
 import { createBrowserRouter } from "react-router";
-import { RequireRole, SoloVisitantes } from "@/auth/require-role";
+import { RequireRole, SoloRegistroPendiente, SoloVisitantes } from "@/auth/require-role";
+import { RUTA_PRIMER_INGRESO } from "@/auth/roles";
 import { AppLayout } from "@/layouts/app-layout";
 import { InicioPage } from "@/pages/inicio";
 import { InicioRolPage } from "@/pages/inicio-rol";
 import { LoginPage } from "@/pages/login";
 import { NoEncontradaPage } from "@/pages/no-encontrada";
+import { PrimerIngresoPage } from "@/pages/primer-ingreso";
 
 export const router = createBrowserRouter([
   {
@@ -21,7 +23,14 @@ export const router = createBrowserRouter([
       },
       {
         element: <RequireRole roles={["admin"]} />,
-        children: [{ path: "/admin", element: <InicioRolPage /> }],
+        children: [
+          // HU-12: con el registro pendiente solo se puede ver S07.
+          {
+            element: <SoloRegistroPendiente />,
+            children: [{ path: RUTA_PRIMER_INGRESO, element: <PrimerIngresoPage /> }],
+          },
+          { path: "/admin", element: <InicioRolPage /> },
+        ],
       },
       {
         element: <RequireRole roles={["root"]} />,
