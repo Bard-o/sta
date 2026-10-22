@@ -139,7 +139,13 @@ def cambiar_contrasena(
     datos: CambioContrasenaEntrada, usuario: UsuarioSesion, db: DbSession
 ) -> None:
     """Cambia la contraseña indicando la actual (HU-06). Único modo para el root."""
-    raise NoImplementado()
+    service.cambiar_contrasena(
+        db,
+        usuario.id,
+        contrasena_actual=datos.contrasena_actual,
+        contrasena_nueva=datos.contrasena_nueva,
+        confirmacion=datos.confirmacion,
+    )
 
 
 @cuenta.get("/me/perfil", response_model=PerfilSalida)
