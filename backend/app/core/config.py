@@ -1,6 +1,7 @@
 """Configuración leída de variables de entorno (archivo .env vía docker compose)."""
 
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -25,6 +26,10 @@ class Settings(BaseSettings):
     smtp_port: int = 1025
     mail_from: str = "AVIANCO <no-responder@avianco.test>"
     frontend_url: str = "http://localhost:5173"
+
+    # Archivos que suben los usuarios (imagen de perfil). Fuera de /app, que es el código montado;
+    # en docker compose es el volumen con nombre `archivos`.
+    archivos_dir: Path = Path("/data/archivos")
 
 
 @lru_cache
