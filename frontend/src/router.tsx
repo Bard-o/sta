@@ -7,10 +7,7 @@ import { LoginPage } from "@/pages/login";
 import { NoEncontradaPage } from "@/pages/no-encontrada";
 import { NoticiasPage } from "@/pages/noticias";
 import { RegistroPage } from "@/pages/registro";
-<<<<<<< HEAD
 import { RestablecerContrasenaPage } from "@/pages/restablecer-contrasena";
-=======
->>>>>>> origin/main
 import { VerificarCorreoPage } from "@/pages/verificar-correo";
 import { VueloDetallePage } from "@/pages/vuelo-detalle";
 
@@ -23,10 +20,7 @@ export const router = createBrowserRouter([
       { path: "/noticias", element: <NoticiasPage /> },
       { path: "/vuelos/:vueloId", element: <VueloDetallePage /> },
       { path: "/verificar-correo", element: <VerificarCorreoPage /> },
-<<<<<<< HEAD
       { path: "/restablecer-contrasena", element: <RestablecerContrasenaPage /> },
-=======
->>>>>>> origin/main
       {
         element: <SoloVisitantes />,
         children: [
