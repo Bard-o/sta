@@ -1,13 +1,33 @@
 """Interfaz pública del módulo usuarios. Otros módulos solo llaman a estas funciones."""
 
+import hashlib
+import logging
+import secrets
 from dataclasses import dataclass
+from datetime import UTC, date, datetime, timedelta
+from html import escape
 
 from sqlalchemy import func, or_, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.core.errors import AppError
-from app.core.security import Rol, hash_contrasena, verificar_contrasena
-from app.modules.usuarios.models import Usuario
+from app.core.config import get_settings
+from app.core.errors import AppError, DatosInvalidos
+from app.core.mail import enviar_correo
+from app.core.security import (
+    MENSAJE_POLITICA_CONTRASENA,
+    Rol,
+    cumple_politica_contrasena,
+    hash_contrasena,
+    verificar_contrasena,
+)
+from app.modules.usuarios.models import TokenVerificacion, Usuario
+from app.modules.usuarios.schemas import RegistroClienteEntrada
+
+logger = logging.getLogger(__name__)
+
+# SUP-19: el enlace de verificación de correo vence en 24 horas.
+HORAS_VERIFICACION = 24
 
 
 class CredencialesInvalidas(AppError):
@@ -21,6 +41,29 @@ class CuentaInactiva(AppError):
     status_code = 403
     codigo = "cuenta_inactiva"
     mensaje = "Cuenta inactiva."
+
+
+class DatosDuplicados(AppError):
+    """RF-04: un dato único ya pertenece a otra cuenta; `campos` dice cuál."""
+
+    status_code = 409
+    codigo = "datos_duplicados"
+    mensaje = "Alguno de los datos ya pertenece a otra cuenta."
+
+
+MENSAJES_DUPLICADO = {
+    "nombre_usuario": "Ese nombre de usuario ya está en uso.",
+    "email": "Ese correo ya está registrado en otra cuenta de cliente.",
+    "numero_documento": "Ese número de documento ya está registrado en otra cuenta de cliente.",
+}
+
+# Restricciones de la tabla usuarios que pueden saltar al registrar un cliente.
+_CAMPO_POR_RESTRICCION = {
+    "uq_usuarios_nombre_usuario": "nombre_usuario",
+    "uq_usuarios_nombre_usuario_lower": "nombre_usuario",
+    "uq_usuarios_rol_email": "email",
+    "uq_usuarios_rol_documento": "numero_documento",
+}
 
 
 def autenticar(db: Session, identificador: str, contrasena: str) -> Usuario:
@@ -84,6 +127,161 @@ def crear_usuario(
     db.add(usuario)
     db.commit()
     return usuario
+
+
+# ---------- Registro de clientes (HU-01) ----------
+
+
+def hash_token(token: str) -> str:
+    """Hash con el que se guarda un token de correo; el valor en claro solo viaja en el enlace."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def registrar_cliente(db: Session, datos: RegistroClienteEntrada) -> Usuario:
+    """HU-01, RF-03 y RF-04: crea la cuenta de cliente y su token de verificación.
+
+    Confirma la transacción y después envía el enlace con `enviar_verificacion`; si el correo
+    falla, la cuenta queda creada igual. La cookie de sesión la pone el router. Lanza
+    DatosInvalidos o DatosDuplicados.
+    """
+    _validar_datos_de_registro(datos)
+    email = datos.email.strip().lower()
+    nombre_usuario = datos.nombre_usuario.strip()
+
+    campos = _campos_duplicados(
+        db,
+        nombre_usuario=nombre_usuario,
+        email=email,
+        tipo_documento=datos.tipo_documento,
+        numero_documento=datos.numero_documento,
+    )
+    if campos:
+        raise DatosDuplicados(campos=campos)
+
+    usuario = Usuario(
+        nombre_usuario=nombre_usuario,
+        email=email,
+        password_hash=hash_contrasena(datos.contrasena),
+        rol=Rol.CLIENTE,
+        email_verificado=False,
+        activo=True,
+        tipo_documento=datos.tipo_documento,
+        numero_documento=datos.numero_documento,
+        nombres=datos.nombres.strip(),
+        apellidos=datos.apellidos.strip(),
+        fecha_nacimiento=datos.fecha_nacimiento,
+        lugar_nacimiento=datos.lugar_nacimiento.strip(),
+        direccion_facturacion=datos.direccion_facturacion.strip(),
+        genero=datos.genero,
+        telefono=datos.telefono.strip() if datos.telefono else None,
+        # Ley 1581 de 2012 (RF-03).
+        fecha_aceptacion_politica=datetime.now(UTC),
+    )
+    db.add(usuario)
+    try:
+        db.flush()  # asigna el id antes de crear el token
+        token = _crear_token_verificacion(db, usuario.id, email)
+        db.commit()
+    except IntegrityError as exc:
+        # Carrera entre la verificación anterior y el commit: la restricción única decide.
+        db.rollback()
+        campos = _campos_duplicados(
+            db,
+            nombre_usuario=nombre_usuario,
+            email=email,
+            tipo_documento=datos.tipo_documento,
+            numero_documento=datos.numero_documento,
+        ) or _campo_por_restriccion(exc)
+        raise DatosDuplicados(campos=campos or None) from exc
+
+    enviar_verificacion(usuario, email, token)
+    return usuario
+
+
+def _validar_datos_de_registro(datos: RegistroClienteEntrada) -> None:
+    campos: dict[str, str] = {}
+    if not datos.acepta_politica:
+        campos["acepta_politica"] = "Debes aceptar la política de tratamiento de datos personales."
+    if datos.fecha_nacimiento > date.today():
+        campos["fecha_nacimiento"] = "La fecha de nacimiento no puede ser futura."
+    if not cumple_politica_contrasena(datos.contrasena):
+        campos["contrasena"] = MENSAJE_POLITICA_CONTRASENA
+    if campos:
+        raise DatosInvalidos(campos=campos)
+
+
+def _campos_duplicados(
+    db: Session,
+    *,
+    nombre_usuario: str,
+    email: str,
+    tipo_documento: str,
+    numero_documento: str,
+) -> dict[str, str]:
+    """RF-04, SUP-18: el nombre de usuario es único global; correo y documento, por rol."""
+    campos: dict[str, str] = {}
+    if db.scalar(
+        select(Usuario.id).where(func.lower(Usuario.nombre_usuario) == nombre_usuario.lower())
+    ):
+        campos["nombre_usuario"] = MENSAJES_DUPLICADO["nombre_usuario"]
+    if db.scalar(select(Usuario.id).where(Usuario.rol == Rol.CLIENTE, Usuario.email == email)):
+        campos["email"] = MENSAJES_DUPLICADO["email"]
+    if db.scalar(
+        select(Usuario.id).where(
+            Usuario.rol == Rol.CLIENTE,
+            Usuario.tipo_documento == tipo_documento,
+            Usuario.numero_documento == numero_documento,
+        )
+    ):
+        campos["numero_documento"] = MENSAJES_DUPLICADO["numero_documento"]
+    return campos
+
+
+def _campo_por_restriccion(exc: IntegrityError) -> dict[str, str]:
+    restriccion = getattr(getattr(exc.orig, "diag", None), "constraint_name", None)
+    campo = _CAMPO_POR_RESTRICCION.get(restriccion or "")
+    return {campo: MENSAJES_DUPLICADO[campo]} if campo else {}
+
+
+def _crear_token_verificacion(db: Session, usuario_id: int, email: str) -> str:
+    """Crea un token de un solo uso y devuelve el valor en claro para el enlace (SUP-19)."""
+    token = secrets.token_urlsafe(32)
+    db.add(
+        TokenVerificacion(
+            usuario_id=usuario_id,
+            token_hash=hash_token(token),
+            email=email,
+            expira_en=datetime.now(UTC) + timedelta(hours=HORAS_VERIFICACION),
+        )
+    )
+    db.flush()
+    return token
+
+
+def enviar_verificacion(usuario: Usuario, email: str, token: str) -> None:
+    """Envía el enlace `/verificar-correo?token=…` (HU-02). Un fallo de SMTP no tumba el
+    registro: queda en el log y el cliente puede pedir el reenvío."""
+    enlace = f"{get_settings().frontend_url}/verificar-correo?token={token}"
+    nombres = escape(usuario.nombres or usuario.nombre_usuario)
+    texto = (
+        f"Hola {usuario.nombres or usuario.nombre_usuario},\n\n"
+        "Gracias por registrarte en AVIANCO. Confirma tu correo con este enlace; "
+        f"vence en {HORAS_VERIFICACION} horas y sirve una sola vez:\n\n"
+        f"{enlace}\n\n"
+        "Si no creaste esta cuenta, ignora este mensaje.\n"
+    )
+    html = (
+        f"<p>Hola {nombres},</p>"
+        "<p>Gracias por registrarte en AVIANCO. Confirma tu correo con este enlace; "
+        f"vence en {HORAS_VERIFICACION} horas y sirve una sola vez.</p>"
+        f'<p><a href="{enlace}">Verificar mi correo</a></p>'
+        "<p>Si no creaste esta cuenta, ignora este mensaje.</p>"
+    )
+    try:
+        enviar_correo(email, "Confirma tu correo en AVIANCO", texto, html)
+    except Exception:
+        # Sin el correo en el log: es un dato personal (Ley 1581 de 2012).
+        logger.exception("No se pudo enviar el correo de verificación al usuario %s", usuario.id)
 
 
 def asegurar_root(db: Session, nombre_usuario: str, contrasena: str) -> bool:

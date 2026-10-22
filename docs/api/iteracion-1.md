@@ -7,7 +7,7 @@ Las convenciones generales (prefijo, `snake_case`, UTC, COP, cookie de sesión, 
 ## Estado
 
 - Cada endpoint de este archivo existe en el backend como **stub**: valida la sesión, el rol y el cuerpo, y responde `501 no_implementado`. El issue de cada HU reemplaza el stub por la implementación sin cambiar la firma.
-- Ya implementados: `POST /auth/login`, `POST /auth/logout` y `GET /auth/me` (ver [`usuarios.md`](usuarios.md)).
+- Ya implementados: `POST /auth/login`, `POST /auth/logout`, `GET /auth/me` y `POST /usuarios/registro` (ver [`usuarios.md`](usuarios.md)).
 - El frontend puede avanzar sin esperar al backend con la API simulada (MSW); ver [Mocks para el frontend](#mocks-para-el-frontend).
 
 ## Convenciones de este contrato
