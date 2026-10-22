@@ -21,7 +21,10 @@ import { Input } from "@/components/ui/input";
 import { Notice } from "@/components/ui/notice";
 import { ProfileImage } from "@/components/ui/profile-image";
 import { Select } from "@/components/ui/select";
+<<<<<<< HEAD
 import { AYUDA_CONTRASENA, esquemaContrasena } from "@/lib/contrasena";
+=======
+>>>>>>> origin/main
 
 type TipoDocumento = Schemas["RegistroClienteEntrada"]["tipo_documento"];
 type Genero = Schemas["RegistroClienteEntrada"]["genero"];
@@ -70,7 +73,15 @@ const esquema = z.object({
     .string()
     .trim()
     .regex(/^[A-Za-z0-9._-]{3,50}$/, "Usa de 3 a 50 letras, números, punto, guion o guion bajo."),
+<<<<<<< HEAD
   contrasena: esquemaContrasena,
+=======
+  contrasena: z
+    .string()
+    .min(8, "La contraseña debe tener al menos 8 caracteres.")
+    .regex(/[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/, "La contraseña debe tener al menos una letra.")
+    .regex(/\d/, "La contraseña debe tener al menos un número."),
+>>>>>>> origin/main
   acepta_politica: z.boolean().refine((v) => v, {
     message: "Debes aceptar la política de tratamiento de datos personales para crear la cuenta.",
   }),
@@ -258,7 +269,11 @@ export function RegistroPage() {
                   label="Contraseña"
                   type="password"
                   autoComplete="new-password"
+<<<<<<< HEAD
                   ayuda={AYUDA_CONTRASENA}
+=======
+                  ayuda="Mínimo 8 caracteres, con al menos una letra y un número."
+>>>>>>> origin/main
                 />
               </div>
 
