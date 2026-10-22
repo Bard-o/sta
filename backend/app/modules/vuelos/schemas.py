@@ -8,7 +8,7 @@ la fecha y la hora locales del origen, sin desfase, y el backend las convierte c
 from datetime import date, datetime, time
 from typing import Annotated, Literal
 
-from pydantic import AwareDatetime, BaseModel, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 Clase = Literal["economica", "primera"]
 TipoVuelo = Literal["nacional", "internacional"]
@@ -26,6 +26,8 @@ DuracionMinutos = Annotated[int, Field(ge=1, lt=1440)]
 
 
 class Ciudad(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     codigo: str
     nombre: str
     pais: str
@@ -38,6 +40,8 @@ class Ciudad(BaseModel):
 
 
 class CiudadResumen(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     codigo: str
     nombre: str
     zona_horaria: str
