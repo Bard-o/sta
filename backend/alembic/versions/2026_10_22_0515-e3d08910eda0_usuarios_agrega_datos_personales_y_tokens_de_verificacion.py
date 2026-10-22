@@ -1,7 +1,7 @@
 """usuarios: agrega datos personales y tokens de verificacion
 
 Revision ID: e3d08910eda0
-Revises: b2f98ffd641d
+Revises: 162188a55835
 Create Date: 2026-10-22 05:15:59.335506
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "e3d08910eda0"
-down_revision: str | None = "b2f98ffd641d"
+down_revision: str | None = "162188a55835"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
