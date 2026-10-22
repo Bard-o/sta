@@ -135,6 +135,8 @@ export interface paths {
     /**
      * Registrar Cliente
      * @description Registra un cliente, inicia su sesión y envía el enlace de verificación (HU-01).
+     *
+     *     Solo el visitante se registra: con una sesión abierta responde 403 sin_permiso.
      */
     post: operations["registrar_cliente"];
     delete?: never;
