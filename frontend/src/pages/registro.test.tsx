@@ -180,6 +180,8 @@ describe("S01 · Registro de cliente (HU-01)", () => {
   });
 
   it("sube la imagen de perfil como multipart después de crear la cuenta", async () => {
+    const adjuntar = vi.spyOn(FormData.prototype, "append");
+    onTestFinished(() => adjuntar.mockRestore());
     responderApi(ok);
     renderRutas(rutas, "/registro");
     const user = await llenar();
@@ -190,10 +192,10 @@ describe("S01 · Registro de cliente (HU-01)", () => {
 
     await screen.findByText("Inicio del cliente");
     const [subida] = peticiones(IMAGEN);
-    const formulario = await subida.formData();
-    const enviada = formulario.get("imagen") as File;
-    expect(enviada.type).toBe("image/png");
-    expect(await enviada.text()).toBe("x");
+    expect(subida.headers.get("Content-Type")).toMatch(/^multipart\/form-data; boundary=/);
+    // En jsdom el File no es el de Node: `Request.formData()` falla y el cuerpo serializado
+    // pierde el contenido. Se comprueba que el formulario lleva el archivo elegido.
+    expect(adjuntar).toHaveBeenCalledWith("imagen", archivo);
   });
 
   it("rechaza una imagen que no es JPG o PNG o pesa más de 2 MB, sin bloquear el registro", async () => {
