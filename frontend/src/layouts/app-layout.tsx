@@ -1,4 +1,4 @@
-import { Navigate, Outlet, useLocation, useNavigate } from "react-router";
+import { Link, Navigate, Outlet, useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
 import {
   inicioDe,
@@ -10,8 +10,10 @@ import {
   RUTA_PRIMER_INGRESO,
 } from "@/auth/roles";
 import { useLogout, useSesion } from "@/auth/sesion";
+import { RUTA_VERIFICACION } from "@/auth/verificacion";
 import { Backdrop } from "@/components/ui/backdrop";
 import { Button } from "@/components/ui/button";
+import { Notice } from "@/components/ui/notice";
 import { Shell } from "@/components/ui/shell";
 import { TopNav } from "@/components/ui/top-nav";
 
@@ -69,10 +71,24 @@ export function AppLayout() {
     />
   );
 
+  // HU-02: un cliente con el correo sin verificar no puede reservar, comprar ni suscribirse.
+  const avisarVerificacion =
+    usuario?.rol === "cliente" &&
+    !usuario.email_verificado &&
+    location.pathname !== RUTA_VERIFICACION;
+
   return (
     <Backdrop className="flex min-h-full flex-col">
       {/* Administrador y root no usan el chatbot (Apéndice B). */}
       <Shell nav={nav} chat={!isPending && (!usuario || usuario.rol === "cliente")}>
+        {avisarVerificacion && (
+          <Notice tone="info">
+            Verifica tu correo para reservar, comprar y suscribirte a noticias.{" "}
+            <Link className="sta-link" to={RUTA_VERIFICACION}>
+              Verificar correo
+            </Link>
+          </Notice>
+        )}
         <Outlet />
       </Shell>
     </Backdrop>

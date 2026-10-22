@@ -7,6 +7,7 @@ import { LoginPage } from "@/pages/login";
 import { NoEncontradaPage } from "@/pages/no-encontrada";
 import { NoticiasPage } from "@/pages/noticias";
 import { RegistroPage } from "@/pages/registro";
+import { VerificarCorreoPage } from "@/pages/verificar-correo";
 import { VueloDetallePage } from "@/pages/vuelo-detalle";
 
 export const router = createBrowserRouter([
@@ -17,6 +18,7 @@ export const router = createBrowserRouter([
       { path: "/", element: <InicioPage /> },
       { path: "/noticias", element: <NoticiasPage /> },
       { path: "/vuelos/:vueloId", element: <VueloDetallePage /> },
+      { path: "/verificar-correo", element: <VerificarCorreoPage /> },
       {
         element: <SoloVisitantes />,
         children: [
