@@ -41,7 +41,8 @@ def _datos(**cambios: object) -> dict[str, object]:
 
 
 def _registrar(client: TestClient, **cambios: object):
-    """Registra desde un navegador sin sesión (el registro cierra sesión al terminar)."""
+    """Registra desde un navegador sin sesión: limpia las cookies porque un registro anterior
+    deja la sesión abierta y el siguiente respondería 403."""
     client.cookies.clear()
     return client.post(REGISTRO, json=_datos(**cambios))
 
