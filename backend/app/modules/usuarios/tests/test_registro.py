@@ -128,7 +128,8 @@ def test_correo_de_verificacion_lleva_un_token_valido(
 def test_registro_responde_201_si_el_correo_no_se_puede_enviar(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ):
-    """HU-01: un fallo de SMTP se registra en el log y no tumba el registro ya hecho."""
+    """HU-01: un fallo de SMTP se registra en el log y no tumba el registro ya hecho. El log
+    identifica al usuario por su id, sin el correo (Ley 1581 de 2012)."""
 
     def _falla(*_: object, **__: object) -> None:
         raise OSError("smtp no disponible")
@@ -143,6 +144,9 @@ def test_registro_responde_201_si_el_correo_no_se_puede_enviar(
 
     assert respuesta.status_code == 201
     logger.exception.assert_called_once()
+    argumentos = logger.exception.call_args.args
+    assert respuesta.json()["id"] in argumentos
+    assert not any("laura.gomez@correo.co" in str(argumento) for argumento in argumentos)
 
 
 def test_registro_sin_aceptar_politica(client: TestClient, db: Session):

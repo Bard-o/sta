@@ -279,7 +279,8 @@ def enviar_verificacion(usuario: Usuario, email: str, token: str) -> None:
     try:
         enviar_correo(email, "Confirma tu correo en AVIANCO", texto, html)
     except Exception:
-        logger.exception("No se pudo enviar el correo de verificación a %s", email)
+        # Sin el correo en el log: es un dato personal (Ley 1581 de 2012).
+        logger.exception("No se pudo enviar el correo de verificación al usuario %s", usuario.id)
 
 
 def asegurar_root(db: Session, nombre_usuario: str, contrasena: str) -> bool:
