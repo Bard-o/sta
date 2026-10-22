@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { Link } from "react-router";
 import { z } from "zod";
 import { ApiError } from "@/api/client";
-import { useLogin } from "@/auth/sesion";
+import { useLogin, useSesionVencida } from "@/auth/sesion";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -27,6 +27,7 @@ type Datos = z.infer<typeof esquema>;
 /** S03 · Inicio de sesión (HU-03). La redirección tras entrar la hace la ruta SoloVisitantes. */
 export function LoginPage() {
   const login = useLogin();
+  const sesionVencida = useSesionVencida();
   const form = useForm<Datos>({
     resolver: zodResolver(esquema),
     defaultValues: { usuario: "", contrasena: "" },
@@ -60,6 +61,9 @@ export function LoginPage() {
       <Glass as="div">
         <Form {...form}>
           <form onSubmit={enviar} noValidate className="flex flex-col gap-3">
+            {sesionVencida && !errorGeneral && (
+              <Notice tone="info">Tu sesión venció por inactividad. Inicia sesión de nuevo.</Notice>
+            )}
             {errorGeneral && <Notice tone="danger">{errorGeneral}</Notice>}
 
             <FormField

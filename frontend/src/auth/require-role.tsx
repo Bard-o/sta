@@ -1,5 +1,5 @@
 import { Navigate, Outlet, useLocation, useSearchParams } from "react-router";
-import { destinoTrasLogin, INICIO_ROL, type Rol } from "./roles";
+import { destinoTrasLogin, inicioDe, type Rol } from "./roles";
 import { useSesion } from "./sesion";
 
 /** Rutas protegidas: sin sesión lleva al login; con otro rol, a la página de inicio de su rol.
@@ -13,7 +13,7 @@ export function RequireRole({ roles }: { roles: Rol[] }) {
     const next = encodeURIComponent(location.pathname + location.search);
     return <Navigate to={`/login?next=${next}`} replace />;
   }
-  if (!roles.includes(usuario.rol)) return <Navigate to={INICIO_ROL[usuario.rol]} replace />;
+  if (!roles.includes(usuario.rol)) return <Navigate to={inicioDe(usuario)} replace />;
   return <Outlet />;
 }
 
@@ -23,6 +23,6 @@ export function SoloVisitantes() {
   const { data: usuario, isPending } = useSesion();
   const [params] = useSearchParams();
   if (isPending) return null;
-  if (usuario) return <Navigate to={destinoTrasLogin(usuario.rol, params.get("next"))} replace />;
+  if (usuario) return <Navigate to={destinoTrasLogin(usuario, params.get("next"))} replace />;
   return <Outlet />;
 }
