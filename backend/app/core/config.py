@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     mail_from: str = "AVIANCO <no-responder@avianco.test>"
     frontend_url: str = "http://localhost:5173"
 
+    # False en los tests: el hilo del planificador no arranca.
+    planificador_activo: bool = True
+
 
 @lru_cache
 def get_settings() -> Settings:

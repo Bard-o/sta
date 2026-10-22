@@ -4,6 +4,7 @@
 - `client`: TestClient de la API que usa esa misma sesión.
 - `crear_usuario`: crea un usuario con rol y contraseña dados.
 - `client_como`: TestClient con la sesión iniciada para un rol.
+- `_sin_planificador_real` (automática): apaga el hilo del planificador en todos los tests.
 """
 
 from collections.abc import Callable, Iterator
@@ -46,6 +47,14 @@ def _crear_base_si_no_existe(url: str) -> None:
         if not existe:
             conn.execute(text(f'CREATE DATABASE "{destino.database}"'))
     admin.dispose()
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _sin_planificador_real() -> Iterator[None]:
+    """El hilo del planificador nunca arranca en los tests (se prueba la clase con un reloj)."""
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(get_settings(), "planificador_activo", False)
+        yield
 
 
 @pytest.fixture(scope="session")
