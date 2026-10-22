@@ -13,9 +13,12 @@ from app.core.auth import UsuarioActual, require_role
 from app.core.db import DbSession
 from app.core.errors import NoImplementado, respuestas_error
 from app.core.security import Rol
+from app.modules.vuelos import service
 from app.modules.vuelos.schemas import (
     CancelacionVueloSalida,
+    Capacidad,
     Ciudad,
+    CiudadResumen,
     EstadoPromocion,
     EstadoVuelo,
     PaginaPromociones,
@@ -45,7 +48,7 @@ ciudades = APIRouter(prefix="/ciudades", tags=["vuelos"])
 @ciudades.get("", response_model=list[Ciudad])
 def listar_ciudades(db: DbSession) -> list[Ciudad]:
     """Catálogo de ciudades (RF-12). Público: lo usan el formulario de vuelos y la búsqueda."""
-    raise NoImplementado()
+    return service.listar_ciudades(db)
 
 
 # ---------- Vuelos ----------
@@ -82,10 +85,23 @@ def programar_vuelo(datos: VueloEntrada, usuario: Admin, db: DbSession) -> Vuelo
     raise NoImplementado()
 
 
-@vuelos.post("/vista-previa", response_model=VueloVistaPrevia)
+@vuelos.post("/vista-previa", response_model=VueloVistaPrevia, responses=respuestas_error(409))
 def previsualizar_vuelo(datos: VueloEntrada, usuario: Admin, db: DbSession) -> VueloVistaPrevia:
     """Valida el vuelo y calcula tipo, capacidad y llegada sin guardarlo (HU-13)."""
-    raise NoImplementado()
+    calculado = service.previsualizar_vuelo(db, datos)
+    return VueloVistaPrevia(
+        tipo=calculado.tipo,
+        origen=CiudadResumen.model_validate(calculado.origen),
+        destino=CiudadResumen.model_validate(calculado.destino),
+        salida=calculado.salida,
+        llegada=calculado.llegada,
+        duracion_minutos=calculado.duracion_minutos,
+        capacidad=Capacidad(
+            primera=calculado.capacidad_primera,
+            economica=calculado.capacidad_economica,
+            total=calculado.capacidad_total,
+        ),
+    )
 
 
 @vuelos.post("/recurrentes", status_code=status.HTTP_201_CREATED, response_model=SerieVuelosSalida)

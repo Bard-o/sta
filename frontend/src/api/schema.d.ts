@@ -3409,6 +3409,15 @@ export interface operations {
           "application/json": components["schemas"]["ErrorRespuesta"];
         };
       };
+      /** @description Choca con el estado actual */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
       /** @description Datos inválidos */
       422: {
         headers: {
