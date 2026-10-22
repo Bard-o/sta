@@ -138,10 +138,11 @@ def hash_token(token: str) -> str:
 
 
 def registrar_cliente(db: Session, datos: RegistroClienteEntrada) -> Usuario:
-    """HU-01, RF-03 y RF-04: crea la cuenta de cliente, su token de verificación y la sesión.
+    """HU-01, RF-03 y RF-04: crea la cuenta de cliente y su token de verificación.
 
-    El envío del correo lo hace quien llama, con `enviar_verificacion`, después de confirmar
-    la transacción. Lanza DatosInvalidos o DatosDuplicados.
+    Confirma la transacción y después envía el enlace con `enviar_verificacion`; si el correo
+    falla, la cuenta queda creada igual. La cookie de sesión la pone el router. Lanza
+    DatosInvalidos o DatosDuplicados.
     """
     _validar_datos_de_registro(datos)
     email = datos.email.strip().lower()
