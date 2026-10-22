@@ -1,7 +1,7 @@
 """noticias: crea la tabla noticias
 
 Revision ID: 49a1241aa99c
-Revises: b2f98ffd641d
+Revises: e3d08910eda0
 Create Date: 2026-10-22 18:55:30.204888
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "49a1241aa99c"
-down_revision: str | None = "b2f98ffd641d"
+down_revision: str | None = "e3d08910eda0"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
