@@ -22,7 +22,7 @@ def test_no_hay_endpoints_de_auditoria():
 
 @pytest.mark.parametrize("metodo", ["GET", "POST", "PUT", "PATCH", "DELETE"])
 def test_la_api_no_permite_leer_ni_modificar_la_auditoria(
-    metodo: str, client: TestClient, client_como: Callable[[Rol], TestClient]
+    metodo: str, client_como: Callable[[Rol], TestClient]
 ):
     # RNF-16: incluso el root recibe 404; no hay forma de tocar los registros por HTTP.
     cliente_root = client_como(Rol.ROOT)
