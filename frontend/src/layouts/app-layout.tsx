@@ -1,6 +1,14 @@
-import { Outlet, useNavigate } from "react-router";
+import { Navigate, Outlet, useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
-import { NAV_ROL, NAV_VISITANTE, NOMBRE_ROL, INICIO_ROL } from "@/auth/roles";
+import {
+  inicioDe,
+  NAV_ROL,
+  NAV_VISITANTE,
+  nombreVisible,
+  NOMBRE_ROL,
+  registroPendiente,
+  RUTA_PRIMER_INGRESO,
+} from "@/auth/roles";
 import { useLogout, useSesion } from "@/auth/sesion";
 import { Backdrop } from "@/components/ui/backdrop";
 import { Button } from "@/components/ui/button";
@@ -9,9 +17,10 @@ import { TopNav } from "@/components/ui/top-nav";
 
 /** Backdrop + ventana + barra del rol. Todas las pantallas viven dentro de este layout. */
 export function AppLayout() {
-  const { data: usuario } = useSesion();
+  const { data: usuario, isPending } = useSesion();
   const logout = useLogout();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const cerrarSesion = () =>
     logout.mutate(undefined, {
@@ -23,11 +32,21 @@ export function AppLayout() {
       onError: (e) => toast.error(e.message),
     });
 
-  const nav = usuario ? (
+  // HU-12: con el registro pendiente el administrador solo ve S07, aunque intente ir a otra ruta.
+  const pendiente = usuario ? registroPendiente(usuario) : false;
+  if (pendiente && location.pathname !== RUTA_PRIMER_INGRESO) {
+    return <Navigate to={RUTA_PRIMER_INGRESO} replace />;
+  }
+
+  // Mientras se resuelve la sesión la barra queda neutra: así quien ya entró no ve un instante el
+  // menú de visitante antes del de su rol.
+  const nav = isPending ? (
+    <TopNav />
+  ) : usuario ? (
     <TopNav
-      homeHref={INICIO_ROL[usuario.rol]}
-      items={NAV_ROL[usuario.rol]}
-      user={{ name: usuario.nombre_usuario, role: NOMBRE_ROL[usuario.rol] }}
+      homeHref={inicioDe(usuario)}
+      items={pendiente ? [] : NAV_ROL[usuario.rol]}
+      user={{ name: nombreVisible(usuario), role: NOMBRE_ROL[usuario.rol] }}
       right={
         <Button variant="ghost" size="sm" onClick={cerrarSesion} disabled={logout.isPending}>
           Cerrar sesión
@@ -53,7 +72,7 @@ export function AppLayout() {
   return (
     <Backdrop className="flex min-h-full flex-col">
       {/* Administrador y root no usan el chatbot (Apéndice B). */}
-      <Shell nav={nav} chat={!usuario || usuario.rol === "cliente"}>
+      <Shell nav={nav} chat={!isPending && (!usuario || usuario.rol === "cliente")}>
         <Outlet />
       </Shell>
     </Backdrop>

@@ -3,6 +3,8 @@ import { api, ApiError, unwrap, type Schemas } from "@/api/client";
 import type { Usuario } from "./roles";
 
 export const SESION_KEY = ["sesion"] as const;
+/** true cuando la sesión terminó porque una petición respondió 401 (RNF-14); el login lo avisa. */
+export const SESION_VENCIDA_KEY = ["sesion-vencida"] as const;
 
 /** Usuario de la sesión, o null si es un visitante. */
 export function useSesion() {
@@ -20,12 +22,26 @@ export function useSesion() {
   });
 }
 
+/** ¿La sesión anterior venció por inactividad? Solo se activa si había una sesión abierta. */
+export function useSesionVencida(): boolean {
+  const { data } = useQuery({
+    queryKey: SESION_VENCIDA_KEY,
+    queryFn: () => false,
+    initialData: false,
+    staleTime: Infinity,
+  });
+  return data;
+}
+
 export function useLogin() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (datos: Schemas["LoginEntrada"]) =>
       unwrap(api.POST("/api/v1/auth/login", { body: datos })),
-    onSuccess: (usuario) => queryClient.setQueryData(SESION_KEY, usuario),
+    onSuccess: (usuario) => {
+      queryClient.setQueryData(SESION_VENCIDA_KEY, false);
+      queryClient.setQueryData(SESION_KEY, usuario);
+    },
   });
 }
 
