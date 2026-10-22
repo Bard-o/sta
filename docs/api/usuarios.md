@@ -69,6 +69,29 @@ Con sesión de cualquier rol. Devuelve el usuario de la sesión, con el mismo cu
 |---|---|---|
 | 401 | `no_autenticado` | Sin cookie, token alterado, sesión vencida o cerrada, o cuenta desactivada. |
 
+## Contraseña
+
+### `PUT /api/v1/usuarios/me/contrasena`
+
+Con sesión de cualquier rol (cliente, admin o root). Cambia la contraseña indicando la actual (HU-06, RF-08). Es la única forma en que el root cambia la suya, porque no tiene correo (RF-01). Responde `204` sin cuerpo.
+
+Entrada:
+
+```json
+{ "contrasena_actual": "Clave1234", "contrasena_nueva": "OtraClave99", "confirmacion": "OtraClave99" }
+```
+
+- La contraseña nueva cumple RNF-08: mínimo 8 caracteres, al menos una letra y un número. Se guarda como hash Argon2id, nunca en texto plano.
+- Las validaciones de `contrasena_nueva` y `confirmacion` se hacen antes de comprobar la actual.
+- La sesión actual sigue abierta: este cambio no invalida ninguna sesión (a diferencia del restablecimiento de HU-05, que las cierra todas).
+
+| HTTP | `codigo` | `campos` | Cuándo |
+|---|---|---|---|
+| 422 | `contrasena_actual_incorrecta` | `contrasena_actual` | La contraseña actual no coincide; no se cambia nada. |
+| 422 | `datos_invalidos` | `contrasena_nueva` | No cumple la política de RNF-08. |
+| 422 | `datos_invalidos` | `confirmacion` | No coincide con la contraseña nueva. |
+| 401 | `no_autenticado` | | Sin sesión, token inválido o sesión vencida. |
+
 ## Usuario root
 
 `python -m app.seed` (lo corre el contenedor del backend al arrancar) crea el root con `ROOT_USERNAME` y `ROOT_PASSWORD` del `.env` si todavía no existe un usuario con rol root. Si ya existe, no lo modifica: el root cambia su contraseña desde su sesión (RF-01).
