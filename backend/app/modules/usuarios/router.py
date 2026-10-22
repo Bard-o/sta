@@ -17,7 +17,7 @@ from app.core.auth import (
     require_role,
 )
 from app.core.db import DbSession
-from app.core.errors import NoImplementado, respuestas_error
+from app.core.errors import NoImplementado, SinPermiso, respuestas_error
 from app.core.security import Rol
 from app.modules.usuarios import service
 from app.modules.usuarios.schemas import (
@@ -43,6 +43,13 @@ Cliente = Annotated[UsuarioActual, Depends(require_role(Rol.CLIENTE))]
 ClienteOAdmin = Annotated[UsuarioActual, Depends(require_role(Rol.CLIENTE, Rol.ADMIN))]
 Admin = Annotated[UsuarioActual, Depends(require_role(Rol.ADMIN))]
 Root = Annotated[UsuarioActual, Depends(require_role(Rol.ROOT))]
+
+
+def solo_visitante(usuario: UsuarioOpcional) -> None:
+    """HU-01, Apéndice B: el registro de clientes es solo para visitantes."""
+    if usuario is not None:
+        raise SinPermiso()
+
 
 # ---------- Sesión: /auth ----------
 
@@ -96,12 +103,18 @@ cuenta = APIRouter(prefix="/usuarios", tags=["usuarios"])
     status_code=status.HTTP_201_CREATED,
     response_model=UsuarioSalida,
     responses=respuestas_error(409),
+    dependencies=[Depends(solo_visitante)],
 )
 def registrar_cliente(
     datos: RegistroClienteEntrada, response: Response, db: DbSession
 ) -> UsuarioSalida:
-    """Registra un cliente, inicia su sesión y envía el enlace de verificación (HU-01)."""
-    raise NoImplementado()
+    """Registra un cliente, inicia su sesión y envía el enlace de verificación (HU-01).
+
+    Solo el visitante se registra: con una sesión abierta responde 403 sin_permiso.
+    """
+    nuevo = service.registrar_cliente(db, datos)
+    poner_cookie_sesion(response, nuevo.id, nuevo.rol, nuevo.version_sesion)
+    return UsuarioSalida.model_validate(nuevo)
 
 
 @cuenta.post("/verificacion", status_code=status.HTTP_204_NO_CONTENT)
