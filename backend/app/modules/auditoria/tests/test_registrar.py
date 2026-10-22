@@ -118,6 +118,27 @@ def test_rollback_del_llamador_no_deja_el_registro(db: Session, crear_usuario):
     assert db.scalar(select(func.count()).select_from(RegistroAuditoria)) == 0
 
 
+def test_sin_antes_ni_despues_guarda_null_de_sql(db: Session, crear_usuario):
+    # RF-26: crear o desactivar puede no tener valor anterior; la columna queda en NULL, no en
+    # el JSON `null`, para que la consulta de HU-50 pueda filtrar con IS NULL.
+    usuario = crear_usuario(Rol.ADMIN)
+
+    service.registrar(
+        db,
+        usuario_id=usuario.id,
+        accion="vuelo.crear",
+        entidad="vuelo",
+        entidad_id=1,
+    )
+
+    sin_valores = db.scalar(
+        select(func.count())
+        .select_from(RegistroAuditoria)
+        .where(RegistroAuditoria.antes.is_(None), RegistroAuditoria.despues.is_(None))
+    )
+    assert sin_valores == 1
+
+
 @pytest.mark.parametrize(
     "detalle",
     [

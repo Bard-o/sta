@@ -21,8 +21,9 @@ class RegistroAuditoria(Base):
     accion: Mapped[str] = mapped_column(String(40))
     entidad: Mapped[str] = mapped_column(String(20))
     entidad_id: Mapped[int] = mapped_column(Integer)
-    antes: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
-    despues: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    # none_as_null: sin valores, la columna queda en NULL de SQL y no en el JSON `null`.
+    antes: Mapped[dict[str, Any] | None] = mapped_column(JSONB(none_as_null=True))
+    despues: Mapped[dict[str, Any] | None] = mapped_column(JSONB(none_as_null=True))
     creado_en: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
