@@ -46,7 +46,11 @@ Root = Annotated[UsuarioActual, Depends(require_role(Rol.ROOT))]
 
 
 def solo_visitante(usuario: UsuarioOpcional) -> None:
-    """HU-01, Apéndice B: el registro de clientes es solo para visitantes."""
+    """HU-01, Apéndice B: el registro de clientes es solo para visitantes.
+
+    Con una sesión abierta responde 403 sin_permiso. (Esto no va en el docstring del endpoint:
+    ese texto sale en el OpenAPI y cambiaría los tipos generados del frontend.)
+    """
     if usuario is not None:
         raise SinPermiso()
 
@@ -108,10 +112,7 @@ cuenta = APIRouter(prefix="/usuarios", tags=["usuarios"])
 def registrar_cliente(
     datos: RegistroClienteEntrada, response: Response, db: DbSession
 ) -> UsuarioSalida:
-    """Registra un cliente, inicia su sesión y envía el enlace de verificación (HU-01).
-
-    Solo el visitante se registra: con una sesión abierta responde 403 sin_permiso.
-    """
+    """Registra un cliente, inicia su sesión y envía el enlace de verificación (HU-01)."""
     nuevo = service.registrar_cliente(db, datos)
     poner_cookie_sesion(response, nuevo.id, nuevo.rol, nuevo.version_sesion)
     return UsuarioSalida.model_validate(nuevo)
