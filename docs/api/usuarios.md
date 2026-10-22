@@ -1,6 +1,70 @@
 # Módulo usuarios
 
-Dueño: Backend A. Requisitos: RF-01 a RF-11. Este archivo cubre por ahora la sesión (RF-06, HU-03, HU-04); el resto de endpoints del módulo se agregan aquí con sus issues. El contrato acordado de todo el módulo está en [iteracion-1.md](iteracion-1.md).
+Dueño: Backend A. Requisitos: RF-01 a RF-11. Este archivo cubre el registro de clientes (RF-03, RF-04, HU-01) y la sesión (RF-06, HU-03, HU-04); el resto de endpoints del módulo se agregan aquí con sus issues. El contrato acordado de todo el módulo está en [iteracion-1.md](iteracion-1.md).
+
+## Registro de clientes
+
+### `POST /api/v1/usuarios/registro`
+
+Sin sesión (visitante). Crea la cuenta de cliente, inicia la sesión con la cookie y envía al
+correo el enlace de verificación `/verificar-correo?token=…` (vence en 24 horas y sirve una
+sola vez; el endpoint que lo consume es HU-02).
+
+Entrada (`RegistroClienteEntrada`):
+
+```json
+{
+  "tipo_documento": "CC",
+  "numero_documento": "1088345921",
+  "nombres": "Laura",
+  "apellidos": "Gómez Ríos",
+  "fecha_nacimiento": "1995-03-14",
+  "lugar_nacimiento": "Pereira, Risaralda",
+  "direccion_facturacion": "Cra. 7 # 19-28, Pereira",
+  "genero": "femenino",
+  "email": "laura.gomez@correo.co",
+  "telefono": "310 555 0192",
+  "nombre_usuario": "lauragomez",
+  "contrasena": "Clave1234",
+  "acepta_politica": true
+}
+```
+
+- `acepta_politica` debe ser `true`; se guarda la fecha de aceptación (Ley 1581 de 2012).
+- `fecha_nacimiento` no puede ser futura. No hay edad mínima de registro: un menor de edad
+  puede registrarse (la restricción de edad aplica al volar).
+- `contrasena`: 8 caracteres o más, con al menos una letra y un número (RNF-08); se guarda
+  con Argon2id, nunca en claro.
+- `nombre_usuario` es único en todo el sistema, sin distinguir mayúsculas. El correo y el
+  documento (tipo y número) son únicos entre las cuentas de cliente, así que un administrador
+  puede registrarse como cliente con sus mismos datos (SUP-18).
+- La cuenta nace con `email_verificado: false` y sin suscripción a noticias. El monedero
+  llega en la iteración 2. La imagen de perfil se sube después del registro, con
+  `PUT /api/v1/usuarios/me/imagen`.
+- Con una sesión abierta responde `403 sin_permiso`: solo el visitante se registra.
+- Si el correo no se puede enviar, la cuenta queda creada igual y el fallo se anota en el
+  log; el cliente puede pedir el reenvío (HU-02).
+
+`201`: pone la cookie de sesión y devuelve el usuario.
+
+```json
+{
+  "id": 12,
+  "nombre_usuario": "lauragomez",
+  "email": "laura.gomez@correo.co",
+  "rol": "cliente",
+  "email_verificado": false,
+  "registro_completo": true,
+  "nombres": "Laura",
+  "apellidos": "Gómez Ríos"
+}
+```
+
+| HTTP | `codigo` | Cuándo |
+|---|---|---|
+| 409 | `datos_duplicados` | `campos` con `nombre_usuario`, `numero_documento` o `email` que ya pertenece a otra cuenta (RF-04). |
+| 422 | `datos_invalidos` | `campos` con `acepta_politica`, `fecha_nacimiento`, `email`, `contrasena` o el campo con formato inválido. |
+| 403 | `sin_permiso` | Hay una sesión abierta (Apéndice B). |
 
 ## Sesión
 
