@@ -45,6 +45,16 @@ export function useLogin() {
   });
 }
 
+/** HU-12: completa el registro del administrador y deja la sesión con `registro_completo`. */
+export function useCompletarPrimerIngreso() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (datos: Schemas["RegistroAdministradorEntrada"]) =>
+      unwrap(api.POST("/api/v1/administradores/me/registro", { body: datos })),
+    onSuccess: (usuario) => queryClient.setQueryData(SESION_KEY, usuario),
+  });
+}
+
 export function useLogout() {
   const queryClient = useQueryClient();
   return useMutation({
