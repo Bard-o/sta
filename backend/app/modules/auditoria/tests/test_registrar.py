@@ -145,6 +145,7 @@ def test_sin_antes_ni_despues_guarda_null_de_sql(db: Session, crear_usuario):
         {"contrasena": "Clave1234"},
         {"contraseña": "Clave1234"},
         {"contrasena_temporal": "Clave1234"},
+        {"confirmacion": "Clave1234"},
         {"password_hash": "$argon2id$v=19$m=65536,t=3,p=4$hash"},
         {"datos": {"contrasena": "Clave1234"}},
         {"lista": [{"password": "Clave1234"}]},

@@ -29,7 +29,8 @@ _ENTIDADES_AUDITADAS = frozenset(get_args(EntidadAuditada))
 
 # Claves que podrían llevar una contraseña. Se comparan sin tildes y en minúscula.
 _RAICES_CONTRASENA = ("contrasena", "password", "passwd", "pwd", "secret", "secreto")
-_CLAVES_CONTRASENA = frozenset({"clave"})
+# `confirmacion` repite la contraseña nueva en los schemas de usuarios (HU-05, HU-06, HU-12).
+_CLAVES_CONTRASENA = frozenset({"clave", "confirmacion"})
 
 
 def _normalizar(clave: str) -> str:
