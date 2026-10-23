@@ -44,3 +44,22 @@ def test_matriz_de_permisos(
         else:
             esperado = 401 if rol is None else 403
             assert estado == esperado, f"{metodo} {ruta} como {rol}: {estado}"
+
+
+def test_programar_vuelo_sin_sesion_responde_no_autenticado(client: TestClient):
+    """HU-13 · RNF-10: sin sesión, POST /vuelos responde 401 no_autenticado."""
+    respuesta = client.post("/api/v1/vuelos", json={})
+
+    assert respuesta.status_code == 401
+    assert respuesta.json()["error"]["codigo"] == "no_autenticado"
+
+
+@pytest.mark.parametrize("rol", [Rol.CLIENTE, Rol.ROOT])
+def test_programar_vuelo_solo_para_administradores(
+    client_como: Callable[[Rol], TestClient], rol: Rol
+):
+    """HU-13 · RNF-10: un cliente o root recibe 403 sin_permiso al programar un vuelo."""
+    respuesta = client_como(rol).post("/api/v1/vuelos", json={})
+
+    assert respuesta.status_code == 403
+    assert respuesta.json()["error"]["codigo"] == "sin_permiso"

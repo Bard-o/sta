@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.errors import DatosInvalidos
+from app.core.security import Rol
 from app.modules.vuelos import service
 from app.modules.vuelos.models import Vuelo
 from app.modules.vuelos.schemas import VueloEntrada
@@ -284,3 +285,22 @@ def test_la_secuencia_genera_codigos_unicos(db: Session) -> None:
     assert re.fullmatch(r"STA-\d{5}", primero.codigo)
     assert re.fullmatch(r"STA-\d{5}", segundo.codigo)
     assert primero.codigo != segundo.codigo
+
+
+def test_programar_vuelo_no_hace_commit(db: Session, crear_usuario) -> None:
+    """HU-13 · RNF-17: guardar usa la transacción de quien llama; el commit es del router."""
+    usuario = crear_usuario(Rol.ADMIN)
+    db.execute(select(Vuelo.id).limit(0))
+    transaccion = db.get_transaction()
+
+    programado = service.programar_vuelo(
+        db,
+        datos_vuelo(origen="PEI", destino="MIA", duracion_minutos=240),
+        usuario_id=usuario.id,
+    )
+
+    assert programado.vuelo.id is not None
+    assert re.fullmatch(r"STA-\d{5}", programado.vuelo.codigo)
+    assert programado.vuelo.tipo == "internacional"
+    assert programado.ocupacion.tiquetes_vendidos == 0
+    assert db.get_transaction() is transaccion

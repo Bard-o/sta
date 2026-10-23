@@ -655,7 +655,7 @@ Hasta la iteración 2 no existen reservas ni compras: estas funciones ya respond
 Necesitan un issue del líder porque tocan `core/`, Docker o recursos compartidos:
 
 1. **Registro incompleto en `core/auth.py`.** `require_role` debe responder `403 registro_incompleto` a un administrador sin registro completo (HU-12), salvo en `/auth/*` y `POST /administradores/me/registro`. Depende del campo que agregue usuarios en su modelo.
-2. **Procesos programados.** Un planificador en el backend para pasar vuelos a realizado y vencer promociones como máximo 2 minutos después de su hora, que también procese al arrancar lo que venció con el servidor apagado (RF-21, RNF-18).
+2. **Procesos programados.** Un planificador en el backend para pasar vuelos a realizado y vencer promociones como máximo 2 minutos después de su hora, que también procese al arrancar lo que venció con el servidor apagado (RF-21, RNF-18). Resuelto en #4: `app/core/planificador.py`; cómo registrar una tarea en `AGENTS.md` (Procesos programados).
 3. **Cola de correos.** `core/mail.py` envía de forma síncrona. Las noticias a los suscritos deben salir por una cola que reintente si SMTP falla (RNF-05, RNF-21).
 4. **Archivos.** Dónde se guardan las imágenes de perfil (un volumen de Docker) y el banco de imágenes por ciudad (SUP-30), que el contrato sirve en `/imagenes/ciudades/<CODIGO>.jpg` desde `frontend/public/`. Las imágenes deben tener una licencia que permita usarlas en un repositorio público.
 
