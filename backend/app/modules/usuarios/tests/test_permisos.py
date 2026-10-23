@@ -31,12 +31,13 @@ ENDPOINTS: list[tuple[str, str, tuple[Rol, ...] | None]] = [
     ("PUT", "/api/v1/usuarios/me/suscripcion", (Rol.CLIENTE,)),
     ("POST", "/api/v1/usuarios/suscripcion/baja", PUBLICO),
     ("GET", "/api/v1/usuarios/me/desactivacion", (Rol.CLIENTE,)),
-    ("POST", "/api/v1/usuarios/me/desactivacion", (Rol.CLIENTE,)),
     ("GET", "/api/v1/administradores", (Rol.ROOT,)),
     ("POST", "/api/v1/administradores", (Rol.ROOT,)),
     ("POST", "/api/v1/administradores/1/desactivar", (Rol.ROOT,)),
     ("POST", "/api/v1/administradores/1/reactivar", (Rol.ROOT,)),
     ("POST", "/api/v1/administradores/me/registro", (Rol.ADMIN,)),
+    # Al final: desactivar la cuenta del cliente invalida su sesión para las rutas siguientes.
+    ("POST", "/api/v1/usuarios/me/desactivacion", (Rol.CLIENTE,)),
 ]
 
 
