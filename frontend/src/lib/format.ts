@@ -72,3 +72,8 @@ export function duracion(minutos: number): string {
   const m = minutos % 60;
   return m === 0 ? `${h} h` : h === 0 ? `${m} min` : `${h} h ${m} min`;
 }
+
+/** Convierte una fecha de calendario aaaa-mm-dd (sin zona) a dd/mm/aaaa. */
+export function fechaCalendario(iso: string): string {
+  return iso.split("-").reverse().join("/");
+}

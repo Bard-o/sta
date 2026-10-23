@@ -1,4 +1,13 @@
-import { cop, desfase, duracion, fecha, fechaHora, fechaRelativa, hora } from "./format";
+import {
+  cop,
+  desfase,
+  duracion,
+  fecha,
+  fechaCalendario,
+  fechaHora,
+  fechaRelativa,
+  hora,
+} from "./format";
 
 describe("cop (IU-06)", () => {
   it("usa punto de miles y sin decimales", () => {
@@ -62,5 +71,11 @@ describe("duracion", () => {
     [1439, "23 h 59 min"],
   ])("%i minutos → %s", (minutos, esperado) => {
     expect(duracion(minutos)).toBe(esperado);
+  });
+});
+
+describe("fechaCalendario", () => {
+  it("pasa aaaa-mm-dd a dd/mm/aaaa sin mover el día por la zona horaria", () => {
+    expect(fechaCalendario("2026-10-05")).toBe("05/10/2026");
   });
 });

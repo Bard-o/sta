@@ -1,8 +1,10 @@
+import type { ReactNode } from "react";
 import { ApiError, type Schemas } from "@/api/client";
 import { FlightPass } from "@/components/ui/flight-pass";
 import { Notice } from "@/components/ui/notice";
 import { cop, desfase, duracion, fecha, hora } from "@/lib/format";
-import { useVistaPrevia, type VueloEntrada } from "./api";
+import { useVistaPrevia, useVistaSerie, type SerieEntrada, type VueloEntrada } from "./api";
+import { resumenSerie } from "./resumen";
 
 type Vista = Schemas["VueloVistaPrevia"];
 
@@ -14,9 +16,12 @@ const NOMBRE_CAMPO: Record<string, string> = {
   duracion_minutos: "Duración",
   precio_economica: "Precio económica",
   precio_primera: "Precio primera",
+  dias_semana: "Días",
+  desde: "Desde",
+  hasta: "Hasta",
 };
 
-function Pase({ vista, precio }: { vista: Vista; precio: number }) {
+function Pase({ vista, precio, extra }: { vista: Vista; precio: number; extra?: ReactNode }) {
   const zo = vista.origen.zona_horaria;
   const zd = vista.destino.zona_horaria;
   return (
@@ -49,46 +54,119 @@ function Pase({ vista, precio }: { vista: Vista; precio: number }) {
           <strong>Llegada calculada:</strong> {fecha(vista.llegada, zd)} {hora(vista.llegada, zd)}{" "}
           en {vista.destino.nombre} ({desfase(vista.llegada, zd)}).
         </p>
+        {extra}
       </div>
     </>
   );
 }
 
-/** «Así lo verá el cliente» (S08): el pase del vuelo y lo que el sistema calcula, antes de guardar. */
-export function VistaPrevia({ entrada, precio }: { entrada: VueloEntrada | null; precio: number }) {
-  const consulta = useVistaPrevia(entrada);
-
+function Errores({ error }: { error: Error }) {
   return (
-    <section aria-labelledby="titulo-vista-previa" className="flex flex-col gap-3">
-      <h2 id="titulo-vista-previa" className="sta-panel-title">
-        Así lo verá el cliente
-      </h2>
-      {entrada === null && (
-        <p className="body sta-muted">
-          Completa el formulario con datos válidos para ver el pase del vuelo y lo que calcula el
-          sistema.
-        </p>
+    <Notice tone="danger">
+      {error.message}
+      {error instanceof ApiError && Object.keys(error.campos).length > 0 && (
+        <ul className="mt-1 list-disc pl-5">
+          {Object.entries(error.campos).map(([campo, mensaje]) => (
+            <li key={campo}>
+              {NOMBRE_CAMPO[campo] ?? campo}: {mensaje}
+            </li>
+          ))}
+        </ul>
       )}
+    </Notice>
+  );
+}
+
+const INDICACION =
+  "Completa el formulario con datos válidos para ver el pase del vuelo y lo que calcula el sistema.";
+
+function PorVuelo({
+  entrada,
+  precio,
+  extra,
+}: {
+  entrada: VueloEntrada | null;
+  precio: number;
+  extra?: ReactNode;
+}) {
+  const consulta = useVistaPrevia(entrada);
+  return (
+    <>
+      {entrada === null && <p className="body sta-muted">{INDICACION}</p>}
       {entrada !== null && consulta.isPending && (
         <p role="status" className="body sta-muted">
           Calculando la vista previa…
         </p>
       )}
-      {entrada !== null && consulta.isError && (
-        <Notice tone="danger">
-          {consulta.error.message}
-          {consulta.error instanceof ApiError && Object.keys(consulta.error.campos).length > 0 && (
-            <ul className="mt-1 list-disc pl-5">
-              {Object.entries(consulta.error.campos).map(([campo, mensaje]) => (
-                <li key={campo}>
-                  {NOMBRE_CAMPO[campo] ?? campo}: {mensaje}
-                </li>
-              ))}
-            </ul>
-          )}
-        </Notice>
+      {entrada !== null && consulta.isError && <Errores error={consulta.error} />}
+      {entrada !== null && consulta.data && (
+        <Pase vista={consulta.data} precio={precio} extra={extra} />
       )}
-      {entrada !== null && consulta.data && <Pase vista={consulta.data} precio={precio} />}
+    </>
+  );
+}
+
+/** Con «Se repite»: el pase es el de la primera fecha que se crearía y se suma el resumen. */
+function PorSerie({ serie, precio }: { serie: SerieEntrada | null; precio: number }) {
+  const consulta = useVistaSerie(serie);
+  if (serie === null) return <p className="body sta-muted">{INDICACION}</p>;
+  if (consulta.isPending) {
+    return (
+      <p role="status" className="body sta-muted">
+        Calculando la vista previa…
+      </p>
+    );
+  }
+  if (consulta.isError) return <Errores error={consulta.error} />;
+
+  const { fechas, omitidas } = consulta.data;
+  const repeticiones = (
+    <p>
+      <strong>Repeticiones:</strong> {resumenSerie(fechas.length, omitidas, serie.dias_semana)}
+    </p>
+  );
+  const vuelo: VueloEntrada = {
+    origen: serie.origen,
+    destino: serie.destino,
+    fecha_salida: fechas[0] ?? "",
+    hora_salida: serie.hora_salida,
+    duracion_minutos: serie.duracion_minutos,
+    precio_economica: serie.precio_economica,
+    precio_primera: serie.precio_primera,
+  };
+
+  if (fechas.length === 0) {
+    return (
+      <div className="sta-notice" style={{ display: "block" }}>
+        {repeticiones}
+        <p>Con estos datos no se crearía ningún vuelo: cambia los días o el periodo.</p>
+      </div>
+    );
+  }
+  return <PorVuelo entrada={vuelo} precio={precio} extra={repeticiones} />;
+}
+
+/** «Así lo verá el cliente» (S08): el pase del vuelo y lo que el sistema calcula, antes de guardar.
+ *  Con `serie` (el vuelo se repite) muestra además cuántos vuelos se crearían. */
+export function VistaPrevia({
+  entrada,
+  serie,
+  precio,
+}: {
+  entrada: VueloEntrada | null;
+  serie?: SerieEntrada | null;
+  precio: number;
+}) {
+  return (
+    <section aria-labelledby="titulo-vista-previa" className="flex flex-col gap-3">
+      <h2 id="titulo-vista-previa" className="sta-panel-title">
+        Así lo verá el cliente
+      </h2>
+      {serie === undefined ? (
+        <PorVuelo entrada={entrada} precio={precio} />
+      ) : (
+        <PorSerie serie={serie} precio={precio} />
+      )}
     </section>
   );
 }
