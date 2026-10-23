@@ -1,8 +1,8 @@
 """RNF-10: cada endpoint del módulo responde 401 o 403 a los roles que no lo tienen permitido.
 
-Matriz del contrato en docs/api/iteracion-1.md. Los endpoints que todavía son stubs responden
-501 (o 422 si el cuerpo vacío no pasa la validación) al rol permitido. El registro de clientes
-(HU-01) es solo para visitantes: con cualquier sesión abierta responde 403.
+Matriz del contrato en docs/api/iteracion-1.md. Los endpoints implementados responden según su
+lógica; los que todavía son stubs, 501 (o 422 si el cuerpo vacío no pasa la validación). El
+registro de clientes (HU-01) es solo para visitantes: con cualquier sesión abierta responde 403.
 """
 
 from collections.abc import Callable

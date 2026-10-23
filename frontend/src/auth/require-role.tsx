@@ -1,5 +1,5 @@
 import { Navigate, Outlet, useLocation, useSearchParams } from "react-router";
-import { destinoTrasLogin, inicioDe, type Rol } from "./roles";
+import { destinoTrasLogin, inicioDe, registroPendiente, type Rol } from "./roles";
 import { useSesion } from "./sesion";
 
 /** Rutas protegidas: sin sesión lleva al login; con otro rol, a la página de inicio de su rol.
@@ -14,6 +14,17 @@ export function RequireRole({ roles }: { roles: Rol[] }) {
     return <Navigate to={`/login?next=${next}`} replace />;
   }
   if (!roles.includes(usuario.rol)) return <Navigate to={inicioDe(usuario)} replace />;
+  return <Outlet />;
+}
+
+/** S07: solo el administrador con el registro pendiente ve el formulario (HU-12). Uno que ya lo
+ *  completó vuelve al inicio de su rol. */
+export function SoloRegistroPendiente() {
+  const { data: usuario, isPending } = useSesion();
+
+  if (isPending) return null;
+  if (!usuario) return <Navigate to="/login" replace />;
+  if (!registroPendiente(usuario)) return <Navigate to={inicioDe(usuario)} replace />;
   return <Outlet />;
 }
 

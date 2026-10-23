@@ -50,3 +50,11 @@ export function useQuitarImagen() {
       ),
   });
 }
+
+/** Cambia la contraseña con la actual (HU-06). La sesión sigue abierta. */
+export function useCambiarContrasena() {
+  return useMutation({
+    mutationFn: (datos: Schemas["CambioContrasenaEntrada"]) =>
+      unwrap(api.PUT("/api/v1/usuarios/me/contrasena", { body: datos })),
+  });
+}

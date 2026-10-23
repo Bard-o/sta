@@ -183,7 +183,8 @@ describe("Enlace a Mi perfil (HU-07)", () => {
   it.each([
     ["cliente", CLIENTE, "/cliente"],
     ["administrador", ADMIN, "/admin"],
-  ])("el nombre del %s en el menú lleva a su perfil", async (_rol, usuario, inicio) => {
+    ["root", ROOT, "/root"],
+  ])("el nombre del %s en el menú lleva a su perfil o cuenta", async (_rol, usuario, inicio) => {
     responderApi({ "GET /api/v1/auth/me": sesionDe(usuario) });
     renderRutas(rutas, inicio);
 
@@ -191,12 +192,9 @@ describe("Enlace a Mi perfil (HU-07)", () => {
     expect(enlace).toHaveAttribute("href", "/perfil");
   });
 
-  it.each([
-    ["root", ROOT, "/root"],
-    ["administrador con el registro pendiente", ADMIN_INCOMPLETO, "/admin/primer-ingreso"],
-  ])("el %s no tiene enlace al perfil", async (_rol, usuario, inicio) => {
-    responderApi({ "GET /api/v1/auth/me": sesionDe(usuario) });
-    renderRutas(rutas, inicio);
+  it("el administrador con el registro pendiente no tiene enlace al perfil", async () => {
+    responderApi({ "GET /api/v1/auth/me": sesionDe(ADMIN_INCOMPLETO) });
+    renderRutas(rutas, "/admin/primer-ingreso");
 
     await screen.findByRole("button", { name: "Cerrar sesión" });
     expect(screen.queryByRole("link", { name: /^Mi perfil/ })).not.toBeInTheDocument();

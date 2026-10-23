@@ -1,6 +1,7 @@
 """Configuración leída de variables de entorno (archivo .env vía docker compose)."""
 
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -28,6 +29,9 @@ class Settings(BaseSettings):
 
     # False en los tests: el hilo del planificador no arranca.
     planificador_activo: bool = True
+    # Archivos que suben los usuarios (imagen de perfil). Fuera de /app, que es el código montado;
+    # en docker compose es el volumen con nombre `archivos`.
+    archivos_dir: Path = Path("/data/archivos")
 
 
 @lru_cache

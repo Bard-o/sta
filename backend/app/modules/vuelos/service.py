@@ -13,6 +13,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.errors import Conflicto, DatosInvalidos
+from app.modules.auditoria import service as auditoria_service
+from app.modules.noticias import service as noticias_service
+from app.modules.reservas import service as reservas_service
 from app.modules.vuelos.models import Ciudad, TipoVuelo, Vuelo
 from app.modules.vuelos.schemas import VueloEntrada
 
@@ -55,6 +58,16 @@ class VueloCalculado:
     @property
     def capacidad_total(self) -> int:
         return self.capacidad_primera + self.capacidad_economica
+
+
+@dataclass(frozen=True)
+class VueloProgramado:
+    """Vuelo guardado, con las ciudades y la ocupación para armar la vista del administrador."""
+
+    vuelo: Vuelo
+    origen: Ciudad
+    destino: Ciudad
+    ocupacion: reservas_service.OcupacionVuelo
 
 
 def listar_ciudades(db: Session) -> list[Ciudad]:
@@ -142,6 +155,95 @@ def previsualizar_vuelo(
 ) -> VueloCalculado:
     """Vista previa de HU-13: mismas validaciones que guardar, sin persistir."""
     return validar_vuelo(db, datos, ahora=ahora)
+
+
+def programar_vuelo(
+    db: Session,
+    datos: VueloEntrada,
+    *,
+    usuario_id: int,
+    ahora: datetime | None = None,
+) -> VueloProgramado:
+    """Guarda un vuelo y, en la misma transacción, publica su noticia y lo audita (HU-13).
+
+    No hace commit: el commit y el rollback son de quien llama. El código `STA-nnnnn` lo pone
+    la secuencia de la base de datos y no se reutiliza (SUP-01).
+    """
+    calculado = validar_vuelo(db, datos, ahora=ahora)
+    vuelo = Vuelo(
+        tipo=calculado.tipo,
+        origen_codigo=calculado.origen.codigo,
+        destino_codigo=calculado.destino.codigo,
+        salida=calculado.salida,
+        llegada=calculado.llegada,
+        duracion_minutos=calculado.duracion_minutos,
+        precio_economica=datos.precio_economica,
+        precio_primera=datos.precio_primera,
+        capacidad_primera=calculado.capacidad_primera,
+        capacidad_economica=calculado.capacidad_economica,
+        estado="programado",
+    )
+    db.add(vuelo)
+    # El código sale de la secuencia al insertar y la noticia lo copia (SUP-01, RF-22).
+    db.flush()
+    db.refresh(vuelo)
+
+    noticias_service.publicar_noticia_vuelo(
+        db,
+        noticias_service.VueloPublicado(
+            vuelo_id=vuelo.id,
+            codigo=vuelo.codigo,
+            origen=_ciudad_publicada(calculado.origen),
+            destino=_ciudad_publicada(calculado.destino),
+            salida=vuelo.salida,
+            precio_economica=vuelo.precio_economica,
+            precio_primera=vuelo.precio_primera,
+            # RF-22: la noticia y el carrusel muestran una imagen de la ciudad destino.
+            imagen_url=calculado.destino.imagen_url,
+        ),
+    )
+    auditoria_service.registrar(
+        db,
+        usuario_id=usuario_id,
+        accion="vuelo.crear",
+        entidad="vuelo",
+        entidad_id=vuelo.id,
+        despues=_detalle_auditoria(vuelo),
+    )
+
+    return VueloProgramado(
+        vuelo=vuelo,
+        origen=calculado.origen,
+        destino=calculado.destino,
+        ocupacion=reservas_service.ocupacion_de_vuelos(db, [vuelo.id])[vuelo.id],
+    )
+
+
+def _ciudad_publicada(ciudad: Ciudad) -> noticias_service.CiudadPublicada:
+    return noticias_service.CiudadPublicada(
+        codigo=ciudad.codigo,
+        nombre=ciudad.nombre,
+        zona_horaria=ciudad.zona_horaria,
+    )
+
+
+def _detalle_auditoria(vuelo: Vuelo) -> dict[str, object]:
+    """Copia del vuelo para la auditoría. Las fechas van en ISO 8601: `despues` se guarda en
+    JSON y la auditoría rechaza valores que no se puedan serializar (RF-26)."""
+    return {
+        "codigo": vuelo.codigo,
+        "tipo": vuelo.tipo,
+        "origen": vuelo.origen_codigo,
+        "destino": vuelo.destino_codigo,
+        "salida": vuelo.salida.isoformat(),
+        "llegada": vuelo.llegada.isoformat(),
+        "duracion_minutos": vuelo.duracion_minutos,
+        "precio_economica": vuelo.precio_economica,
+        "precio_primera": vuelo.precio_primera,
+        "capacidad_primera": vuelo.capacidad_primera,
+        "capacidad_economica": vuelo.capacidad_economica,
+        "estado": vuelo.estado,
+    }
 
 
 def _existe_vuelo(

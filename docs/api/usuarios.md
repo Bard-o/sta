@@ -1,6 +1,6 @@
 # Módulo usuarios
 
-Dueño: Backend A. Requisitos: RF-01 a RF-11. Este archivo cubre el registro de clientes (RF-03, RF-04, HU-01) y la sesión (RF-06, HU-03, HU-04); el resto de endpoints del módulo se agregan aquí con sus issues. El contrato acordado de todo el módulo está en [iteracion-1.md](iteracion-1.md).
+Dueño: Backend A. Requisitos: RF-01 a RF-11. Este archivo cubre el registro de clientes (RF-03, RF-04, HU-01), la verificación de correo (RF-05, HU-02), la sesión (RF-06, HU-03, HU-04) y el cambio de contraseña (HU-06); el resto de endpoints del módulo se agregan aquí con sus issues. El contrato acordado de todo el módulo está en [iteracion-1.md](iteracion-1.md).
 
 ## Registro de clientes
 
@@ -65,6 +65,44 @@ Entrada (`RegistroClienteEntrada`):
 | 409 | `datos_duplicados` | `campos` con `nombre_usuario`, `numero_documento` o `email` que ya pertenece a otra cuenta (RF-04). |
 | 422 | `datos_invalidos` | `campos` con `acepta_politica`, `fecha_nacimiento`, `email`, `contrasena` o el campo con formato inválido. |
 | 403 | `sin_permiso` | Hay una sesión abierta (Apéndice B). |
+
+## Verificación de correo
+
+### `POST /api/v1/usuarios/verificacion`
+
+Sin sesión (público). Recibe el token del enlace `/verificar-correo?token=…` y responde `204` sin cuerpo.
+
+Entrada (`TokenEntrada`):
+
+```json
+{ "token": "…" }
+```
+
+- El token se guarda hasheado (SHA-256); el valor en claro solo viaja en el enlace del correo.
+- Es de un solo uso y vence a las 24 horas (SUP-19). Al usarlo, los demás tokens vigentes de la cuenta quedan invalidados.
+- Marca `email_verificado` como `true`, lo que habilita reservar, comprar y suscribirse a noticias.
+- No exige sesión: el enlace se puede abrir en otro dispositivo.
+- El cambio de correo desde el perfil (HU-07) reutiliza este endpoint; el correo pendiente se documenta con esa historia.
+
+| HTTP | `codigo` | Cuándo |
+|---|---|---|
+| 400 | `enlace_invalido` | Token inexistente, vencido, ya usado o de otro correo. El frontend ofrece reenviar. |
+| 422 | `datos_invalidos` | Falta `token` o está vacío. |
+
+### `POST /api/v1/usuarios/me/verificacion/reenviar`
+
+Con sesión de cliente o administrador. Envía un enlace nuevo al correo vigente de la cuenta y responde `204` sin cuerpo. El root no puede usarlo.
+
+- Reenviar invalida todos los enlaces vigentes anteriores de la cuenta.
+- Si el correo ya está verificado no hay nada pendiente que reenviar.
+- Si el correo no se puede enviar, el enlace queda creado igual y el fallo se anota en el log; el cliente puede volver a pedirlo.
+- El enlace tiene la misma vigencia de 24 horas y también es de un solo uso.
+
+| HTTP | `codigo` | Cuándo |
+|---|---|---|
+| 409 | `correo_ya_verificado` | El correo ya está verificado (o la cuenta no tiene correo). |
+| 401 | `no_autenticado` | Sin sesión o sesión vencida. |
+| 403 | `sin_permiso` | El rol no es cliente ni administrador. |
 
 ## Sesión
 
