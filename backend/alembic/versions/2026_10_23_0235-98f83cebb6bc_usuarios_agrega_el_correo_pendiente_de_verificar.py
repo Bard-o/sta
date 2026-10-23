@@ -1,8 +1,8 @@
 """usuarios: agrega el correo pendiente de verificar
 
-Revision ID: a0c6085e8856
-Revises: 8769cb0e0baf
-Create Date: 2026-10-23 02:09:17.581453
+Revision ID: 98f83cebb6bc
+Revises: dcba7414261c
+Create Date: 2026-10-23 02:35:46.051337
 
 """
 
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 
 from alembic import op
 
-revision: str = "a0c6085e8856"
-down_revision: str | None = "d772f4e14cd0"
+revision: str = "98f83cebb6bc"
+down_revision: str | None = "dcba7414261c"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
