@@ -1,11 +1,12 @@
-"""Modelos del módulo vuelos (RF-12 a RF-16).
+"""Modelos del módulo vuelos (RF-12 a RF-16, RF-23).
 
 `ciudades` es el catálogo precargado por la migración. `vuelos` guarda la salida y la llegada
 en UTC; la hora local se calcula con la zona IANA de cada ciudad. El código sale de una
-secuencia de PostgreSQL y nunca se reutiliza (SUP-01).
+secuencia de PostgreSQL y nunca se reutiliza (SUP-01). `promociones` guarda el descuento por
+clase y su vigencia; el estado efectivo se calcula al consultar (RF-23).
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Literal
 
 from sqlalchemy import (
@@ -27,6 +28,8 @@ from app.core.db import Base, TimestampMixin
 TipoCiudad = Literal["nacional", "internacional"]
 TipoVuelo = Literal["nacional", "internacional"]
 EstadoVuelo = Literal["programado", "realizado", "cancelado"]
+Clase = Literal["economica", "primera"]
+EstadoPromocion = Literal["programada", "vigente", "vencida", "agotada", "cancelada"]
 
 SECUENCIA_CODIGO = "vuelos_codigo_seq"
 _CODIGO_POR_DEFECTO = f"'STA-' || lpad(nextval('{SECUENCIA_CODIGO}')::text, 5, '0')"
@@ -111,4 +114,60 @@ class Vuelo(TimestampMixin, Base):
             create_constraint=True,
         ),
         server_default=text("'programado'"),
+    )
+
+
+class Promocion(Base):
+    """Promoción de una clase o de ambas en un vuelo (HU-17, RF-23).
+
+    `estado` guarda `programada` mientras la promoción está activa o por empezar, y los
+    estados terminales (`vencida`, `agotada`, `cancelada`). `vigente` y `vencida` por fecha
+    se calculan al consultar con la hora inyectada, como en noticias (RF-23, RF-25).
+
+    Los índices únicos parciales impiden acumular dos promociones activas en la misma clase.
+    """
+
+    __tablename__ = "promociones"
+    __table_args__ = (
+        CheckConstraint("porcentaje BETWEEN 1 AND 90", name="porcentaje_valido"),
+        CheckConstraint("fin > inicio", name="vigencia_valida"),
+        CheckConstraint("aplica_economica OR aplica_primera", name="aplica_alguna_clase"),
+        Index(
+            "uq_promociones_economica_activa",
+            "vuelo_id",
+            unique=True,
+            postgresql_where=text("aplica_economica AND estado = 'programada'"),
+        ),
+        Index(
+            "uq_promociones_primera_activa",
+            "vuelo_id",
+            unique=True,
+            postgresql_where=text("aplica_primera AND estado = 'programada'"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    vuelo_id: Mapped[int] = mapped_column(ForeignKey("vuelos.id"), index=True)
+    porcentaje: Mapped[int] = mapped_column(Integer)
+    aplica_economica: Mapped[bool] = mapped_column(Boolean, server_default=false())
+    aplica_primera: Mapped[bool] = mapped_column(Boolean, server_default=false())
+    inicio: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    fin: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    estado: Mapped[EstadoPromocion] = mapped_column(
+        Enum(
+            "programada",
+            "vigente",
+            "vencida",
+            "agotada",
+            "cancelada",
+            name="estado_promocion",
+            native_enum=False,
+            length=10,
+            create_constraint=True,
+        ),
+        server_default=text("'programada'"),
+    )
+    # Se calcula en la aplicación para poder inyectar la hora en los tests (HU-17).
+    creada_en: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
