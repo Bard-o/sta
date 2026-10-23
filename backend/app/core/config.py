@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     mail_from: str = "AVIANCO <no-responder@avianco.test>"
     frontend_url: str = "http://localhost:5173"
 
+    # False en los tests: el hilo del planificador no arranca.
+    planificador_activo: bool = True
     # Archivos que suben los usuarios (imagen de perfil). Fuera de /app, que es el código montado;
     # en docker compose es el volumen con nombre `archivos`.
     archivos_dir: Path = Path("/data/archivos")

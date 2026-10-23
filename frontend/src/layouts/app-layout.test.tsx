@@ -19,6 +19,7 @@ const rutas = [
     element: <AppLayout />,
     children: [
       { path: "/", element: <h1>Inicio público</h1> },
+      { path: "/verificar-correo", element: <p>Verificación de correo</p> },
       { element: <SoloVisitantes />, children: [{ path: "/login", element: <LoginPage /> }] },
       {
         element: <RequireRole roles={["cliente"]} />,
@@ -175,5 +176,52 @@ describe("Menú de cada rol (HU-03)", () => {
     expect(screen.getByText("jtorres")).toBeVisible();
     const nav = screen.getByRole("navigation", { name: "Principal" });
     expect(within(nav).queryAllByRole("link")).toHaveLength(0);
+  });
+});
+
+describe("Enlace a Mi perfil (HU-07)", () => {
+  it.each([
+    ["cliente", CLIENTE, "/cliente"],
+    ["administrador", ADMIN, "/admin"],
+  ])("el nombre del %s en el menú lleva a su perfil", async (_rol, usuario, inicio) => {
+    responderApi({ "GET /api/v1/auth/me": sesionDe(usuario) });
+    renderRutas(rutas, inicio);
+
+    const enlace = await screen.findByRole("link", { name: /^Mi perfil/ });
+    expect(enlace).toHaveAttribute("href", "/perfil");
+  });
+
+  it.each([
+    ["root", ROOT, "/root"],
+    ["administrador con el registro pendiente", ADMIN_INCOMPLETO, "/admin/primer-ingreso"],
+  ])("el %s no tiene enlace al perfil", async (_rol, usuario, inicio) => {
+    responderApi({ "GET /api/v1/auth/me": sesionDe(usuario) });
+    renderRutas(rutas, inicio);
+
+    await screen.findByRole("button", { name: "Cerrar sesión" });
+    expect(screen.queryByRole("link", { name: /^Mi perfil/ })).not.toBeInTheDocument();
+  });
+});
+
+describe("Aviso de correo sin verificar (HU-02)", () => {
+  it("el cliente con el correo sin verificar ve el aviso con el enlace a la verificación", async () => {
+    responderApi({ "GET /api/v1/auth/me": sesionDe({ ...CLIENTE, email_verificado: false }) });
+    renderRutas(rutas, "/cliente");
+
+    expect(await screen.findByText(/Verifica tu correo para reservar, comprar/)).toBeVisible();
+    await userEvent.click(screen.getByRole("link", { name: "Verificar correo" }));
+    expect(await screen.findByText("Verificación de correo")).toBeVisible();
+    expect(screen.queryByText(/Verifica tu correo para reservar, comprar/)).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["cliente verificado", CLIENTE],
+    ["administrador", { ...ADMIN, email_verificado: false }],
+  ])("no lo ve el %s", async (_nombre, usuario) => {
+    responderApi({ "GET /api/v1/auth/me": sesionDe(usuario) });
+    renderRutas(rutas, usuario.rol === "admin" ? "/admin" : "/cliente");
+
+    await screen.findByRole("button", { name: "Cerrar sesión" });
+    expect(screen.queryByText(/Verifica tu correo para reservar, comprar/)).not.toBeInTheDocument();
   });
 });

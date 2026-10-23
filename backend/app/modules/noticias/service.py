@@ -8,19 +8,25 @@ cada cambio. Ninguna función hace commit: van en la transacción de quien llama
 import logging
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import datetime
-from typing import Literal
+from datetime import UTC, datetime
+from typing import Literal, cast
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.modules.noticias import schemas
 from app.modules.noticias.models import Noticia
 
 logger = logging.getLogger(__name__)
 
 Clase = Literal["economica", "primera"]
+EstadoPromocion = Literal["programada", "vigente", "vencida", "agotada", "cancelada"]
+
+# SUP-06: el carrusel muestra como máximo 10 elementos.
+MAX_CARRUSEL = 10
 
 _NOMBRE_CLASE = {"economica": "económica", "primera": "primera"}
+_ESTADOS_TERMINALES: tuple[EstadoPromocion, ...] = ("vencida", "agotada", "cancelada")
 
 
 @dataclass(frozen=True)
@@ -124,6 +130,56 @@ def terminar_noticia_promocion(
         noticia.promocion_estado = estado
 
 
+def listar_noticias(
+    db: Session,
+    *,
+    pagina: int = 1,
+    por_pagina: int = 10,
+    ahora: datetime | None = None,
+) -> schemas.PaginaNoticias:
+    """Noticias de la más reciente a la más antigua, vigentes y no vigentes (HU-19, RF-55)."""
+    momento = ahora or datetime.now(UTC)
+    total = db.scalar(select(func.count()).select_from(Noticia)) or 0
+    filas = db.scalars(
+        select(Noticia)
+        .order_by(Noticia.publicada_en.desc(), Noticia.id.desc())
+        .offset((pagina - 1) * por_pagina)
+        .limit(por_pagina)
+    ).all()
+    return schemas.PaginaNoticias(
+        items=[_a_noticia(noticia, momento) for noticia in filas],
+        total=total,
+        pagina=pagina,
+        por_pagina=por_pagina,
+    )
+
+
+def carrusel(db: Session, *, ahora: datetime | None = None) -> list[schemas.Noticia]:
+    """Hasta 10 noticias vigentes: primero las promociones y luego los vuelos, de la más
+    reciente a la más antigua y con cada vuelo una sola vez (HU-19, RF-22, SUP-06, SUP-41)."""
+    momento = ahora or datetime.now(UTC)
+    candidatas = sorted(
+        db.scalars(select(Noticia).where(Noticia.vigente.is_(True))).all(),
+        key=lambda noticia: (noticia.publicada_en, noticia.id),
+        reverse=True,
+    )
+    vigentes = [noticia for noticia in candidatas if _es_vigente(noticia, momento)]
+    # Las promociones van delante y ganan sobre la noticia del mismo vuelo.
+    promociones = [noticia for noticia in vigentes if noticia.tipo == "promocion"]
+    vuelos = [noticia for noticia in vigentes if noticia.tipo == "vuelo"]
+
+    seleccion: list[Noticia] = []
+    vistos: set[int] = set()
+    for noticia in (*promociones, *vuelos):
+        if noticia.vuelo_id in vistos:
+            continue
+        vistos.add(noticia.vuelo_id)
+        seleccion.append(noticia)
+        if len(seleccion) == MAX_CARRUSEL:
+            break
+    return [_a_noticia(noticia, momento) for noticia in seleccion]
+
+
 def _noticias_de_vuelo(db: Session, vuelo_id: int) -> list[Noticia]:
     return list(db.scalars(select(Noticia).where(Noticia.vuelo_id == vuelo_id)))
 
@@ -168,6 +224,83 @@ def _clases_guardadas(noticia: Noticia) -> list[Clase]:
     if noticia.promocion_aplica_primera:
         clases.append("primera")
     return clases
+
+
+def _a_noticia(noticia: Noticia, ahora: datetime) -> schemas.Noticia:
+    """Vista pública de una noticia, con la vigencia y el estado calculados al consultar."""
+    promocion = None
+    if noticia.tipo == "promocion":
+        porcentaje = noticia.promocion_porcentaje or 0
+        promocion = schemas.PromocionNoticia(
+            porcentaje=porcentaje,
+            clases=_clases_guardadas(noticia),
+            inicio=cast(datetime, noticia.promocion_inicio),
+            fin=cast(datetime, noticia.promocion_fin),
+            estado=_estado_promocion(noticia, ahora),
+            # RF-24: el precio con descuento se redondea hacia abajo al peso.
+            precio_economica=(
+                _precio_con_descuento(noticia.precio_economica, porcentaje)
+                if noticia.promocion_aplica_economica
+                else None
+            ),
+            precio_primera=(
+                _precio_con_descuento(noticia.precio_primera, porcentaje)
+                if noticia.promocion_aplica_primera
+                else None
+            ),
+        )
+    return schemas.Noticia(
+        id=noticia.id,
+        tipo=noticia.tipo,
+        titulo=noticia.titulo,
+        publicada_en=noticia.publicada_en,
+        vigente=_es_vigente(noticia, ahora),
+        vuelo_id=noticia.vuelo_id,
+        vuelo_codigo=noticia.vuelo_codigo,
+        origen=schemas.CiudadNoticia(
+            codigo=noticia.origen_codigo,
+            nombre=noticia.origen_nombre,
+            zona_horaria=noticia.origen_zona_horaria,
+        ),
+        destino=schemas.CiudadNoticia(
+            codigo=noticia.destino_codigo,
+            nombre=noticia.destino_nombre,
+            zona_horaria=noticia.destino_zona_horaria,
+        ),
+        salida=noticia.salida,
+        precio_economica=noticia.precio_economica,
+        precio_primera=noticia.precio_primera,
+        imagen_url=noticia.imagen_url,
+        promocion=promocion,
+    )
+
+
+def _es_vigente(noticia: Noticia, ahora: datetime) -> bool:
+    """RF-25: un vuelo sigue vigente mientras no se retire; una promoción, además, mientras
+    haya empezado y no haya terminado."""
+    if not noticia.vigente:
+        return False
+    return noticia.tipo == "vuelo" or _estado_promocion(noticia, ahora) == "vigente"
+
+
+def _estado_promocion(noticia: Noticia, ahora: datetime) -> EstadoPromocion:
+    """Estado efectivo: el guardado solo retiene el final anticipado; el resto se deriva de
+    las fechas (RF-23, RF-25)."""
+    if noticia.promocion_estado in _ESTADOS_TERMINALES:
+        return cast(EstadoPromocion, noticia.promocion_estado)
+    inicio = noticia.promocion_inicio
+    fin = noticia.promocion_fin
+    if inicio is None or fin is None:
+        return "vencida"
+    if ahora < inicio:
+        return "programada"
+    if ahora < fin:
+        return "vigente"
+    return "vencida"
+
+
+def _precio_con_descuento(precio: int, porcentaje: int) -> int:
+    return precio * (100 - porcentaje) // 100
 
 
 def _encolar_correo_suscriptores(db: Session, noticia: Noticia) -> None:
