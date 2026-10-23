@@ -1,6 +1,6 @@
 # Módulo usuarios
 
-Dueño: Backend A. Requisitos: RF-01 a RF-11 y RF-56. Este archivo cubre el registro de clientes (RF-03, RF-04, HU-01), la verificación de correo (RF-05, HU-02), la sesión (RF-06, HU-03, HU-04), el restablecimiento de contraseña (RF-07, HU-05), el cambio de contraseña (HU-06), el perfil (HU-07), la suscripción a noticias (RF-09, HU-08), la desactivación de la cuenta (RF-10, HU-09), la creación y el listado de administradores (RF-02, HU-10) y los destinatarios del correo de noticias (RF-56); el resto de endpoints del módulo se agregan aquí con sus issues. El contrato acordado de todo el módulo está en [iteracion-1.md](iteracion-1.md).
+Dueño: Backend A. Requisitos: RF-01 a RF-11 y RF-56. Este archivo cubre el registro de clientes (RF-03, RF-04, HU-01), la verificación de correo (RF-05, HU-02), la sesión (RF-06, HU-03, HU-04), el restablecimiento de contraseña (RF-07, HU-05), el cambio de contraseña (HU-06), el perfil (HU-07), la suscripción a noticias (RF-09, HU-08), la desactivación de la cuenta (RF-10, HU-09), la creación y el listado de administradores (RF-02, HU-10), el primer ingreso del administrador (HU-12) y los destinatarios del correo de noticias (RF-56); el resto de endpoints del módulo se agregan aquí con sus issues. El contrato acordado de todo el módulo está en [iteracion-1.md](iteracion-1.md).
 
 ## Registro de clientes
 
@@ -560,6 +560,74 @@ con su estado anterior: `activo` o `registro_incompleto`.
 | 409 | `estado_invalido` | El administrador sigue activo (incluido `registro_incompleto`). |
 | 401 | `no_autenticado` | Sin sesión o sesión vencida. |
 | 403 | `sin_permiso` | El rol no es root. |
+
+## Primer ingreso del administrador
+
+### `POST /api/v1/administradores/me/registro`
+
+Con sesión de un administrador que todavía no completó su registro (HU-12, RF-02 a RF-04).
+Completa sus datos personales, cambia la contraseña temporal y responde `200 UsuarioSalida`
+con `registro_completo: true`. Mientras no lo complete, cualquier otro endpoint responde
+`403 registro_incompleto` (lo aplica `core`).
+
+Entrada (`RegistroAdministradorEntrada`): los datos personales de HU-01 sin `nombre_usuario`,
+`contrasena` ni `acepta_politica`, más el cambio de contraseña.
+
+```json
+{
+  "tipo_documento": "CC",
+  "numero_documento": "10234567",
+  "nombres": "Jorge",
+  "apellidos": "Torres",
+  "fecha_nacimiento": "1990-05-02",
+  "lugar_nacimiento": "Cali, Valle del Cauca",
+  "direccion_facturacion": "Cl. 5 # 38-14, Cali",
+  "genero": "masculino",
+  "email": "jorge.torres@avianco.test",
+  "telefono": null,
+  "contrasena_temporal": "Temporal123",
+  "contrasena_nueva": "MiClave2026",
+  "confirmacion": "MiClave2026"
+}
+```
+
+```json
+{
+  "id": 5,
+  "nombre_usuario": "jtorres",
+  "email": "jorge.torres@avianco.test",
+  "rol": "admin",
+  "email_verificado": true,
+  "registro_completo": true,
+  "nombres": "Jorge",
+  "apellidos": "Torres"
+}
+```
+
+- `contrasena_temporal` se comprueba contra la contraseña que puso el root al crear la cuenta.
+  Si no coincide, la respuesta es `422 contrasena_actual_incorrecta` con
+  `campos.contrasena_temporal` y no se guarda nada.
+- `contrasena_nueva` cumple RNF-08 (8 caracteres o más, con al menos una letra y un número) y
+  coincide con `confirmacion`; se guarda con Argon2id, nunca en claro. La temporal deja de
+  funcionar.
+- `fecha_nacimiento` no puede ser futura.
+- El documento (tipo y número) y el correo son únicos entre administradores (RF-04, SUP-18).
+  La misma persona puede tener además una cuenta de cliente: esos datos no chocan con las
+  cuentas de cliente. Un correo que otro administrador tenga pendiente de verificar (HU-07)
+  también se rechaza.
+- El correo se guarda en minúscula y queda con `email_verificado: true`: en esta iteración no
+  pasa por la verificación de HU-02.
+- La sesión actual sigue abierta; completar el registro no cierra sesiones.
+- Completarlo dos veces responde `409 registro_ya_completo`.
+
+| HTTP | `codigo` | `campos` | Cuándo |
+|---|---|---|---|
+| 409 | `registro_ya_completo` | | El administrador ya completó su registro. |
+| 409 | `datos_duplicados` | `numero_documento` o `email` | El dato ya pertenece a otro administrador. |
+| 422 | `contrasena_actual_incorrecta` | `contrasena_temporal` | La contraseña temporal no coincide. |
+| 422 | `datos_invalidos` | `contrasena_nueva`, `confirmacion` o `fecha_nacimiento` | Política de contraseña, confirmación o datos personales. |
+| 401 | `no_autenticado` | | Sin sesión o sesión vencida. |
+| 403 | `sin_permiso` | | El rol no es administrador. |
 
 ## Usuario root
 
