@@ -120,3 +120,30 @@ def test_gestion_de_vuelos_solo_para_administradores(
 
     assert respuesta.status_code == 403
     assert respuesta.json()["error"]["codigo"] == "sin_permiso"
+
+
+RUTAS_PROMOCIONES = [
+    ("POST", "/api/v1/vuelos/1/promociones"),
+    ("GET", "/api/v1/promociones"),
+]
+
+
+@pytest.mark.parametrize(("metodo", "ruta"), RUTAS_PROMOCIONES)
+def test_promociones_sin_sesion_responde_no_autenticado(client: TestClient, metodo: str, ruta: str):
+    """HU-17 · RNF-10: sin sesión, las promociones responden 401 no_autenticado."""
+    respuesta = client.request(metodo, ruta, json={})
+
+    assert respuesta.status_code == 401
+    assert respuesta.json()["error"]["codigo"] == "no_autenticado"
+
+
+@pytest.mark.parametrize(("metodo", "ruta"), RUTAS_PROMOCIONES)
+@pytest.mark.parametrize("rol", [Rol.CLIENTE, Rol.ROOT])
+def test_promociones_solo_para_administradores(
+    client_como: Callable[[Rol], TestClient], metodo: str, ruta: str, rol: Rol
+):
+    """HU-17 · RNF-10: un cliente o root recibe 403 sin_permiso en promociones."""
+    respuesta = client_como(rol).request(metodo, ruta, json={})
+
+    assert respuesta.status_code == 403
+    assert respuesta.json()["error"]["codigo"] == "sin_permiso"

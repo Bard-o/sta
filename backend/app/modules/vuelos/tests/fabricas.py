@@ -11,7 +11,14 @@ from sqlalchemy.orm import Session
 from app.core.security import Rol
 from app.core.testing import CONTRASENA_TEST
 from app.modules.reservas import service as reservas_service
-from app.modules.vuelos.models import EstadoVuelo, TipoVuelo, Vuelo
+from app.modules.vuelos.models import (
+    Clase,
+    EstadoPromocion,
+    EstadoVuelo,
+    Promocion,
+    TipoVuelo,
+    Vuelo,
+)
 
 SALIDA = datetime(2026, 12, 10, 11, 0, tzinfo=UTC)
 CAPACIDADES = {"nacional": (25, 125), "internacional": (50, 200)}
@@ -62,6 +69,46 @@ def cuerpo_vuelo(**cambios: object) -> dict[str, object]:
         "duracion_minutos": 600,
         "precio_economica": 2_450_000,
         "precio_primera": 6_900_000,
+    }
+    base.update(cambios)
+    return base
+
+
+def crear_promocion_bd(
+    db: Session,
+    vuelo: Vuelo,
+    *,
+    porcentaje: int = 20,
+    clases: Sequence[Clase] = ("economica",),
+    inicio: datetime | None = None,
+    fin: datetime | None = None,
+    estado: EstadoPromocion = "programada",
+) -> Promocion:
+    """Inserta una promoción directamente para probar estados y clases ya ocupadas."""
+    momento = datetime.now(UTC)
+    promocion = Promocion(
+        vuelo_id=vuelo.id,
+        porcentaje=porcentaje,
+        aplica_economica="economica" in clases,
+        aplica_primera="primera" in clases,
+        inicio=inicio or momento - timedelta(hours=1),
+        fin=fin or momento + timedelta(days=7),
+        estado=estado,
+        creada_en=momento,
+    )
+    db.add(promocion)
+    db.flush()
+    db.refresh(promocion)
+    return promocion
+
+
+def cuerpo_promocion(**cambios: object) -> dict[str, object]:
+    """Cuerpo válido de `PromocionEntrada` para los tests de los endpoints."""
+    base: dict[str, object] = {
+        "porcentaje": 20,
+        "clases": ["economica"],
+        "inicio": "2099-01-01T00:00:00Z",
+        "fin": "2099-02-01T00:00:00Z",
     }
     base.update(cambios)
     return base
