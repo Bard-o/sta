@@ -288,10 +288,12 @@ def reactivar_administrador(admin_id: int, usuario: Root, db: DbSession) -> Admi
 
 @administradores.post("/me/registro", response_model=UsuarioSalida, responses=respuestas_error(409))
 def completar_registro_administrador(
-    datos: RegistroAdministradorEntrada, usuario: Admin, response: Response, db: DbSession
+    datos: RegistroAdministradorEntrada, usuario: Admin, db: DbSession
 ) -> UsuarioSalida:
     """Completa los datos del administrador y cambia la contraseña temporal (HU-12)."""
-    raise NoImplementado()
+    return UsuarioSalida.model_validate(
+        service.completar_registro_administrador(db, datos, usuario_id=usuario.id)
+    )
 
 
 router = APIRouter()

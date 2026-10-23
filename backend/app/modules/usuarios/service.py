@@ -39,6 +39,7 @@ from app.modules.usuarios.schemas import (
     EstadoAdministrador,
     PerfilEntrada,
     PerfilSalida,
+    RegistroAdministradorEntrada,
     RegistroClienteEntrada,
 )
 
@@ -133,10 +134,26 @@ class EstadoInvalido(AppError):
     mensaje = "El administrador no está en el estado necesario para esta acción."
 
 
+class RegistroYaCompleto(AppError):
+    """HU-12: el administrador ya completó su registro."""
+
+    status_code = 409
+    codigo = "registro_ya_completo"
+    mensaje = "Tu registro ya está completo."
+
+
 MENSAJES_DUPLICADO = {
     "nombre_usuario": "Ese nombre de usuario ya está en uso.",
     "email": "Ese correo ya está registrado en otra cuenta de cliente.",
     "numero_documento": "Ese número de documento ya está registrado en otra cuenta de cliente.",
+}
+
+# HU-12: documento y correo son únicos entre administradores (RF-04, SUP-18).
+MENSAJES_DUPLICADO_ADMIN = {
+    "email": "Ese correo ya está registrado en otra cuenta de administrador.",
+    "numero_documento": (
+        "Ese número de documento ya está registrado en otra cuenta de administrador."
+    ),
 }
 
 # HU-07: el correo se comparte entre clientes y, por separado, entre administradores (SUP-18).
@@ -426,10 +443,13 @@ def _nombre_usuario_en_uso(db: Session, nombre_usuario: str) -> bool:
     )
 
 
-def _campo_por_restriccion(exc: IntegrityError) -> dict[str, str]:
+def _campo_por_restriccion(
+    exc: IntegrityError, mensajes: dict[str, str] | None = None
+) -> dict[str, str]:
+    mensajes = mensajes or MENSAJES_DUPLICADO
     restriccion = getattr(getattr(exc.orig, "diag", None), "constraint_name", None)
     campo = _CAMPO_POR_RESTRICCION.get(restriccion or "")
-    return {campo: MENSAJES_DUPLICADO[campo]} if campo else {}
+    return {campo: mensajes[campo]} if campo in mensajes else {}
 
 
 def _crear_token_verificacion(db: Session, usuario_id: int, email: str) -> str:
@@ -587,7 +607,12 @@ def reenviar_verificacion(db: Session, usuario_id: int) -> None:
 
 def _validar_datos_editables(datos: PerfilEntrada) -> None:
     """RF-08: la fecha de nacimiento no puede ser futura."""
-    if datos.fecha_nacimiento > date.today():
+    _validar_fecha_nacimiento(datos.fecha_nacimiento)
+
+
+def _validar_fecha_nacimiento(fecha_nacimiento: date) -> None:
+    """RF-03, HU-12: la fecha de nacimiento no puede ser futura."""
+    if fecha_nacimiento > date.today():
         raise DatosInvalidos(
             campos={"fecha_nacimiento": "La fecha de nacimiento no puede ser futura."}
         )
@@ -1119,6 +1144,105 @@ def reactivar_administrador(db: Session, admin_id: int, *, usuario_id: int) -> A
         raise
 
     return _administrador_salida(administrador)
+
+
+def _campos_duplicados_administrador(
+    db: Session,
+    *,
+    email: str,
+    tipo_documento: str,
+    numero_documento: str,
+    excluir_id: int,
+) -> dict[str, str]:
+    """RF-04, SUP-18: correo y documento son únicos entre administradores.
+
+    El correo también se compara contra el `email_pendiente` de otro administrador (HU-07)
+    para no ocupar un cambio que está esperando verificación.
+    """
+    campos: dict[str, str] = {}
+    if _email_en_uso(db, email, Rol.ADMIN, excluir_id):
+        campos["email"] = MENSAJES_DUPLICADO_ADMIN["email"]
+    documento_en_uso = db.scalar(
+        select(Usuario.id).where(
+            Usuario.rol == Rol.ADMIN,
+            Usuario.id != excluir_id,
+            Usuario.tipo_documento == tipo_documento,
+            Usuario.numero_documento == numero_documento,
+        )
+    )
+    if documento_en_uso is not None:
+        campos["numero_documento"] = MENSAJES_DUPLICADO_ADMIN["numero_documento"]
+    return campos
+
+
+def completar_registro_administrador(
+    db: Session, datos: RegistroAdministradorEntrada, *, usuario_id: int
+) -> Usuario:
+    """HU-12, RF-02 a RF-04: completa los datos del administrador y cambia la temporal.
+
+    Mientras `registro_completo` sea falso, `core` solo deja llegar a este endpoint. El correo
+    no pasa por la verificación de HU-02: queda verificado. La sesión actual sigue abierta, así
+    que no se incrementa `version_sesion`. Las reglas sin estado se validan antes de comprobar
+    la contraseña temporal, igual que en HU-06. Lanza RegistroYaCompleto, DatosInvalidos,
+    ContrasenaActualIncorrecta o DatosDuplicados.
+    """
+    usuario = db.scalar(select(Usuario).where(Usuario.id == usuario_id).with_for_update())
+    if usuario is None:
+        raise NoAutenticado()
+
+    # HU-12: completar dos veces responde 409 aunque el cuerpo sea válido.
+    if usuario.registro_completo:
+        raise RegistroYaCompleto()
+
+    _validar_fecha_nacimiento(datos.fecha_nacimiento)
+    _validar_contrasena_nueva(datos.contrasena_nueva, datos.confirmacion)
+
+    if not verificar_contrasena(datos.contrasena_temporal, usuario.password_hash):
+        mensaje = "La contraseña temporal no es correcta."
+        raise ContrasenaActualIncorrecta(mensaje, campos={"contrasena_temporal": mensaje})
+
+    email = datos.email.strip().lower()
+    campos = _campos_duplicados_administrador(
+        db,
+        email=email,
+        tipo_documento=datos.tipo_documento,
+        numero_documento=datos.numero_documento,
+        excluir_id=usuario.id,
+    )
+    if campos:
+        raise DatosDuplicados(campos=campos)
+
+    usuario.email = email
+    usuario.email_pendiente = None
+    # El correo del administrador no se verifica en la iteración 1 (HU-12).
+    usuario.email_verificado = True
+    usuario.tipo_documento = datos.tipo_documento
+    usuario.numero_documento = datos.numero_documento
+    usuario.nombres = datos.nombres.strip()
+    usuario.apellidos = datos.apellidos.strip()
+    usuario.fecha_nacimiento = datos.fecha_nacimiento
+    usuario.lugar_nacimiento = datos.lugar_nacimiento.strip()
+    usuario.direccion_facturacion = datos.direccion_facturacion.strip()
+    usuario.genero = datos.genero
+    usuario.telefono = datos.telefono.strip() if datos.telefono else None
+    usuario.password_hash = hash_contrasena(datos.contrasena_nueva)
+    usuario.registro_completo = True
+
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        # Carrera entre la verificación anterior y el commit: la restricción única decide.
+        db.rollback()
+        campos = _campos_duplicados_administrador(
+            db,
+            email=email,
+            tipo_documento=datos.tipo_documento,
+            numero_documento=datos.numero_documento,
+            excluir_id=usuario_id,
+        ) or _campo_por_restriccion(exc, MENSAJES_DUPLICADO_ADMIN)
+        raise DatosDuplicados(campos=campos or None) from exc
+
+    return usuario
 
 
 def listar_administradores(db: Session) -> list[AdministradorSalida]:
