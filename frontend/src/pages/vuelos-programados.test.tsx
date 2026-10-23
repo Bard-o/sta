@@ -69,6 +69,24 @@ describe("S09 · Vuelos programados (HU-15, HU-16)", () => {
     expect(within(fila("STA-00031")).getByRole("button", { name: /^Cancelar/ })).toBeEnabled();
   });
 
+  it("«Promoción» abre la promoción de ese vuelo", async () => {
+    responderApi({ [SESION]: sesionDe(ADMIN), [LISTA]: pagina(VUELOS) });
+    renderRutas(rutas, "/admin/vuelos");
+    await screen.findByRole("row", { name: /STA-00031/ });
+
+    // Aun con reservas o compras: la promoción sirve justamente para vender más.
+    for (const [codigo, id] of [
+      ["STA-00031", 31],
+      ["STA-00051", 51],
+      ["STA-00088", 88],
+    ] as const) {
+      expect(within(fila(codigo)).getByRole("link", { name: /Promoción/ })).toHaveAttribute(
+        "href",
+        `/admin/vuelos/${id}/promocion`,
+      );
+    }
+  });
+
   it("«Programar vuelo» lleva al formulario", async () => {
     responderApi({ [SESION]: sesionDe(ADMIN), [LISTA]: pagina(VUELOS) });
     renderRutas(rutas, "/admin/vuelos");

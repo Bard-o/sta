@@ -9,9 +9,11 @@ import { LoginPage } from "@/pages/login";
 import { NoEncontradaPage } from "@/pages/no-encontrada";
 import { NoticiasPage } from "@/pages/noticias";
 import { BajaNoticiasPage } from "@/pages/noticias-baja";
+import { NuevaPromocionPage } from "@/pages/nueva-promocion";
 import { PerfilPage } from "@/pages/perfil";
 import { PrimerIngresoPage } from "@/pages/primer-ingreso";
 import { ProgramarVueloPage } from "@/pages/programar-vuelo";
+import { PromocionesPage } from "@/pages/promociones";
 import { RegistroPage } from "@/pages/registro";
 import { RestablecerContrasenaPage } from "@/pages/restablecer-contrasena";
 import { VerificarCorreoPage } from "@/pages/verificar-correo";
@@ -58,6 +60,8 @@ export const router = createBrowserRouter([
           { path: "/admin/vuelos", element: <VuelosProgramadosPage /> },
           { path: "/admin/vuelos/nuevo", element: <ProgramarVueloPage /> },
           { path: "/admin/vuelos/:vueloId/editar", element: <EditarVueloPage /> },
+          { path: "/admin/vuelos/:vueloId/promocion", element: <NuevaPromocionPage /> },
+          { path: "/admin/promociones", element: <PromocionesPage /> },
         ],
       },
       {

@@ -211,6 +211,9 @@ export function VuelosProgramadosPage() {
                         Editar<span className="sr-only"> {v.codigo}</span>
                       </Button>
                     )}
+                    <Button size="sm" href={`/admin/vuelos/${v.id}/promocion`}>
+                      Promoción<span className="sr-only"> {v.codigo}</span>
+                    </Button>
                     {v.cancelable ? (
                       <Button size="sm" onClick={() => setACancelar(v)}>
                         Cancelar<span className="sr-only"> {v.codigo}</span>
