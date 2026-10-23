@@ -10,6 +10,11 @@ Uso en un router:
 
     @router.post("/vuelos", dependencies=[Depends(require_role(Rol.ADMIN))])
     def crear_vuelo(...): ...
+
+HU-12, RF-02: un administrador con el registro incompleto solo puede iniciar y cerrar sesión,
+consultar /auth/me y completar su registro. Cualquier otra ruta que use la sesión responde
+403 `registro_incompleto`; el bloqueo vive aquí, así que cubre los endpoints de todos los módulos
+sin que cada router lo marque.
 """
 
 from collections.abc import Callable
@@ -21,12 +26,27 @@ from fastapi import Depends, Request, Response
 
 from app.core.config import get_settings
 from app.core.db import DbSession
-from app.core.errors import NoAutenticado, SinPermiso
+from app.core.errors import NoAutenticado, RegistroIncompleto, SinPermiso
 from app.core.security import Rol, crear_token, leer_token, minutos_de_sesion
 
 # Cada petición autenticada renueva la cookie (vencimiento por inactividad), como mucho
 # una vez por este intervalo para no reescribirla en cada llamada.
 _RENOVAR_CADA = timedelta(seconds=60)
+
+# HU-12, RF-02: lo único que puede usar un administrador con el registro incompleto. Rutas
+# completas, con el prefijo de app.main.API_PREFIX. El endpoint de registro lo implementa
+# usuarios (#26) y no necesita marcar nada en su router.
+PREFIJOS_PERMITIDOS_CON_REGISTRO_INCOMPLETO: tuple[str, ...] = ("/api/v1/auth/",)
+RUTAS_PERMITIDAS_CON_REGISTRO_INCOMPLETO: frozenset[tuple[str, str]] = frozenset(
+    {("POST", "/api/v1/administradores/me/registro")}
+)
+
+
+def permitida_con_registro_incompleto(metodo: str, ruta: str) -> bool:
+    """True si un administrador con el registro incompleto puede llamar `metodo ruta`."""
+    return ruta.startswith(PREFIJOS_PERMITIDOS_CON_REGISTRO_INCOMPLETO) or (
+        (metodo.upper(), ruta) in RUTAS_PERMITIDAS_CON_REGISTRO_INCOMPLETO
+    )
 
 
 @dataclass(frozen=True)
@@ -61,7 +81,8 @@ def borrar_cookie_sesion(response: Response) -> None:
 
 
 def get_current_user(request: Request, response: Response, db: DbSession) -> UsuarioActual:
-    """Usuario de la sesión. Responde 401 si no hay sesión válida."""
+    """Usuario de la sesión. Responde 401 si no hay sesión válida y 403 `registro_incompleto` a un
+    administrador sin registro completo fuera de las rutas permitidas (HU-12)."""
     # Import diferido: core no depende de usuarios al importarse.
     from app.modules.usuarios import service as usuarios_service
 
@@ -78,6 +99,15 @@ def get_current_user(request: Request, response: Response, db: DbSession) -> Usu
         or usuario.rol != datos.rol
     ):
         raise NoAutenticado()
+
+    # HU-12, RF-02: mientras no complete su registro, el administrador solo puede iniciar y
+    # cerrar sesión, consultar /auth/me y completar el registro.
+    if (
+        usuario.rol == Rol.ADMIN
+        and not usuario.registro_completo
+        and not permitida_con_registro_incompleto(request.method, request.url.path)
+    ):
+        raise RegistroIncompleto()
 
     if datetime.now(UTC) - datos.emitido_en >= _RENOVAR_CADA:
         poner_cookie_sesion(response, usuario.id, usuario.rol, usuario.version_sesion)
@@ -103,7 +133,9 @@ def require_role(*roles: Rol) -> Callable[..., UsuarioActual]:
 def get_current_user_opcional(
     request: Request, response: Response, db: DbSession
 ) -> UsuarioActual | None:
-    """Como get_current_user, pero devuelve None para visitantes en vez de responder 401."""
+    """Como get_current_user, pero devuelve None para visitantes en vez de responder 401.
+
+    El bloqueo por registro incompleto (HU-12) también aplica."""
     try:
         return get_current_user(request, response, db)
     except NoAutenticado:

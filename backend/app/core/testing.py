@@ -2,7 +2,8 @@
 
 - `db`: sesión sobre la base de datos de tests; todo lo que haga el test se deshace al final.
 - `client`: TestClient de la API que usa esa misma sesión.
-- `crear_usuario`: crea un usuario con rol y contraseña dados.
+- `crear_usuario`: crea un usuario con rol y contraseña dados (`registro_completo=False` para un
+  administrador con el registro incompleto, HU-12).
 - `client_como`: TestClient con la sesión iniciada para un rol.
 - `smtp_falso`: reemplaza el servidor SMTP de app.core.mail (correos enviados, fallos simulados).
 - `_sin_planificador_real` (automática): apaga el hilo del planificador en todos los tests.
@@ -175,9 +176,10 @@ def crear_usuario(db: Session) -> Callable[..., Any]:
         contrasena: str = CONTRASENA_TEST,
         email: str | None = None,
         activo: bool = True,
+        registro_completo: bool = True,
     ) -> Any:
         nombre = nombre_usuario or f"{rol.value}_test"
-        return usuarios_service.crear_usuario(
+        usuario = usuarios_service.crear_usuario(
             db,
             nombre_usuario=nombre,
             contrasena=contrasena,
@@ -185,6 +187,10 @@ def crear_usuario(db: Session) -> Callable[..., Any]:
             email=email,
             activo=activo,
         )
+        if not registro_completo:
+            usuario.registro_completo = False
+            db.commit()
+        return usuario
 
     return _crear
 
