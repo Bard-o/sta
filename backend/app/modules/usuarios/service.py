@@ -21,6 +21,7 @@ from app.core.security import (
     hash_contrasena,
     verificar_contrasena,
 )
+from app.modules.reservas import service as reservas_service
 from app.modules.usuarios.models import TokenVerificacion, Usuario
 from app.modules.usuarios.schemas import RegistroClienteEntrada
 
@@ -72,6 +73,14 @@ class CorreoYaVerificado(AppError):
     status_code = 409
     codigo = "correo_ya_verificado"
     mensaje = "Tu correo ya está verificado."
+
+
+class TiquetesActivos(AppError):
+    """HU-09: el cliente tiene compras o reservas activas en vuelos futuros."""
+
+    status_code = 409
+    codigo = "tiquetes_activos"
+    mensaje = "Tienes compras o reservas activas en vuelos futuros."
 
 
 MENSAJES_DUPLICADO = {
@@ -411,6 +420,38 @@ def reenviar_verificacion(db: Session, usuario_id: int) -> None:
     db.commit()
 
     enviar_verificacion(usuario, email, token)
+
+
+# ---------- Desactivación de cuenta (HU-09) ----------
+
+
+def bloqueos_de_desactivacion(db: Session, usuario_id: int) -> list[reservas_service.TiqueteActivo]:
+    """Compras y reservas activas del cliente en vuelos futuros (HU-09, RF-10).
+
+    La regla vive en reservas; esta función solo la expone para el aviso del perfil. En la
+    iteración 1 todavía no hay ventas y la lista siempre sale vacía.
+    """
+    return reservas_service.tiquetes_activos_futuros_de_cliente(db, usuario_id)
+
+
+def desactivar_cuenta(db: Session, usuario_id: int) -> None:
+    """Desactiva la cuenta del cliente y cierra todas sus sesiones (HU-09, RF-10).
+
+    Es un borrado lógico: los datos, el histórico y el saldo se conservan. Lanza
+    TiquetesActivos si el cliente tiene compras o reservas activas en vuelos futuros.
+    La cookie la borra el router.
+    """
+    if bloqueos_de_desactivacion(db, usuario_id):
+        raise TiquetesActivos()
+
+    # `activo` ya invalida la sesión en core/auth; `version_sesion` cierra además todas las
+    # sesiones abiertas en otros dispositivos.
+    db.execute(
+        update(Usuario)
+        .where(Usuario.id == usuario_id)
+        .values(activo=False, version_sesion=Usuario.version_sesion + 1)
+    )
+    db.commit()
 
 
 def asegurar_root(db: Session, nombre_usuario: str, contrasena: str) -> bool:
