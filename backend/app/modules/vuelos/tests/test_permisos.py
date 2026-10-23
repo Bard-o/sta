@@ -90,3 +90,33 @@ def test_serie_solo_para_administradores(
 
     assert respuesta.status_code == 403
     assert respuesta.json()["error"]["codigo"] == "sin_permiso"
+
+
+RUTAS_GESTION = [
+    ("GET", "/api/v1/vuelos"),
+    ("GET", "/api/v1/vuelos/1/gestion"),
+    ("PUT", "/api/v1/vuelos/1"),
+]
+
+
+@pytest.mark.parametrize(("metodo", "ruta"), RUTAS_GESTION)
+def test_gestion_de_vuelos_sin_sesion_responde_no_autenticado(
+    client: TestClient, metodo: str, ruta: str
+):
+    """HU-15 · RNF-10: sin sesión, el listado y la edición de vuelos responden 401."""
+    respuesta = client.request(metodo, ruta, json={})
+
+    assert respuesta.status_code == 401
+    assert respuesta.json()["error"]["codigo"] == "no_autenticado"
+
+
+@pytest.mark.parametrize(("metodo", "ruta"), RUTAS_GESTION)
+@pytest.mark.parametrize("rol", [Rol.CLIENTE, Rol.ROOT])
+def test_gestion_de_vuelos_solo_para_administradores(
+    client_como: Callable[[Rol], TestClient], metodo: str, ruta: str, rol: Rol
+):
+    """HU-15 · RNF-10: un cliente o root recibe 403 sin_permiso en la gestión de vuelos."""
+    respuesta = client_como(rol).request(metodo, ruta, json={})
+
+    assert respuesta.status_code == 403
+    assert respuesta.json()["error"]["codigo"] == "sin_permiso"

@@ -12,13 +12,16 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.security import Rol
-from app.core.testing import CONTRASENA_TEST
 from app.modules.auditoria import service as auditoria_service
 from app.modules.auditoria.models import RegistroAuditoria
 from app.modules.noticias import service as noticias_service
 from app.modules.noticias.models import Noticia
 from app.modules.vuelos.models import Vuelo
-from app.modules.vuelos.tests.fabricas import crear_vuelo
+from app.modules.vuelos.tests.fabricas import (
+    crear_vuelo,
+    cuerpo_vuelo,
+    iniciar_sesion_admin,
+)
 
 RUTA = "/api/v1/vuelos/vista-previa"
 RUTA_CREAR = "/api/v1/vuelos"
@@ -36,31 +39,6 @@ def proximo_lunes(desde: date) -> date:
     """El lunes siguiente a `desde`, siempre en el futuro."""
     dias = (0 - desde.weekday()) % 7 or 7
     return desde + timedelta(days=dias)
-
-
-def iniciar_sesion_admin(client: TestClient, crear_usuario: Callable[..., Any]) -> Any:
-    """Crea un administrador y abre su sesión en el cliente. Devuelve el usuario."""
-    usuario = crear_usuario(Rol.ADMIN)
-    respuesta = client.post(
-        "/api/v1/auth/login",
-        json={"usuario": usuario.nombre_usuario, "contrasena": CONTRASENA_TEST},
-    )
-    assert respuesta.status_code == 200, respuesta.text
-    return usuario
-
-
-def cuerpo_vuelo(**cambios: object) -> dict[str, object]:
-    base: dict[str, object] = {
-        "origen": "PEI",
-        "destino": "MAD",
-        "fecha_salida": "2099-01-15",
-        "hora_salida": "10:00",
-        "duracion_minutos": 600,
-        "precio_economica": 2_450_000,
-        "precio_primera": 6_900_000,
-    }
-    base.update(cambios)
-    return base
 
 
 def test_catalogo_publico(client: TestClient) -> None:
