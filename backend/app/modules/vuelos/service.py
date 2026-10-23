@@ -5,19 +5,20 @@ rutas permitidas, conversión de la hora local del origen a UTC, llegada, tipo y
 (RF-12 a RF-16). Ninguna función hace commit: van en la transacción de quien llama.
 """
 
+import unicodedata
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Literal
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from app.core.errors import Conflicto, DatosInvalidos
+from app.core.errors import Conflicto, DatosInvalidos, NoEncontrado
 from app.modules.auditoria import service as auditoria_service
 from app.modules.noticias import service as noticias_service
 from app.modules.reservas import service as reservas_service
-from app.modules.vuelos.models import Ciudad, TipoVuelo, Vuelo
+from app.modules.vuelos.models import Ciudad, EstadoVuelo, TipoVuelo, Vuelo
 from app.modules.vuelos.schemas import SerieVuelosEntrada, VueloEntrada
 
 # RF-13: nacional 25 + 125; internacional 50 + 200.
@@ -42,6 +43,10 @@ _DIAS_SEMANA: dict[str, int] = {
 # Textos del resumen de la serie (docs/api/iteracion-1.md, HU-14).
 _MOTIVO_PASADO = "La salida ya pasó."
 _MOTIVO_DUPLICADO = "Ya existe un vuelo igual."
+# Motivos que ve el administrador cuando el vuelo no se puede editar (HU-15).
+_MOTIVO_CERRADO = "El vuelo ya se realizó o está cancelado."
+_MOTIVO_SALIO = "El vuelo ya salió."
+_MOTIVO_VENTAS = "El vuelo tiene reservas activas o compras."
 
 
 class RutaNoPermitida(DatosInvalidos):
@@ -56,6 +61,20 @@ class VueloDuplicado(Conflicto):
 
     codigo = "vuelo_duplicado"
     mensaje = _MENSAJE_DUPLICADO
+
+
+class VueloConReservas(Conflicto):
+    """RF-18: el vuelo tiene reservas vigentes o compras y no se puede editar."""
+
+    codigo = "vuelo_con_reservas"
+    mensaje = "El vuelo tiene reservas activas o compras y no se puede editar."
+
+
+class VueloCerrado(Conflicto):
+    """RF-18: el vuelo ya salió, se realizó o está cancelado."""
+
+    codigo = "vuelo_cerrado"
+    mensaje = "El vuelo ya salió, se realizó o está cancelado."
 
 
 @dataclass(frozen=True)
@@ -77,13 +96,35 @@ class VueloCalculado:
 
 
 @dataclass(frozen=True)
-class VueloProgramado:
-    """Vuelo guardado, con las ciudades y la ocupación para armar la vista del administrador."""
+class Gestion:
+    """Bloqueos del vuelo para la vista del administrador (HU-15, HU-16)."""
+
+    editable: bool
+    motivo_no_editable: str | None
+    cancelable: bool
+
+
+@dataclass(frozen=True)
+class VueloGestion:
+    """Vuelo guardado, con las ciudades, la ocupación y sus bloqueos (HU-15)."""
 
     vuelo: Vuelo
     origen: Ciudad
     destino: Ciudad
     ocupacion: reservas_service.OcupacionVuelo
+    editable: bool
+    motivo_no_editable: str | None
+    cancelable: bool
+
+
+@dataclass(frozen=True)
+class PaginaVuelosGestion:
+    """Página del listado del administrador (HU-15, HU-16, HU-18)."""
+
+    items: list[VueloGestion]
+    total: int
+    pagina: int
+    por_pagina: int
 
 
 @dataclass(frozen=True)
@@ -214,7 +255,7 @@ def programar_vuelo(
     *,
     usuario_id: int,
     ahora: datetime | None = None,
-) -> VueloProgramado:
+) -> VueloGestion:
     """Guarda un vuelo y, en la misma transacción, publica su noticia y lo audita (HU-13).
 
     No hace commit: el commit y el rollback son de quien llama. El código `STA-nnnnn` lo pone
@@ -228,12 +269,8 @@ def programar_vuelo(
         precio_primera=datos.precio_primera,
         usuario_id=usuario_id,
     )
-    return VueloProgramado(
-        vuelo=vuelo,
-        origen=calculado.origen,
-        destino=calculado.destino,
-        ocupacion=reservas_service.ocupacion_de_vuelos(db, [vuelo.id])[vuelo.id],
-    )
+    ocupacion = reservas_service.ocupacion_de_vuelos(db, [vuelo.id])[vuelo.id]
+    return _armar_gestion(vuelo, calculado.origen, calculado.destino, ocupacion, ahora=ahora)
 
 
 def previsualizar_serie(
@@ -346,6 +383,285 @@ def _limite_de_doce_meses(momento: datetime) -> date:
         return hoy.replace(year=hoy.year + 1, day=28)
 
 
+# ---------- Gestión y edición (HU-15) ----------
+
+
+def listar_vuelos_gestion(
+    db: Session,
+    *,
+    estado: EstadoVuelo = "programado",
+    desde: date | None = None,
+    hasta: date | None = None,
+    q: str | None = None,
+    pagina: int = 1,
+    por_pagina: int = 20,
+    ahora: datetime | None = None,
+) -> PaginaVuelosGestion:
+    """Vuelos del administrador con filtros, orden y ocupación (HU-15, HU-16, HU-18).
+
+    Los programados van por salida ascendente; los realizados y cancelados, del más reciente
+    al más antiguo. `desde` y `hasta` son fechas de Colombia inclusivas y se aplican a la
+    salida (programados y cancelados) o a la llegada (realizados). No hace commit.
+    """
+    filtros = _filtros_listado(db, estado=estado, desde=desde, hasta=hasta, q=q)
+    total = db.scalar(select(func.count()).select_from(Vuelo).where(*filtros)) or 0
+    orden, desempate = _orden_listado(estado)
+    vuelos = list(
+        db.scalars(
+            select(Vuelo)
+            .where(*filtros)
+            .order_by(orden, desempate)
+            .offset((pagina - 1) * por_pagina)
+            .limit(por_pagina)
+        )
+    )
+    ciudades = _ciudades_por_codigo(
+        db,
+        {codigo for vuelo in vuelos for codigo in (vuelo.origen_codigo, vuelo.destino_codigo)},
+    )
+    # Una sola consulta para la ocupación de toda la página (HU-15).
+    ocupaciones = reservas_service.ocupacion_de_vuelos(db, [vuelo.id for vuelo in vuelos])
+    items = [
+        _armar_gestion(
+            vuelo,
+            ciudades[vuelo.origen_codigo],
+            ciudades[vuelo.destino_codigo],
+            ocupaciones.get(vuelo.id, reservas_service.OcupacionVuelo()),
+            ahora=ahora,
+        )
+        for vuelo in vuelos
+    ]
+    return PaginaVuelosGestion(items=items, total=total, pagina=pagina, por_pagina=por_pagina)
+
+
+def obtener_vuelo_gestion(
+    db: Session, vuelo_id: int, *, ahora: datetime | None = None
+) -> VueloGestion:
+    """Un vuelo con su ocupación y sus bloqueos, para el formulario de edición (HU-15)."""
+    return _gestion_de_vuelo(db, _vuelo_o_no_encontrado(db, vuelo_id), ahora=ahora)
+
+
+def editar_vuelo(
+    db: Session,
+    vuelo_id: int,
+    datos: VueloEntrada,
+    *,
+    usuario_id: int,
+    ahora: datetime | None = None,
+) -> VueloGestion:
+    """Edita un vuelo programado sin ventas ni reservas vigentes (HU-15, RF-18).
+
+    Vuelve a aplicar las validaciones de HU-13 excluyendo al propio vuelo de la unicidad,
+    recalcula tipo, capacidad y llegada y conserva el código. En la misma transacción
+    actualiza sus noticias y audita solo los campos que cambiaron (RF-26). No hace commit:
+    el commit y el rollback son de quien llama.
+    """
+    momento = ahora or datetime.now(UTC)
+    vuelo = _vuelo_o_no_encontrado(db, vuelo_id)
+    ocupacion = reservas_service.ocupacion_de_vuelos(db, [vuelo.id]).get(
+        vuelo.id, reservas_service.OcupacionVuelo()
+    )
+    evaluar_edicion(vuelo, ocupacion, ahora=momento)
+
+    calculado = validar_vuelo(db, datos, excepto_id=vuelo.id, ahora=momento)
+    antes = _detalle_auditoria(vuelo)
+    _actualizar_vuelo(vuelo, calculado, datos)
+    despues = _detalle_auditoria(vuelo)
+    # RF-26: solo se audita lo que cambió; un PUT idéntico no deja registro.
+    if antes != despues:
+        noticias_service.actualizar_noticias_de_vuelo(db, _vuelo_publicado(vuelo, calculado))
+        auditoria_service.registrar(
+            db,
+            usuario_id=usuario_id,
+            accion="vuelo.editar",
+            entidad="vuelo",
+            entidad_id=vuelo.id,
+            antes=_cambios(antes, despues),
+            despues=_cambios(despues, antes),
+        )
+    return _armar_gestion(vuelo, calculado.origen, calculado.destino, ocupacion, ahora=momento)
+
+
+def evaluar_gestion(
+    vuelo: Vuelo,
+    ocupacion: reservas_service.OcupacionVuelo,
+    *,
+    ahora: datetime | None = None,
+) -> Gestion:
+    """Reglas de HU-15 y HU-16: cuándo se edita y cuándo se cancela un vuelo."""
+    momento = ahora or datetime.now(UTC)
+    cerrado = vuelo.estado != "programado"
+    salio = vuelo.salida <= momento
+    if cerrado:
+        editable, motivo = False, _MOTIVO_CERRADO
+    elif salio:
+        editable, motivo = False, _MOTIVO_SALIO
+    elif _tiene_ventas(ocupacion):
+        editable, motivo = False, _MOTIVO_VENTAS
+    else:
+        editable, motivo = True, None
+    # RF-19: las reservas no impiden cancelar; los tiquetes vendidos, sí.
+    cancelable = not cerrado and not salio and ocupacion.tiquetes_vendidos == 0
+    return Gestion(editable=editable, motivo_no_editable=motivo, cancelable=cancelable)
+
+
+def evaluar_edicion(
+    vuelo: Vuelo,
+    ocupacion: reservas_service.OcupacionVuelo,
+    *,
+    ahora: datetime | None = None,
+) -> None:
+    """RF-18: rechaza la edición de un vuelo cerrado o con ventas, con el motivo del contrato."""
+    momento = ahora or datetime.now(UTC)
+    if vuelo.estado != "programado" or vuelo.salida <= momento:
+        raise VueloCerrado()
+    if _tiene_ventas(ocupacion):
+        raise VueloConReservas()
+
+
+def _tiene_ventas(ocupacion: reservas_service.OcupacionVuelo) -> bool:
+    return ocupacion.reservas_activas > 0 or ocupacion.tiquetes_vendidos > 0
+
+
+def _armar_gestion(
+    vuelo: Vuelo,
+    origen: Ciudad,
+    destino: Ciudad,
+    ocupacion: reservas_service.OcupacionVuelo,
+    *,
+    ahora: datetime | None = None,
+) -> VueloGestion:
+    gestion = evaluar_gestion(vuelo, ocupacion, ahora=ahora)
+    return VueloGestion(
+        vuelo=vuelo,
+        origen=origen,
+        destino=destino,
+        ocupacion=ocupacion,
+        editable=gestion.editable,
+        motivo_no_editable=gestion.motivo_no_editable,
+        cancelable=gestion.cancelable,
+    )
+
+
+def _gestion_de_vuelo(db: Session, vuelo: Vuelo, *, ahora: datetime | None = None) -> VueloGestion:
+    ocupacion = reservas_service.ocupacion_de_vuelos(db, [vuelo.id]).get(
+        vuelo.id, reservas_service.OcupacionVuelo()
+    )
+    origen, destino = _obtener_ciudades(db, vuelo.origen_codigo, vuelo.destino_codigo)
+    return _armar_gestion(vuelo, origen, destino, ocupacion, ahora=ahora)
+
+
+def _vuelo_o_no_encontrado(db: Session, vuelo_id: int) -> Vuelo:
+    vuelo = db.get(Vuelo, vuelo_id)
+    if vuelo is None:
+        raise NoEncontrado("El vuelo no existe.")
+    return vuelo
+
+
+def _actualizar_vuelo(vuelo: Vuelo, calculado: VueloCalculado, datos: VueloEntrada) -> None:
+    """Aplica al vuelo lo calculado; el código y el estado no cambian (HU-15)."""
+    vuelo.tipo = calculado.tipo
+    vuelo.origen_codigo = calculado.origen.codigo
+    vuelo.destino_codigo = calculado.destino.codigo
+    vuelo.salida = calculado.salida
+    vuelo.llegada = calculado.llegada
+    vuelo.duracion_minutos = calculado.duracion_minutos
+    vuelo.precio_economica = datos.precio_economica
+    vuelo.precio_primera = datos.precio_primera
+    vuelo.capacidad_primera = calculado.capacidad_primera
+    vuelo.capacidad_economica = calculado.capacidad_economica
+
+
+def _cambios(nuevo: dict[str, object], anterior: dict[str, object]) -> dict[str, object]:
+    """Solo los campos que cambiaron, para `antes` o `despues` de la auditoría (RF-26)."""
+    return {clave: valor for clave, valor in nuevo.items() if anterior.get(clave) != valor}
+
+
+def _vuelo_publicado(vuelo: Vuelo, calculado: VueloCalculado) -> noticias_service.VueloPublicado:
+    """Copia del vuelo para la noticia, con la imagen de la ciudad destino (RF-22)."""
+    return noticias_service.VueloPublicado(
+        vuelo_id=vuelo.id,
+        codigo=vuelo.codigo,
+        origen=_ciudad_publicada(calculado.origen),
+        destino=_ciudad_publicada(calculado.destino),
+        salida=vuelo.salida,
+        precio_economica=vuelo.precio_economica,
+        precio_primera=vuelo.precio_primera,
+        imagen_url=calculado.destino.imagen_url,
+    )
+
+
+def _filtros_listado(
+    db: Session,
+    *,
+    estado: EstadoVuelo,
+    desde: date | None,
+    hasta: date | None,
+    q: str | None,
+) -> list[object]:
+    """Filtros de `GET /vuelos`: estado, fechas de Colombia y texto (HU-15)."""
+    columna = Vuelo.llegada if estado == "realizado" else Vuelo.salida
+    filtros: list[object] = [Vuelo.estado == estado]
+    if desde is not None:
+        filtros.append(columna >= _inicio_del_dia(desde))
+    if hasta is not None:
+        filtros.append(columna < _inicio_del_dia(hasta + timedelta(days=1)))
+    texto = (q or "").strip()
+    if texto:
+        filtros.append(_filtro_texto(db, texto))
+    return filtros
+
+
+def _orden_listado(estado: EstadoVuelo) -> tuple[object, object]:
+    """Programados: salida ascendente. Realizados y cancelados: del más reciente al más
+    antiguo (los realizados por llegada, como su filtro de fechas)."""
+    if estado == "realizado":
+        return Vuelo.llegada.desc(), Vuelo.id.desc()
+    if estado == "cancelado":
+        return Vuelo.salida.desc(), Vuelo.id.desc()
+    return Vuelo.salida.asc(), Vuelo.id.asc()
+
+
+def _inicio_del_dia(fecha: date) -> datetime:
+    """Medianoche en Colombia, que es la zona de los filtros de fecha del contrato."""
+    return datetime.combine(fecha, time.min, tzinfo=_ZONA_NEGOCIO).astimezone(UTC)
+
+
+def _filtro_texto(db: Session, texto: str) -> object:
+    """Código del vuelo o nombre de la ciudad de origen/destino, sin tildes (HU-15)."""
+    buscado = _sin_tildes(texto)
+    codigos = [
+        ciudad.codigo
+        for ciudad in db.scalars(select(Ciudad))
+        if buscado in _sin_tildes(ciudad.nombre) or buscado in _sin_tildes(ciudad.codigo)
+    ]
+    condiciones = [Vuelo.codigo.ilike(f"%{_escapar_like(texto)}%", escape="\\")]
+    if codigos:
+        condiciones.append(Vuelo.origen_codigo.in_(codigos))
+        condiciones.append(Vuelo.destino_codigo.in_(codigos))
+    return or_(*condiciones)
+
+
+def _sin_tildes(texto: str) -> str:
+    sin_tildes = unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode()
+    return sin_tildes.strip().lower()
+
+
+def _escapar_like(texto: str) -> str:
+    """Los comodines de `LIKE` del texto del administrador son literales."""
+    return texto.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def _ciudades_por_codigo(db: Session, codigos: set[str]) -> dict[str, Ciudad]:
+    """Las ciudades de la página en una sola consulta, sin N+1."""
+    if not codigos:
+        return {}
+    return {
+        ciudad.codigo: ciudad
+        for ciudad in db.scalars(select(Ciudad).where(Ciudad.codigo.in_(codigos)))
+    }
+
+
 def _crear_vuelo(
     db: Session,
     calculado: VueloCalculado,
@@ -373,20 +689,7 @@ def _crear_vuelo(
     db.flush()
     db.refresh(vuelo)
 
-    noticias_service.publicar_noticia_vuelo(
-        db,
-        noticias_service.VueloPublicado(
-            vuelo_id=vuelo.id,
-            codigo=vuelo.codigo,
-            origen=_ciudad_publicada(calculado.origen),
-            destino=_ciudad_publicada(calculado.destino),
-            salida=vuelo.salida,
-            precio_economica=vuelo.precio_economica,
-            precio_primera=vuelo.precio_primera,
-            # RF-22: la noticia y el carrusel muestran una imagen de la ciudad destino.
-            imagen_url=calculado.destino.imagen_url,
-        ),
-    )
+    noticias_service.publicar_noticia_vuelo(db, _vuelo_publicado(vuelo, calculado))
     auditoria_service.registrar(
         db,
         usuario_id=usuario_id,

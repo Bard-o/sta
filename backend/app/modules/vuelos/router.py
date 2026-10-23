@@ -77,7 +77,21 @@ def listar_vuelos(
 
     Programados por salida ascendente; realizados y cancelados por fecha descendente.
     """
-    raise NoImplementado()
+    pagina_vuelos = service.listar_vuelos_gestion(
+        db,
+        estado=estado,
+        desde=desde,
+        hasta=hasta,
+        q=q,
+        pagina=pagina,
+        por_pagina=por_pagina,
+    )
+    return PaginaVuelosAdmin(
+        items=[_a_vuelo_admin(item) for item in pagina_vuelos.items],
+        total=pagina_vuelos.total,
+        pagina=pagina_vuelos.pagina,
+        por_pagina=pagina_vuelos.por_pagina,
+    )
 
 
 @vuelos.post(
@@ -98,16 +112,16 @@ def programar_vuelo(datos: VueloEntrada, usuario: Admin, db: DbSession) -> Vuelo
     return _a_vuelo_admin(programado)
 
 
-def _a_vuelo_admin(programado: service.VueloProgramado) -> VueloAdmin:
-    """Vista del administrador de un vuelo que acaba de crearse: sin ventas ni bloqueos."""
-    vuelo = programado.vuelo
-    ocupacion = programado.ocupacion
+def _a_vuelo_admin(gestion: service.VueloGestion) -> VueloAdmin:
+    """Vista del administrador: ocupación, bloqueos y promociones del vuelo (HU-15)."""
+    vuelo = gestion.vuelo
+    ocupacion = gestion.ocupacion
     return VueloAdmin(
         id=vuelo.id,
         codigo=vuelo.codigo,
         tipo=vuelo.tipo,
-        origen=CiudadResumen.model_validate(programado.origen),
-        destino=CiudadResumen.model_validate(programado.destino),
+        origen=CiudadResumen.model_validate(gestion.origen),
+        destino=CiudadResumen.model_validate(gestion.destino),
         salida=vuelo.salida,
         llegada=vuelo.llegada,
         duracion_minutos=vuelo.duracion_minutos,
@@ -133,9 +147,9 @@ def _a_vuelo_admin(programado: service.VueloProgramado) -> VueloAdmin:
         ),
         reservas_activas=ocupacion.reservas_activas,
         tiquetes_vendidos=ocupacion.tiquetes_vendidos,
-        editable=True,
-        motivo_no_editable=None,
-        cancelable=True,
+        editable=gestion.editable,
+        motivo_no_editable=gestion.motivo_no_editable,
+        cancelable=gestion.cancelable,
         promociones=[],
     )
 
@@ -243,13 +257,20 @@ def obtener_vuelo(vuelo_id: int, db: DbSession) -> VueloDetalle:
 @vuelos.get("/{vuelo_id}/gestion", response_model=VueloAdmin, responses=respuestas_error(404))
 def obtener_vuelo_gestion(vuelo_id: int, usuario: Admin, db: DbSession) -> VueloAdmin:
     """Vuelo con ocupación y bloqueos de edición, para el formulario de edición (HU-15)."""
-    raise NoImplementado()
+    return _a_vuelo_admin(service.obtener_vuelo_gestion(db, vuelo_id))
 
 
 @vuelos.put("/{vuelo_id}", response_model=VueloAdmin, responses=respuestas_error(404, 409))
 def editar_vuelo(vuelo_id: int, datos: VueloEntrada, usuario: Admin, db: DbSession) -> VueloAdmin:
     """Edita un vuelo sin ventas ni reservas activas y conserva su código (HU-15)."""
-    raise NoImplementado()
+    try:
+        editado = service.editar_vuelo(db, vuelo_id, datos, usuario_id=usuario.id)
+        db.commit()
+    except Exception:
+        # RNF-17: si falla la noticia o la auditoría no queda nada del cambio.
+        db.rollback()
+        raise
+    return _a_vuelo_admin(editado)
 
 
 @vuelos.post(
