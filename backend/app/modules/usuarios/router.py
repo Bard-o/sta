@@ -120,8 +120,8 @@ def registrar_cliente(
 
 @cuenta.post("/verificacion", status_code=status.HTTP_204_NO_CONTENT)
 def verificar_correo(datos: TokenEntrada, db: DbSession) -> None:
-    """Marca el correo como verificado con el token del enlace (HU-02, HU-07)."""
-    raise NoImplementado()
+    """Marca el correo como verificado con el token del enlace (HU-02)."""
+    service.verificar_correo(db, datos.token)
 
 
 @cuenta.post(
@@ -131,7 +131,7 @@ def verificar_correo(datos: TokenEntrada, db: DbSession) -> None:
 )
 def reenviar_verificacion(usuario: ClienteOAdmin, db: DbSession) -> None:
     """Envía un enlace nuevo e invalida el anterior (HU-02)."""
-    raise NoImplementado()
+    service.reenviar_verificacion(db, usuario.id)
 
 
 @cuenta.put("/me/contrasena", status_code=status.HTTP_204_NO_CONTENT)
