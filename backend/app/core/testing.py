@@ -4,14 +4,17 @@
 - `client`: TestClient de la API que usa esa misma sesión.
 - `crear_usuario`: crea un usuario con rol y contraseña dados.
 - `client_como`: TestClient con la sesión iniciada para un rol.
+- `smtp_falso`: reemplaza el servidor SMTP de app.core.mail (correos enviados, fallos simulados).
 - `_sin_planificador_real` (automática): apaga el hilo del planificador en todos los tests.
 - `archivos_dir` (autouse): los archivos de app.core.archivos van a un tmp_path del test,
   nunca al volumen real.
 """
 
+import smtplib
 from collections.abc import Callable, Iterator
+from email.message import EmailMessage
 from pathlib import Path
-from typing import Any
+from typing import Any, Self
 
 import pytest
 from alembic.config import Config
@@ -81,6 +84,59 @@ def archivos_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     ruta = tmp_path / "archivos"  # no se crea: guardar() crea la raíz cuando hace falta
     monkeypatch.setattr(get_settings(), "archivos_dir", ruta)
     return ruta
+
+
+class _ConexionSmtpFalsa:
+    def __init__(self, enviados: list[EmailMessage], rechazados: set[str]) -> None:
+        self._enviados = enviados
+        self._rechazados = rechazados
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        return None
+
+    def send_message(self, mensaje: EmailMessage) -> None:
+        destinatario = str(mensaje["To"])
+        if destinatario in self._rechazados:
+            raise smtplib.SMTPRecipientsRefused({destinatario: (550, b"Buzon inexistente")})
+        self._enviados.append(mensaje)
+
+    def quit(self) -> None:
+        return None
+
+    def close(self) -> None:
+        return None
+
+
+class SmtpFalso:
+    """Servidor SMTP simulado que reemplaza smtplib.SMTP (fixture `smtp_falso`).
+
+    enviados: mensajes aceptados; conexiones: (host, puerto) de cada conexión;
+    sin_conexion=True: conectar lanza ConnectionRefusedError; rechazados: destinatarios que el
+    servidor rechaza con SMTPRecipientsRefused.
+    """
+
+    def __init__(self) -> None:
+        self.enviados: list[EmailMessage] = []
+        self.conexiones: list[tuple[str, int]] = []
+        self.sin_conexion = False
+        self.rechazados: set[str] = set()
+
+    def __call__(self, host: str, port: int, timeout: float | None = None) -> _ConexionSmtpFalsa:
+        if self.sin_conexion:
+            raise ConnectionRefusedError("SMTP simulado fuera de servicio")
+        self.conexiones.append((host, port))
+        return _ConexionSmtpFalsa(self.enviados, self.rechazados)
+
+
+@pytest.fixture
+def smtp_falso(monkeypatch: pytest.MonkeyPatch) -> SmtpFalso:
+    """app.core.mail entrega a un servidor SMTP simulado (issue #5)."""
+    servidor = SmtpFalso()
+    monkeypatch.setattr(smtplib, "SMTP", servidor)
+    return servidor
 
 
 @pytest.fixture
