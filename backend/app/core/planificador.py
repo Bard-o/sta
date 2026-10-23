@@ -187,8 +187,11 @@ def registrar_tarea(
 
 
 def cargar_tareas_de_modulos() -> None:
-    """Importa el `service.py` de cada módulo para que registren sus tareas."""
+    """Registra la tarea de core (cola de correos) e importa el `service.py` de cada módulo para
+    que registren las suyas."""
     from app import modules
+
+    importlib.import_module("app.core.mail")  # la cola de correos de core (issue #5)
 
     for modulo in pkgutil.iter_modules(modules.__path__):
         if not modulo.ispkg:

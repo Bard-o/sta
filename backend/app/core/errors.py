@@ -65,6 +65,14 @@ class SinPermiso(AppError):
     mensaje = "Tu rol no tiene permiso para esta acción."
 
 
+class RegistroIncompleto(AppError):
+    """HU-12, RF-02: un administrador sin registro completo solo puede completarlo."""
+
+    status_code = 403
+    codigo = "registro_incompleto"
+    mensaje = "Completa tu registro para continuar."
+
+
 class NoEncontrado(AppError):
     status_code = 404
     codigo = "no_encontrado"
