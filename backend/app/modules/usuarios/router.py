@@ -23,6 +23,7 @@ from app.modules.usuarios import service
 from app.modules.usuarios.schemas import (
     AdministradorEntrada,
     AdministradorSalida,
+    BloqueoDesactivacion,
     CambioContrasenaEntrada,
     DesactivacionSalida,
     LoginEntrada,
@@ -212,7 +213,11 @@ def dar_baja_suscripcion(datos: TokenEntrada, db: DbSession) -> None:
 @cuenta.get("/me/desactivacion", response_model=DesactivacionSalida)
 def consultar_desactivacion(usuario: Cliente, db: DbSession) -> DesactivacionSalida:
     """Indica si la cuenta se puede desactivar y qué lo impide (HU-09)."""
-    raise NoImplementado()
+    bloqueos = [
+        BloqueoDesactivacion.model_validate(bloqueo, from_attributes=True)
+        for bloqueo in service.bloqueos_de_desactivacion(db, usuario.id)
+    ]
+    return DesactivacionSalida(puede_desactivar=not bloqueos, bloqueos=bloqueos)
 
 
 @cuenta.post(
@@ -222,7 +227,8 @@ def consultar_desactivacion(usuario: Cliente, db: DbSession) -> DesactivacionSal
 )
 def desactivar_cuenta(usuario: Cliente, response: Response, db: DbSession) -> None:
     """Desactiva la cuenta (borrado lógico) y cierra la sesión (HU-09, RF-10)."""
-    raise NoImplementado()
+    service.desactivar_cuenta(db, usuario.id)
+    borrar_cookie_sesion(response)
 
 
 # ---------- Administradores: /administradores ----------
