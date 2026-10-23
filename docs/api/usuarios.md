@@ -1,6 +1,6 @@
 # Módulo usuarios
 
-Dueño: Backend A. Requisitos: RF-01 a RF-11. Este archivo cubre el registro de clientes (RF-03, RF-04, HU-01), la verificación de correo (RF-05, HU-02), la sesión (RF-06, HU-03, HU-04), el restablecimiento de contraseña (RF-07, HU-05), el cambio de contraseña (HU-06) y el perfil (HU-07); el resto de endpoints del módulo se agregan aquí con sus issues. El contrato acordado de todo el módulo está en [iteracion-1.md](iteracion-1.md).
+Dueño: Backend A. Requisitos: RF-01 a RF-11. Este archivo cubre el registro de clientes (RF-03, RF-04, HU-01), la verificación de correo (RF-05, HU-02), la sesión (RF-06, HU-03, HU-04), el restablecimiento de contraseña (RF-07, HU-05), el cambio de contraseña (HU-06), el perfil (HU-07) y la desactivación de la cuenta (RF-10, HU-09); el resto de endpoints del módulo se agregan aquí con sus issues. El contrato acordado de todo el módulo está en [iteracion-1.md](iteracion-1.md).
 
 ## Registro de clientes
 
@@ -317,6 +317,59 @@ Entrada:
 | 422 | `datos_invalidos` | `contrasena_nueva` | No cumple la política de RNF-08. |
 | 422 | `datos_invalidos` | `confirmacion` | No coincide con la contraseña nueva. |
 | 401 | `no_autenticado` | | Sin sesión, token inválido o sesión vencida. |
+
+## Desactivación de cuenta
+
+### `GET /api/v1/usuarios/me/desactivacion`
+
+Con sesión de cliente. Indica si la cuenta se puede desactivar y, si no, qué compras o reservas
+activas en vuelos futuros lo impiden (HU-09, RF-10). La pantalla del perfil muestra el aviso y
+deshabilita el botón antes de intentarlo.
+
+```json
+{
+  "puede_desactivar": false,
+  "bloqueos": [
+    {
+      "tipo": "compra",
+      "codigo_reserva": "K7Q2MX",
+      "vuelo_id": 88,
+      "vuelo_codigo": "STA-00088",
+      "origen": "Bogotá",
+      "destino": "Madrid",
+      "salida": "2026-12-11T03:00:00Z"
+    }
+  ]
+}
+```
+
+- `tipo` es `compra` o `reserva`; `codigo_reserva` es `null` en una reserva.
+- `salida` va en ISO 8601 y UTC (RF-15).
+- Los bloqueos salen de `reservas.tiquetes_activos_futuros_de_cliente`. En la iteración 1
+  todavía no hay ventas, así que la lista siempre sale vacía.
+
+| HTTP | `codigo` | Cuándo |
+|---|---|---|
+| 401 | `no_autenticado` | Sin sesión o sesión vencida. |
+| 403 | `sin_permiso` | El rol no es cliente. |
+
+### `POST /api/v1/usuarios/me/desactivacion`
+
+Con sesión de cliente. Desactiva la cuenta y responde `204` sin cuerpo; la respuesta borra la
+cookie de sesión.
+
+- Es un borrado lógico (RF-10): la fila de `usuarios` queda con `activo: false` y se conservan
+  los datos personales, el histórico, las preferencias y el saldo del monedero.
+- Se cierran todas las sesiones abiertas de la cuenta y el siguiente inicio de sesión responde
+  `403 cuenta_inactiva`.
+- Antes de desactivar se consultan las compras y reservas activas en vuelos futuros; si hay
+  alguna, no se cambia nada.
+
+| HTTP | `codigo` | Cuándo |
+|---|---|---|
+| 409 | `tiquetes_activos` | Tiene compras o reservas activas en vuelos futuros: debe cancelarlas o esperar. |
+| 401 | `no_autenticado` | Sin sesión o sesión vencida. |
+| 403 | `sin_permiso` | El rol no es cliente. |
 
 ## Usuario root
 
