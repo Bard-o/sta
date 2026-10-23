@@ -6,7 +6,7 @@ import { cop, desfase, duracion, fecha, hora } from "@/lib/format";
 import { useVistaPrevia, useVistaSerie, type SerieEntrada, type VueloEntrada } from "./api";
 import { resumenSerie } from "./resumen";
 
-type Vista = Schemas["VueloVistaPrevia"];
+export type Vista = Schemas["VueloVistaPrevia"];
 
 const NOMBRE_CAMPO: Record<string, string> = {
   origen: "Origen",
@@ -21,13 +21,23 @@ const NOMBRE_CAMPO: Record<string, string> = {
   hasta: "Hasta",
 };
 
-function Pase({ vista, precio, extra }: { vista: Vista; precio: number; extra?: ReactNode }) {
+function Pase({
+  vista,
+  precio,
+  codigo,
+  extra,
+}: {
+  vista: Vista;
+  precio: number;
+  codigo: string;
+  extra?: ReactNode;
+}) {
   const zo = vista.origen.zona_horaria;
   const zd = vista.destino.zona_horaria;
   return (
     <>
       <FlightPass
-        code="STA-?????"
+        code={codigo}
         from={{
           iata: vista.origen.codigo,
           city: vista.origen.nombre,
@@ -77,19 +87,30 @@ function Errores({ error }: { error: Error }) {
   );
 }
 
+/** Un vuelo nuevo aún no tiene código: se asigna al guardar. */
+const CODIGO_NUEVO = "STA-?????";
+
 const INDICACION =
   "Completa el formulario con datos válidos para ver el pase del vuelo y lo que calcula el sistema.";
 
 function PorVuelo({
   entrada,
   precio,
+  codigo = CODIGO_NUEVO,
+  conocida,
   extra,
 }: {
   entrada: VueloEntrada | null;
   precio: number;
+  codigo?: string;
+  conocida?: Vista;
   extra?: ReactNode;
 }) {
-  const consulta = useVistaPrevia(entrada);
+  // Con `conocida` no se consulta: el servidor la rechazaría como duplicada de sí misma.
+  const consulta = useVistaPrevia(conocida ? null : entrada);
+  if (conocida) {
+    return <Pase vista={conocida} precio={precio} codigo={codigo} extra={extra} />;
+  }
   return (
     <>
       {entrada === null && <p className="body sta-muted">{INDICACION}</p>}
@@ -100,7 +121,7 @@ function PorVuelo({
       )}
       {entrada !== null && consulta.isError && <Errores error={consulta.error} />}
       {entrada !== null && consulta.data && (
-        <Pase vista={consulta.data} precio={precio} extra={extra} />
+        <Pase vista={consulta.data} precio={precio} codigo={codigo} extra={extra} />
       )}
     </>
   );
@@ -152,10 +173,16 @@ export function VistaPrevia({
   entrada,
   serie,
   precio,
+  codigo,
+  conocida,
 }: {
   entrada: VueloEntrada | null;
   serie?: SerieEntrada | null;
   precio: number;
+  /** Código del vuelo que se edita; sin él se muestra «STA-?????». */
+  codigo?: string;
+  /** Vista ya conocida (al editar, mientras no cambien ruta, salida ni duración). */
+  conocida?: Vista;
 }) {
   return (
     <section aria-labelledby="titulo-vista-previa" className="flex flex-col gap-3">
@@ -163,7 +190,7 @@ export function VistaPrevia({
         Así lo verá el cliente
       </h2>
       {serie === undefined ? (
-        <PorVuelo entrada={entrada} precio={precio} />
+        <PorVuelo entrada={entrada} precio={precio} codigo={codigo} conocida={conocida} />
       ) : (
         <PorSerie serie={serie} precio={precio} />
       )}
