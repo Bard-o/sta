@@ -1,4 +1,8 @@
-"""HU-19 / RF-55: las noticias son públicas y no hay ninguna interfaz para crearlas a mano."""
+"""HU-19 / RF-55: las noticias son públicas y no hay ninguna interfaz para crearlas a mano.
+
+El correo a los suscritos (RF-56, HU-08) se encola desde el servicio de publicación: este
+módulo no agrega endpoints, así que la matriz de roles sigue siendo la de los dos GET públicos.
+"""
 
 from collections.abc import Callable
 
