@@ -88,13 +88,22 @@ def solicitar_restablecimiento(datos: RestablecimientoSolicitud, db: DbSession) 
 
     Responde lo mismo exista o no el correo.
     """
-    raise NoImplementado()
+    service.solicitar_restablecimiento(db, datos.email)
+    return MensajeSalida(mensaje=service.MENSAJE_RESTABLECIMIENTO)
 
 
-@auth.post("/restablecimiento/confirmar", status_code=status.HTTP_204_NO_CONTENT)
+@auth.post(
+    "/restablecimiento/confirmar",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
 def confirmar_restablecimiento(datos: RestablecimientoConfirmacion, db: DbSession) -> None:
     """Define la contraseña nueva con el token del enlace y cierra todas las sesiones (HU-05)."""
-    raise NoImplementado()
+    service.confirmar_restablecimiento(
+        db,
+        datos.token,
+        contrasena_nueva=datos.contrasena_nueva,
+        confirmacion=datos.confirmacion,
+    )
 
 
 # ---------- Cuenta propia: /usuarios ----------

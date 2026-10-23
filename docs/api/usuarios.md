@@ -1,6 +1,6 @@
 # Módulo usuarios
 
-Dueño: Backend A. Requisitos: RF-01 a RF-11. Este archivo cubre el registro de clientes (RF-03, RF-04, HU-01), la verificación de correo (RF-05, HU-02), la sesión (RF-06, HU-03, HU-04) y el cambio de contraseña (HU-06); el resto de endpoints del módulo se agregan aquí con sus issues. El contrato acordado de todo el módulo está en [iteracion-1.md](iteracion-1.md).
+Dueño: Backend A. Requisitos: RF-01 a RF-11. Este archivo cubre el registro de clientes (RF-03, RF-04, HU-01), la verificación de correo (RF-05, HU-02), la sesión (RF-06, HU-03, HU-04), el restablecimiento de contraseña (RF-07, HU-05) y el cambio de contraseña (HU-06); el resto de endpoints del módulo se agregan aquí con sus issues. El contrato acordado de todo el módulo está en [iteracion-1.md](iteracion-1.md).
 
 ## Registro de clientes
 
@@ -176,6 +176,52 @@ Con sesión de cualquier rol. Devuelve el usuario de la sesión, con el mismo cu
 | 401 | `no_autenticado` | Sin cookie, token alterado, sesión vencida o cerrada, o cuenta desactivada. |
 
 ## Contraseña
+
+### `POST /api/v1/auth/restablecimiento`
+
+Sin sesión. Envía al correo un enlace de un solo uso, válido 30 minutos, para definir una contraseña nueva (HU-05, RF-07). Sirve para clientes y administradores; el root nunca recibe enlace porque cambia su contraseña desde su sesión (HU-06).
+
+Entrada:
+
+```json
+{ "email": "laura.gomez@correo.co" }
+```
+
+`202`: siempre responde lo mismo, exista o no el correo, para no revelar qué correos están registrados.
+
+```json
+{ "mensaje": "Si el correo está registrado, recibirás un enlace válido por 30 minutos." }
+```
+
+- El enlace lleva al frontend (`/restablecer-contrasena?token=…`) y no exige sesión: se puede abrir en otro dispositivo.
+- Si el correo pertenece a una cuenta de cliente y a una de administrador (SUP-18), se envía un enlace por cada cuenta. El correo identifica el nombre de usuario y el tipo de cuenta para que el titular los distinga.
+- Solo se envían enlaces a cuentas activas. Al pedir uno nuevo, los enlaces anteriores sin usar dejan de servir.
+- Si el correo no se puede enviar, la solicitud responde igual y el fallo queda en el log sin exponer el correo.
+
+| HTTP | `codigo` | `campos` | Cuándo |
+|---|---|---|---|
+| 422 | `datos_invalidos` | `email` | Falta el correo o no tiene un formato válido. |
+
+### `POST /api/v1/auth/restablecimiento/confirmar`
+
+Sin sesión. Define la contraseña nueva con el token del enlace (HU-05, RF-07). Responde `204` sin cuerpo.
+
+Entrada:
+
+```json
+{ "token": "…", "contrasena_nueva": "OtraClave99", "confirmacion": "OtraClave99" }
+```
+
+- El token es de un solo uso y vence en 30 minutos (SUP-19). Un enlace vencido, ya usado o de una cuenta desactivada responde `400 enlace_invalido`.
+- El token se valida antes que la contraseña: un enlace inválido siempre responde `enlace_invalido`.
+- La contraseña nueva cumple RNF-08: mínimo 8 caracteres, al menos una letra y un número. Se guarda como hash Argon2id, nunca en texto plano.
+- Al confirmar, la contraseña anterior deja de funcionar y se cierran todas las sesiones abiertas de esa cuenta. La cookie no se borra del navegador, pero el servidor la rechaza en la siguiente petición. En ningún caso se muestra ni se envía la contraseña actual.
+
+| HTTP | `codigo` | `campos` | Cuándo |
+|---|---|---|---|
+| 400 | `enlace_invalido` | | Token inexistente, vencido, ya usado o de una cuenta desactivada. |
+| 422 | `datos_invalidos` | `contrasena_nueva` | No cumple la política de RNF-08. |
+| 422 | `datos_invalidos` | `confirmacion` | No coincide con la contraseña nueva. |
 
 ### `PUT /api/v1/usuarios/me/contrasena`
 
