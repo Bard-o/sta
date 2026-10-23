@@ -1,7 +1,7 @@
 """vuelos: crea la tabla promociones
 
 Revision ID: a43951ffe636
-Revises: d24066b8c1d9
+Revises: cfbc16d2bdd9
 Create Date: 2026-10-23 03:00:48.567656
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "a43951ffe636"
-down_revision: str | None = "d24066b8c1d9"
+down_revision: str | None = "cfbc16d2bdd9"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
