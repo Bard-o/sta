@@ -1,6 +1,8 @@
 import { createBrowserRouter } from "react-router";
-import { RequireRole, SoloVisitantes } from "@/auth/require-role";
+import { RequireRole, SoloRegistroPendiente, SoloVisitantes } from "@/auth/require-role";
+import { RUTA_PRIMER_INGRESO } from "@/auth/roles";
 import { AppLayout } from "@/layouts/app-layout";
+import { EditarVueloPage } from "@/pages/editar-vuelo";
 import { InicioPage } from "@/pages/inicio";
 import { InicioRolPage } from "@/pages/inicio-rol";
 import { LoginPage } from "@/pages/login";
@@ -8,7 +10,7 @@ import { NoEncontradaPage } from "@/pages/no-encontrada";
 import { NoticiasPage } from "@/pages/noticias";
 import { BajaNoticiasPage } from "@/pages/noticias-baja";
 import { PerfilPage } from "@/pages/perfil";
-import { EditarVueloPage } from "@/pages/editar-vuelo";
+import { PrimerIngresoPage } from "@/pages/primer-ingreso";
 import { ProgramarVueloPage } from "@/pages/programar-vuelo";
 import { RegistroPage } from "@/pages/registro";
 import { RestablecerContrasenaPage } from "@/pages/restablecer-contrasena";
@@ -47,6 +49,11 @@ export const router = createBrowserRouter([
       {
         element: <RequireRole roles={["admin"]} />,
         children: [
+          // HU-12: con el registro pendiente solo se puede ver S07.
+          {
+            element: <SoloRegistroPendiente />,
+            children: [{ path: RUTA_PRIMER_INGRESO, element: <PrimerIngresoPage /> }],
+          },
           { path: "/admin", element: <InicioRolPage /> },
           { path: "/admin/vuelos", element: <VuelosProgramadosPage /> },
           { path: "/admin/vuelos/nuevo", element: <ProgramarVueloPage /> },

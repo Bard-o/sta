@@ -1,13 +1,15 @@
 type Respuesta = { status: number; body?: unknown };
-type Rutas = Record<string, Respuesta>;
+/** Una respuesta fija, o una función de la URL pedida (para listados con parámetros). */
+type Rutas = Record<string, Respuesta | ((url: URL) => Respuesta)>;
 
 /** Simula la API: las llaves son "MÉTODO /ruta", p. ej. "POST /api/v1/auth/login". */
 export function responderApi(rutas: Rutas) {
   vi.mocked(fetch).mockImplementation(async (input) => {
     const req = input as Request;
     const llave = `${req.method} ${new URL(req.url).pathname}`;
-    const r = rutas[llave];
-    if (!r) throw new Error(`Petición no simulada: ${llave}`);
+    const entrada = rutas[llave];
+    if (!entrada) throw new Error(`Petición no simulada: ${llave}`);
+    const r = typeof entrada === "function" ? entrada(new URL(req.url)) : entrada;
     return new Response(r.body === undefined ? null : JSON.stringify(r.body), {
       status: r.status,
       headers: { "Content-Type": "application/json" },

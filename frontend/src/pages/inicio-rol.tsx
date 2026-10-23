@@ -1,5 +1,6 @@
 import { NOMBRE_ROL } from "@/auth/roles";
 import { useSesion } from "@/auth/sesion";
+import { Button } from "@/components/ui/button";
 import { Glass } from "@/components/ui/glass";
 
 /** Página de inicio de cada rol. Cada módulo la llena en su propio issue. */
@@ -14,6 +15,13 @@ export function InicioRolPage() {
       </div>
       <Glass title="Tu sesión">
         <p className="body">Usa el menú de arriba para ir a las funciones de tu rol.</p>
+        {usuario.rol === "admin" && (
+          <div className="mt-4">
+            <Button variant="primary" href="/admin/vuelos/nuevo">
+              Programar vuelo
+            </Button>
+          </div>
+        )}
       </Glass>
     </div>
   );

@@ -13,7 +13,8 @@ RUTAS = ["/api/v1/noticias", "/api/v1/noticias/carrusel"]
 @pytest.mark.parametrize("ruta", RUTAS)
 def test_un_visitante_puede_consultar_noticias(client: TestClient, ruta: str):
     """HU-19 / RF-55: un visitante sin sesión ve el listado y el carrusel."""
-    assert client.get(ruta).status_code not in (401, 403)
+    respuesta = client.get(ruta)
+    assert respuesta.status_code == 200
 
 
 @pytest.mark.parametrize("ruta", RUTAS)
@@ -22,7 +23,7 @@ def test_ningun_rol_recibe_401_ni_403(
     client_como: Callable[[Rol], TestClient], ruta: str, rol: Rol
 ):
     """HU-19 / RF-55: las noticias son públicas para todos los roles."""
-    assert client_como(rol).get(ruta).status_code not in (401, 403)
+    assert client_como(rol).get(ruta).status_code == 200
 
 
 @pytest.mark.parametrize("metodo", ["POST", "PUT", "PATCH", "DELETE"])
