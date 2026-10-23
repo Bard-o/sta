@@ -106,3 +106,21 @@ class TokenVerificacion(TimestampMixin, Base):
     # SUP-19: vence en 24 horas y es de un solo uso.
     expira_en: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     usado_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class TokenRestablecimiento(TimestampMixin, Base):
+    """Enlace para restablecer la contraseña (HU-05, RF-07).
+
+    Se guarda solo el hash del token: el valor en claro viaja únicamente en el correo.
+    """
+
+    __tablename__ = "tokens_restablecimiento"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    usuario_id: Mapped[int] = mapped_column(
+        ForeignKey("usuarios.id", ondelete="CASCADE"), index=True
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    # SUP-19: vence en 30 minutos y es de un solo uso.
+    expira_en: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    usado_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
