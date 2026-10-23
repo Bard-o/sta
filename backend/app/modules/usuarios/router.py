@@ -185,7 +185,7 @@ def subir_imagen_perfil(
     db: DbSession,
 ) -> PerfilSalida:
     """Sube o reemplaza la imagen de perfil (HU-01, HU-07)."""
-    raise NoImplementado()
+    return service.subir_imagen(db, usuario.id, imagen.file)
 
 
 @cuenta.get(
@@ -195,13 +195,14 @@ def subir_imagen_perfil(
 )
 def obtener_imagen_perfil(usuario: ClienteOAdmin, db: DbSession) -> Response:
     """Imagen de perfil de la sesión (la URL que trae `imagen_url`)."""
-    raise NoImplementado()
+    contenido, tipo = service.obtener_imagen(db, usuario.id)
+    return Response(content=contenido, media_type=tipo)
 
 
 @cuenta.delete("/me/imagen", status_code=status.HTTP_204_NO_CONTENT)
 def eliminar_imagen_perfil(usuario: ClienteOAdmin, db: DbSession) -> None:
     """Quita la imagen de perfil."""
-    raise NoImplementado()
+    service.borrar_imagen(db, usuario.id)
 
 
 @cuenta.put("/me/suscripcion", response_model=SuscripcionSalida)

@@ -178,6 +178,54 @@ Con sesión de cliente o administrador. Actualiza los datos editables y devuelve
 | 403 | `sin_permiso` | | El rol es root. |
 | 404 | `no_encontrado` | | La cuenta aún no tiene sus datos personales. |
 
+## Imagen de perfil
+
+Con sesión de cliente o administrador. La imagen se sube después del registro (HU-01) y se
+administra desde el perfil (HU-07, RF-03 y RF-08). El tipo se decide por el contenido del
+archivo, no por su extensión: solo se aceptan JPG o PNG de máximo 2 MB. El archivo se guarda
+fuera del código, en el volumen `archivos` (`ARCHIVOS_DIR`), y sobrevive a `docker compose down`.
+
+### `PUT /api/v1/usuarios/me/imagen`
+
+`multipart/form-data` con el campo `imagen`. Sube o reemplaza la imagen y devuelve
+`200 PerfilSalida` con el `imagen_url` nuevo.
+
+```bash
+curl -X PUT http://localhost:8000/api/v1/usuarios/me/imagen \
+  -H "Cookie: sta_sesion=…" -F "imagen=@laura.png"
+```
+
+- `imagen_url` cambia en cada subida (`/api/v1/usuarios/me/imagen?v=1`, `?v=2`, …) para que el
+  navegador no muestre la anterior desde su caché.
+- Si la subida reemplaza una imagen anterior, el archivo viejo se sobrescribe.
+
+| HTTP | `codigo` | `campos` | Cuándo |
+|---|---|---|---|
+| 422 | `datos_invalidos` | `imagen` | No es JPG ni PNG, está vacía, o pesa más de 2 MB. |
+| 401 | `no_autenticado` | | Sin sesión o sesión vencida. |
+| 403 | `sin_permiso` | | El rol es root. |
+| 404 | `no_encontrado` | | La cuenta aún no tiene sus datos personales. |
+
+### `GET /api/v1/usuarios/me/imagen`
+
+Devuelve `200` con la imagen (`Content-Type: image/png` o `image/jpeg`). Es la URL que trae
+`imagen_url` en el perfil.
+
+| HTTP | `codigo` | Cuándo |
+|---|---|---|
+| 404 | `no_encontrado` | La cuenta no tiene imagen. |
+| 401 | `no_autenticado` | Sin sesión o sesión vencida. |
+| 403 | `sin_permiso` | El rol es root. |
+
+### `DELETE /api/v1/usuarios/me/imagen`
+
+Quita la imagen y responde `204` sin cuerpo. Es idempotente: sin imagen también responde `204`.
+
+| HTTP | `codigo` | Cuándo |
+|---|---|---|
+| 401 | `no_autenticado` | Sin sesión o sesión vencida. |
+| 403 | `sin_permiso` | El rol es root. |
+
 ## Sesión
 
 La sesión es un JWT firmado dentro de la cookie httpOnly `sta_sesion`.

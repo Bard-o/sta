@@ -7,11 +7,13 @@ import secrets
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from html import escape
+from typing import BinaryIO
 
 from sqlalchemy import func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core import archivos
 from app.core.config import get_settings
 from app.core.errors import (
     AppError,
@@ -46,6 +48,13 @@ MENSAJE_RESTABLECIMIENTO = (
 # RNF-13: tras 5 intentos fallidos consecutivos la cuenta se bloquea 15 minutos.
 MAX_INTENTOS_FALLIDOS = 5
 MINUTOS_BLOQUEO = 15
+
+# HU-01, HU-07: la imagen de perfil es JPG o PNG de máximo 2 MB (RF-03).
+MAX_BYTES_IMAGEN = 2 * 1024 * 1024
+FIRMA_PNG = b"\x89PNG\r\n\x1a\n"
+FIRMA_JPEG = b"\xff\xd8\xff"
+MENSAJE_IMAGEN_INVALIDA = "La imagen debe ser JPG o PNG."
+MENSAJE_IMAGEN_GRANDE = "La imagen pesa más de 2 MB. Elige una más liviana."
 
 
 class CredencialesInvalidas(AppError):
@@ -607,8 +616,12 @@ def _perfil_salida(usuario: Usuario) -> PerfilSalida:
         email_verificado=usuario.email_verificado,
         email_pendiente=usuario.email_pendiente,
         telefono=usuario.telefono,
-        # HU-07: la imagen de perfil llega con su issue (#29).
-        imagen_url=None,
+        # HU-07: la versión cambia en cada subida para vencer el caché del navegador.
+        imagen_url=(
+            f"/api/v1/usuarios/me/imagen?v={usuario.imagen_version}"
+            if usuario.imagen_tipo is not None
+            else None
+        ),
         # HU-08: la suscripción a noticias llega con su issue (#30). Para admin siempre false.
         suscrito_noticias=False,
     )
@@ -662,6 +675,70 @@ def actualizar_perfil(db: Session, usuario_id: int, datos: PerfilEntrada) -> Per
         enviar_verificacion(usuario, email, token, cambio=True)
 
     return _perfil_salida(usuario)
+
+
+# ---------- Imagen de perfil (HU-01, HU-07) ----------
+
+
+def _clave_imagen(usuario_id: int) -> str:
+    """Clave del archivo en `core.archivos`; se arma con el id, nunca con texto del cliente."""
+    return f"perfiles/{usuario_id}"
+
+
+def _tipo_de_imagen(contenido: bytes) -> str | None:
+    """Media type según la firma de los bytes, no la extensión ni el content-type del cliente."""
+    if contenido.startswith(FIRMA_PNG):
+        return "image/png"
+    if contenido.startswith(FIRMA_JPEG):
+        return "image/jpeg"
+    return None
+
+
+def subir_imagen(db: Session, usuario_id: int, archivo: BinaryIO) -> PerfilSalida:
+    """Sube o reemplaza la imagen de perfil y devuelve el perfil actualizado (HU-01, HU-07).
+
+    Solo acepta JPG o PNG de máximo 2 MB, validando el contenido y no la extensión; el error
+    va en `campos.imagen`. El media type se deduce de la firma y la versión sube para que
+    `imagen_url` cambie y el navegador no muestre la anterior desde su caché.
+    """
+    usuario = db.get(Usuario, usuario_id)
+    if usuario is None:
+        raise NoAutenticado()
+    # Un administrador con el registro incompleto (HU-12) todavía no tiene perfil.
+    _perfil_salida(usuario)
+
+    contenido = archivo.read(MAX_BYTES_IMAGEN + 1)
+    if len(contenido) > MAX_BYTES_IMAGEN:
+        raise DatosInvalidos(campos={"imagen": MENSAJE_IMAGEN_GRANDE})
+    tipo = _tipo_de_imagen(contenido)
+    if tipo is None:
+        raise DatosInvalidos(campos={"imagen": MENSAJE_IMAGEN_INVALIDA})
+
+    archivos.guardar(_clave_imagen(usuario.id), contenido)
+    usuario.imagen_tipo = tipo
+    usuario.imagen_version = (usuario.imagen_version or 0) + 1
+    db.commit()
+    return _perfil_salida(usuario)
+
+
+def obtener_imagen(db: Session, usuario_id: int) -> tuple[bytes, str]:
+    """Bytes y media type de la imagen de perfil; `NoEncontrado` si la cuenta no tiene (HU-07)."""
+    usuario = db.get(Usuario, usuario_id)
+    if usuario is None:
+        raise NoAutenticado()
+    if usuario.imagen_tipo is None:
+        raise NoEncontrado()
+    return archivos.leer(_clave_imagen(usuario.id)), usuario.imagen_tipo
+
+
+def borrar_imagen(db: Session, usuario_id: int) -> None:
+    """Quita la imagen de perfil (HU-07). Es idempotente: sin imagen también responde 204."""
+    usuario = db.get(Usuario, usuario_id)
+    if usuario is None:
+        raise NoAutenticado()
+    archivos.borrar(_clave_imagen(usuario.id))
+    usuario.imagen_tipo = None
+    db.commit()
 
 
 # ---------- Restablecimiento de contraseña (HU-05) ----------
