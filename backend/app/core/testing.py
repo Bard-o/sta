@@ -4,6 +4,9 @@
 - `client`: TestClient de la API que usa esa misma sesión.
 - `crear_usuario`: crea un usuario con rol y contraseña dados.
 - `client_como`: TestClient con la sesión iniciada para un rol.
+- `_sin_planificador_real` (automática): apaga el hilo del planificador en todos los tests.
+- `archivos_dir` (autouse): los archivos de app.core.archivos van a un tmp_path del test,
+  nunca al volumen real.
 """
 
 from collections.abc import Callable, Iterator
@@ -48,6 +51,14 @@ def _crear_base_si_no_existe(url: str) -> None:
     admin.dispose()
 
 
+@pytest.fixture(autouse=True, scope="session")
+def _sin_planificador_real() -> Iterator[None]:
+    """El hilo del planificador nunca arranca en los tests (se prueba la clase con un reloj)."""
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(get_settings(), "planificador_activo", False)
+        yield
+
+
 @pytest.fixture(scope="session")
 def engine_de_tests() -> Iterator[Engine]:
     """Base de tests desde cero en cada corrida, migrada con Alembic (prueba las migraciones)."""
@@ -62,6 +73,14 @@ def engine_de_tests() -> Iterator[Engine]:
     command.upgrade(config, "head")
     yield engine
     engine.dispose()
+
+
+@pytest.fixture(autouse=True)
+def archivos_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Los archivos subidos van a un directorio temporal del test, nunca al volumen real."""
+    ruta = tmp_path / "archivos"  # no se crea: guardar() crea la raíz cuando hace falta
+    monkeypatch.setattr(get_settings(), "archivos_dir", ruta)
+    return ruta
 
 
 @pytest.fixture
