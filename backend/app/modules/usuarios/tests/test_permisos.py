@@ -17,6 +17,8 @@ VISITANTE: tuple[Rol, ...] = ()
 SESION = (Rol.CLIENTE, Rol.ADMIN, Rol.ROOT)
 
 ENDPOINTS: list[tuple[str, str, tuple[Rol, ...] | None]] = [
+    ("POST", "/api/v1/auth/login", PUBLICO),
+    ("GET", "/api/v1/auth/me", SESION),
     ("POST", "/api/v1/auth/restablecimiento", PUBLICO),
     ("POST", "/api/v1/auth/restablecimiento/confirmar", PUBLICO),
     ("POST", "/api/v1/usuarios/registro", VISITANTE),
