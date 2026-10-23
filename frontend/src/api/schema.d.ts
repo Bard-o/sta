@@ -155,6 +155,9 @@ export interface paths {
     /**
      * Verificar Correo
      * @description Marca el correo como verificado con el token del enlace (HU-02).
+     *
+     *     Si el enlace es de un cambio de perfil, el correo pendiente pasa a ser el de la cuenta
+     *     (HU-07).
      */
     post: operations["verificar_correo"];
     delete?: never;
@@ -2139,6 +2142,15 @@ export interface operations {
       };
       /** @description El rol no tiene permiso */
       403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Choca con el estado actual */
+      409: {
         headers: {
           [name: string]: unknown;
         };
