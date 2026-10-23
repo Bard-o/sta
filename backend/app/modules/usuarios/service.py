@@ -673,8 +673,9 @@ def _perfil_salida(usuario: Usuario) -> PerfilSalida:
             if usuario.imagen_tipo is not None
             else None
         ),
-        # HU-08: la suscripción a noticias llega con su issue (#30). Para admin siempre false.
-        suscrito_noticias=False,
+        # HU-08, RF-09: el perfil refleja la suscripción vigente del cliente. El administrador
+        # no se suscribe (el endpoint de suscripción es solo para clientes), así que es false.
+        suscrito_noticias=usuario.suscrito_noticias if usuario.rol == Rol.CLIENTE else False,
     )
 
 
