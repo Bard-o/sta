@@ -170,12 +170,14 @@ class PaginaVuelosGestion:
 
 @dataclass(frozen=True)
 class PromocionVigente:
-    """Datos mínimos de la promoción que aplica hoy a una clase (RF-24)."""
+    """Datos de la promoción que aplica hoy a una clase (RF-24)."""
 
     id: int
     porcentaje: int
+    clases: list[Clase]
     inicio: datetime
     fin: datetime
+    estado: EstadoPromocion
 
 
 @dataclass(frozen=True)
@@ -185,6 +187,28 @@ class PrecioVigente:
     precio_base: int
     precio: int
     promocion: PromocionVigente | None
+
+
+@dataclass(frozen=True)
+class ClaseDetalleVuelo:
+    """Precio y disponibilidad de una clase en el detalle público (HU-19)."""
+
+    precio_base: int
+    precio: int
+    promocion: PromocionVigente | None
+    disponibles: int
+    agotada: bool
+
+
+@dataclass(frozen=True)
+class VueloDetalleGestion:
+    """Detalle público del vuelo: precio vigente y sillas por clase (HU-19)."""
+
+    vuelo: Vuelo
+    origen: Ciudad
+    destino: Ciudad
+    economica: ClaseDetalleVuelo
+    primera: ClaseDetalleVuelo
 
 
 @dataclass(frozen=True)
@@ -521,6 +545,73 @@ def obtener_vuelo_gestion(
 ) -> VueloGestion:
     """Un vuelo con su ocupación y sus bloqueos, para el formulario de edición (HU-15)."""
     return _gestion_de_vuelo(db, _vuelo_o_no_encontrado(db, vuelo_id), ahora=ahora)
+
+
+def obtener_vuelo_detalle(
+    db: Session, vuelo_id: int, *, ahora: datetime | None = None
+) -> VueloDetalleGestion:
+    """Detalle público del vuelo con el precio vigente de cada clase (HU-19, RF-24).
+
+    Responde para cualquier `estado`: el frontend avisa si el vuelo ya no está programado.
+    Una promoción solo aplica a un vuelo vendible (programado y que no ha salido); en los
+    demás casos el precio vuelve a la base y `promocion` es None. No hace commit.
+    """
+    momento = ahora or datetime.now(UTC)
+    vuelo = _vuelo_o_no_encontrado(db, vuelo_id)
+    origen, destino = _obtener_ciudades(db, vuelo.origen_codigo, vuelo.destino_codigo)
+    ocupacion = reservas_service.ocupacion_de_vuelos(db, [vuelo.id]).get(
+        vuelo.id, reservas_service.OcupacionVuelo()
+    )
+
+    promociones: dict[Clase, PromocionVigente] = {}
+    if vuelo.estado == "programado" and vuelo.salida > momento:
+        for promocion in _promociones_activas(db, vuelo.id, ahora=momento):
+            if estado_de(promocion, ahora=momento) == "vigente":
+                vigente = _promocion_vigente_de(promocion)
+                for clase in vigente.clases:
+                    promociones[clase] = vigente
+
+    return VueloDetalleGestion(
+        vuelo=vuelo,
+        origen=origen,
+        destino=destino,
+        economica=_clase_detalle(
+            vuelo.capacidad_economica,
+            ocupacion.vendidas_economica,
+            ocupacion.reservadas_economica,
+            vuelo.precio_economica,
+            promociones.get("economica"),
+        ),
+        primera=_clase_detalle(
+            vuelo.capacidad_primera,
+            ocupacion.vendidas_primera,
+            ocupacion.reservadas_primera,
+            vuelo.precio_primera,
+            promociones.get("primera"),
+        ),
+    )
+
+
+def _clase_detalle(
+    capacidad: int,
+    vendidas: int,
+    reservadas: int,
+    precio_base: int,
+    promocion: PromocionVigente | None,
+) -> ClaseDetalleVuelo:
+    """Precio y sillas de una clase; la promoción solo cambia el precio mostrado (RF-24)."""
+    disponibles = capacidad - vendidas - reservadas
+    return ClaseDetalleVuelo(
+        precio_base=precio_base,
+        precio=(
+            precio_con_descuento(precio_base, promocion.porcentaje)
+            if promocion is not None
+            else precio_base
+        ),
+        promocion=promocion,
+        disponibles=disponibles,
+        agotada=disponibles <= 0,
+    )
 
 
 def editar_vuelo(
@@ -952,12 +1043,19 @@ def precio_vigente(
     return PrecioVigente(
         precio_base=base,
         precio=precio_con_descuento(base, promocion.porcentaje),
-        promocion=PromocionVigente(
-            id=promocion.id,
-            porcentaje=promocion.porcentaje,
-            inicio=promocion.inicio,
-            fin=promocion.fin,
-        ),
+        promocion=_promocion_vigente_de(promocion),
+    )
+
+
+def _promocion_vigente_de(promocion: Promocion) -> PromocionVigente:
+    """Forma pública de una promoción vigente, con sus clases y su estado (HU-19)."""
+    return PromocionVigente(
+        id=promocion.id,
+        porcentaje=promocion.porcentaje,
+        clases=clases_de(promocion),
+        inicio=promocion.inicio,
+        fin=promocion.fin,
+        estado="vigente",
     )
 
 
