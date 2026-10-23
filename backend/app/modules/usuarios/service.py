@@ -125,6 +125,14 @@ class TiquetesActivos(AppError):
     mensaje = "Tienes compras o reservas activas en vuelos futuros."
 
 
+class EstadoInvalido(AppError):
+    """HU-11: desactivar uno ya inactivo o reactivar uno que sigue activo."""
+
+    status_code = 409
+    codigo = "estado_invalido"
+    mensaje = "El administrador no está en el estado necesario para esta acción."
+
+
 MENSAJES_DUPLICADO = {
     "nombre_usuario": "Ese nombre de usuario ya está en uso.",
     "email": "Ese correo ya está registrado en otra cuenta de cliente.",
@@ -1028,6 +1036,85 @@ def crear_administrador(
         raise
     except Exception:
         # RNF-17: si falla la auditoría no queda el administrador.
+        db.rollback()
+        raise
+
+    return _administrador_salida(administrador)
+
+
+def _administrador_para_cambio(db: Session, admin_id: int) -> Usuario:
+    """Administrador que el root va a desactivar o reactivar (HU-11).
+
+    Bloquea la fila hasta el commit para que dos peticiones simultáneas no cambien el estado
+    dos veces ni dejen dos registros de auditoría. Un id que no es de un administrador
+    (inexistente, root o cliente) responde NoEncontrado, como el contrato.
+    """
+    administrador = db.scalar(
+        select(Usuario).where(Usuario.id == admin_id, Usuario.rol == Rol.ADMIN).with_for_update()
+    )
+    if administrador is None:
+        raise NoEncontrado("El administrador no existe.")
+    return administrador
+
+
+def desactivar_administrador(db: Session, admin_id: int, *, usuario_id: int) -> AdministradorSalida:
+    """HU-11, RF-02: desactiva un administrador (borrado lógico) y cierra sus sesiones.
+
+    Conserva los datos y el estado al que vuelve cuando se reactive (`registro_completo` decide
+    si vuelve como activo o como registro incompleto). La desactivación y su auditoría entran
+    en la misma transacción (RF-26, RNF-17). Lanza NoEncontrado o EstadoInvalido.
+    """
+    administrador = _administrador_para_cambio(db, admin_id)
+    if not administrador.activo:
+        raise EstadoInvalido("El administrador ya está inactivo.")
+
+    antes = _detalle_administrador(administrador)
+    administrador.activo = False
+    # Cierra todas las sesiones abiertas del administrador en cualquier dispositivo.
+    administrador.version_sesion = (administrador.version_sesion or 0) + 1
+    try:
+        auditoria_service.registrar(
+            db,
+            usuario_id=usuario_id,
+            accion="administrador.desactivar",
+            entidad="usuario",
+            entidad_id=administrador.id,
+            antes=antes,
+            despues=_detalle_administrador(administrador),
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+    return _administrador_salida(administrador)
+
+
+def reactivar_administrador(db: Session, admin_id: int, *, usuario_id: int) -> AdministradorSalida:
+    """HU-11, RF-02: reactiva un administrador desactivado con su estado anterior.
+
+    `registro_completo` se conservó al desactivar, así que vuelve como `activo` o como
+    `registro_incompleto`. La reactivación y su auditoría entran en la misma transacción
+    (RF-26, RNF-17). Lanza NoEncontrado o EstadoInvalido.
+    """
+    administrador = _administrador_para_cambio(db, admin_id)
+    if administrador.activo:
+        raise EstadoInvalido("El administrador ya está activo.")
+
+    antes = _detalle_administrador(administrador)
+    administrador.activo = True
+    try:
+        auditoria_service.registrar(
+            db,
+            usuario_id=usuario_id,
+            accion="administrador.reactivar",
+            entidad="usuario",
+            entidad_id=administrador.id,
+            antes=antes,
+            despues=_detalle_administrador(administrador),
+        )
+        db.commit()
+    except Exception:
         db.rollback()
         raise
 
