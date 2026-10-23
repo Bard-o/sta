@@ -7,6 +7,7 @@ import { InicioRolPage } from "@/pages/inicio-rol";
 import { LoginPage } from "@/pages/login";
 import { NoEncontradaPage } from "@/pages/no-encontrada";
 import { NoticiasPage } from "@/pages/noticias";
+import { BajaNoticiasPage } from "@/pages/noticias-baja";
 import { PerfilPage } from "@/pages/perfil";
 import { PrimerIngresoPage } from "@/pages/primer-ingreso";
 import { RegistroPage } from "@/pages/registro";
@@ -21,6 +22,7 @@ export const router = createBrowserRouter([
       // Públicas
       { path: "/", element: <InicioPage /> },
       { path: "/noticias", element: <NoticiasPage /> },
+      { path: "/noticias/baja", element: <BajaNoticiasPage /> },
       { path: "/vuelos/:vueloId", element: <VueloDetallePage /> },
       { path: "/verificar-correo", element: <VerificarCorreoPage /> },
       { path: "/restablecer-contrasena", element: <RestablecerContrasenaPage /> },
@@ -38,7 +40,7 @@ export const router = createBrowserRouter([
         children: [{ path: "/cliente", element: <InicioRolPage /> }],
       },
       {
-        element: <RequireRole roles={["cliente", "admin"]} />,
+        element: <RequireRole roles={["cliente", "admin", "root"]} />,
         children: [{ path: "/perfil", element: <PerfilPage /> }],
       },
       {

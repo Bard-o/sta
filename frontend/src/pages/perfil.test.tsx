@@ -8,7 +8,7 @@ import { renderRutas } from "@/test/render";
 
 const rutas = [
   {
-    element: <RequireRole roles={["cliente", "admin"]} />,
+    element: <RequireRole roles={["cliente", "admin", "root"]} />,
     children: [{ path: "/perfil", element: <PerfilPage /> }],
   },
   { path: "/login", element: <p>Pantalla de inicio de sesión</p> },
@@ -44,6 +44,8 @@ const PERFIL = "GET /api/v1/usuarios/me/perfil";
 const GUARDAR = "PUT /api/v1/usuarios/me/perfil";
 const IMAGEN = "PUT /api/v1/usuarios/me/imagen";
 const QUITAR = "DELETE /api/v1/usuarios/me/imagen";
+const CONTRASENA = "PUT /api/v1/usuarios/me/contrasena";
+const SUSCRIPCION = "PUT /api/v1/usuarios/me/suscripcion";
 
 function peticiones(llave: string) {
   return vi
@@ -191,10 +193,9 @@ describe("S05 · Datos personales (HU-07)", () => {
     renderRutas(rutas, "/perfil");
 
     expect(await screen.findByText(/Tu correo aún no está verificado/)).toBeVisible();
-    expect(screen.getByRole("link", { name: "Verificar correo" })).toHaveAttribute(
-      "href",
-      "/verificar-correo",
-    );
+    for (const enlace of screen.getAllByRole("link", { name: "Verificar correo" })) {
+      expect(enlace).toHaveAttribute("href", "/verificar-correo");
+    }
   });
 
   it("el administrador también tiene perfil", async () => {
@@ -204,11 +205,15 @@ describe("S05 · Datos personales (HU-07)", () => {
     expect(await campo("Nombres")).toHaveValue("Carlos");
   });
 
-  it("el root no tiene perfil: lo lleva a su inicio", async () => {
+  it("el root no tiene perfil: solo ve el cambio de contraseña y no pide el perfil", async () => {
     responderApi({ [SESION]: sesionDe(ROOT) });
     renderRutas(rutas, "/perfil");
 
-    expect(await screen.findByText("Inicio del root")).toBeVisible();
+    expect(await screen.findByRole("heading", { name: "Mi cuenta" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Cambiar contraseña" })).toBeVisible();
+    expect(screen.queryByLabelText("Nombres")).not.toBeInTheDocument();
+    expect(screen.queryByRole("switch")).not.toBeInTheDocument();
+    expect(peticiones(PERFIL)).toHaveLength(0);
   });
 });
 
@@ -292,5 +297,156 @@ describe("S05 · Imagen de perfil (HU-07)", () => {
     );
     expect(peticiones(QUITAR)).toHaveLength(1);
     expect(screen.queryByRole("button", { name: "Quitar" })).not.toBeInTheDocument();
+  });
+});
+
+async function escribirContrasenas(actual: string, nueva: string, repetida = nueva) {
+  const user = userEvent.setup();
+  await user.type(await screen.findByLabelText("Actual"), actual);
+  await user.type(screen.getByLabelText("Nueva"), nueva);
+  await user.type(screen.getByLabelText("Repite la nueva"), repetida);
+  await user.click(screen.getByRole("button", { name: "Cambiar contraseña" }));
+}
+
+describe("S05 · Contraseña (HU-06)", () => {
+  it("cambia la contraseña con la actual correcta y limpia los campos", async () => {
+    servidor();
+    responderApi({
+      [SESION]: sesionDe(CLIENTE),
+      [PERFIL]: { status: 200, body: PERFIL_LAURA },
+      [CONTRASENA]: { status: 204 },
+    });
+    renderRutas(rutas, "/perfil");
+    await escribirContrasenas("Clave1234", "OtraClave99");
+
+    await waitFor(() => expect(peticiones(CONTRASENA)).toHaveLength(1));
+    expect(await peticiones(CONTRASENA)[0].json()).toEqual({
+      contrasena_actual: "Clave1234",
+      contrasena_nueva: "OtraClave99",
+      confirmacion: "OtraClave99",
+    });
+    await waitFor(() => expect(screen.getByLabelText("Actual")).toHaveValue(""));
+    expect(screen.getByLabelText("Nueva")).toHaveValue("");
+  });
+
+  it("si la actual es incorrecta, lo indica junto al campo y no cambia nada", async () => {
+    responderApi({
+      [SESION]: sesionDe(CLIENTE),
+      [PERFIL]: { status: 200, body: PERFIL_LAURA },
+      [CONTRASENA]: {
+        status: 422,
+        body: {
+          error: {
+            codigo: "contrasena_actual_incorrecta",
+            mensaje: "La contraseña actual no es correcta.",
+            campos: { contrasena_actual: "La contraseña actual no es correcta." },
+          },
+        },
+      },
+    });
+    renderRutas(rutas, "/perfil");
+    await escribirContrasenas("Equivocada1", "OtraClave99");
+
+    expect(await screen.findByText("La contraseña actual no es correcta.")).toBeVisible();
+    expect(screen.getByLabelText("Actual")).toBeInvalid();
+    expect(screen.getByLabelText("Nueva")).toHaveValue("OtraClave99");
+  });
+
+  it("rechaza una nueva que no cumple la política o no coincide, indicando el motivo", async () => {
+    servidor();
+    renderRutas(rutas, "/perfil");
+    await escribirContrasenas("Clave1234", "sololetras", "otracosa");
+
+    expect(await screen.findByText("La contraseña debe tener al menos un número.")).toBeVisible();
+    expect(screen.getByText("No coincide con la contraseña nueva.")).toBeVisible();
+    expect(peticiones(CONTRASENA)).toHaveLength(0);
+  });
+
+  it("el root cambia su contraseña desde su cuenta", async () => {
+    responderApi({ [SESION]: sesionDe(ROOT), [CONTRASENA]: { status: 204 } });
+    renderRutas(rutas, "/perfil");
+    await escribirContrasenas("Clave1234", "OtraClave99");
+
+    await waitFor(() => expect(peticiones(CONTRASENA)).toHaveLength(1));
+  });
+});
+
+describe("S05 · Correos que recibes (HU-08)", () => {
+  it("el cliente se suscribe a las noticias", async () => {
+    responderApi({
+      [SESION]: sesionDe(CLIENTE),
+      [PERFIL]: { status: 200, body: PERFIL_LAURA },
+      [SUSCRIPCION]: { status: 200, body: { noticias: true } },
+    });
+    renderRutas(rutas, "/perfil");
+    const interruptor = await screen.findByRole("switch", {
+      name: "Noticias de vuelos y promociones",
+    });
+    expect(interruptor).not.toBeChecked();
+
+    await userEvent.click(interruptor);
+
+    await waitFor(() => expect(interruptor).toBeChecked());
+    expect(await peticiones(SUSCRIPCION)[0].json()).toEqual({ noticias: true });
+  });
+
+  it("el cliente suscrito se da de baja", async () => {
+    responderApi({
+      [SESION]: sesionDe(CLIENTE),
+      [PERFIL]: { status: 200, body: { ...PERFIL_LAURA, suscrito_noticias: true } },
+      [SUSCRIPCION]: { status: 200, body: { noticias: false } },
+    });
+    renderRutas(rutas, "/perfil");
+    const interruptor = await screen.findByRole("switch", {
+      name: "Noticias de vuelos y promociones",
+    });
+    expect(interruptor).toBeChecked();
+
+    await userEvent.click(interruptor);
+
+    await waitFor(() => expect(interruptor).not.toBeChecked());
+    expect(await peticiones(SUSCRIPCION)[0].json()).toEqual({ noticias: false });
+  });
+
+  it("con el correo sin verificar no se puede suscribir y se ofrece verificarlo", async () => {
+    servidor({ ...PERFIL_LAURA, email_verificado: false });
+    renderRutas(rutas, "/perfil");
+
+    const interruptor = await screen.findByRole("switch", {
+      name: "Noticias de vuelos y promociones",
+    });
+    expect(interruptor).toBeDisabled();
+    expect(screen.getByText(/Verifica tu correo para suscribirte a noticias/)).toBeVisible();
+    expect(screen.getAllByRole("link", { name: "Verificar correo" }).length).toBeGreaterThan(0);
+    expect(peticiones(SUSCRIPCION)).toHaveLength(0);
+  });
+
+  it("si el servidor responde correo_no_verificado, ofrece verificarlo", async () => {
+    responderApi({
+      [SESION]: sesionDe(CLIENTE),
+      [PERFIL]: { status: 200, body: PERFIL_LAURA },
+      [SUSCRIPCION]: {
+        status: 403,
+        body: {
+          error: {
+            codigo: "correo_no_verificado",
+            mensaje: "Verifica tu correo para suscribirte a noticias.",
+          },
+        },
+      },
+    });
+    renderRutas(rutas, "/perfil");
+    await userEvent.click(await screen.findByRole("switch"));
+
+    expect(await screen.findByRole("link", { name: "Verificar correo" })).toBeVisible();
+    expect(screen.getByRole("switch")).not.toBeChecked();
+  });
+
+  it("el administrador no ve las suscripciones", async () => {
+    servidor({ ...PERFIL_LAURA, rol: "admin", nombre_usuario: "cruiz" }, ADMIN);
+    renderRutas(rutas, "/perfil");
+
+    await campo("Nombres");
+    expect(screen.queryByRole("switch")).not.toBeInTheDocument();
   });
 });

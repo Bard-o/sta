@@ -51,8 +51,9 @@ export function AppLayout() {
       user={{
         name: nombreVisible(usuario),
         role: NOMBRE_ROL[usuario.rol],
-        // El root no tiene perfil (HU-07) y el administrador con el registro pendiente solo ve S07.
-        href: usuario.rol === "root" || pendiente ? undefined : "/perfil",
+        // El administrador con el registro pendiente solo ve S07. El root entra a /perfil solo para
+        // cambiar su contraseña (HU-06).
+        href: pendiente ? undefined : "/perfil",
       }}
       right={
         <Button variant="ghost" size="sm" onClick={cerrarSesion} disabled={logout.isPending}>
