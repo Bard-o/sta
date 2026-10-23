@@ -1,4 +1,4 @@
-import { cop, desfase, fecha, fechaHora, fechaRelativa, hora } from "./format";
+import { cop, desfase, duracion, fecha, fechaHora, fechaRelativa, hora } from "./format";
 
 describe("cop (IU-06)", () => {
   it("usa punto de miles y sin decimales", () => {
@@ -51,5 +51,16 @@ describe("fechaRelativa (S13)", () => {
   });
   it("una hora de madrugada UTC aún es el día anterior en Colombia", () => {
     expect(fechaRelativa("2026-10-20T03:00:00Z", ahora)).toBe("Ayer, 22:00");
+  });
+});
+
+describe("duracion", () => {
+  it.each([
+    [600, "10 h"],
+    [50, "50 min"],
+    [90, "1 h 30 min"],
+    [1439, "23 h 59 min"],
+  ])("%i minutos → %s", (minutos, esperado) => {
+    expect(duracion(minutos)).toBe(esperado);
   });
 });

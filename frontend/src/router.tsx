@@ -10,6 +10,7 @@ import { NoticiasPage } from "@/pages/noticias";
 import { BajaNoticiasPage } from "@/pages/noticias-baja";
 import { PerfilPage } from "@/pages/perfil";
 import { PrimerIngresoPage } from "@/pages/primer-ingreso";
+import { ProgramarVueloPage } from "@/pages/programar-vuelo";
 import { RegistroPage } from "@/pages/registro";
 import { RestablecerContrasenaPage } from "@/pages/restablecer-contrasena";
 import { VerificarCorreoPage } from "@/pages/verificar-correo";
@@ -52,6 +53,7 @@ export const router = createBrowserRouter([
             children: [{ path: RUTA_PRIMER_INGRESO, element: <PrimerIngresoPage /> }],
           },
           { path: "/admin", element: <InicioRolPage /> },
+          { path: "/admin/vuelos/nuevo", element: <ProgramarVueloPage /> },
         ],
       },
       {
