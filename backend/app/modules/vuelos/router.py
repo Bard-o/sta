@@ -1,8 +1,4 @@
-"""Endpoints del módulo vuelos. Contrato: docs/api/iteracion-1.md (HU-13 a HU-18).
-
-Los endpoints que responden NoImplementado (501) son stubs del contrato: ya validan el rol y
-el cuerpo, y su implementación llega con el issue de cada HU.
-"""
+"""Endpoints del módulo vuelos. Contrato: docs/api/iteracion-1.md (HU-13 a HU-19)."""
 
 from datetime import date
 from typing import Annotated
@@ -11,8 +7,9 @@ from fastapi import APIRouter, Depends, Query, status
 
 from app.core.auth import UsuarioActual, require_role
 from app.core.db import DbSession
-from app.core.errors import NoImplementado, respuestas_error
+from app.core.errors import respuestas_error
 from app.core.security import Rol
+from app.modules.reservas import service as reservas_service
 from app.modules.vuelos import service
 from app.modules.vuelos.models import Ciudad as CiudadModelo
 from app.modules.vuelos.models import Vuelo as VueloModelo
@@ -30,6 +27,7 @@ from app.modules.vuelos.schemas import (
     PaginaPromociones,
     PaginaVuelosAdmin,
     PasajerosVueloSalida,
+    PasajeroVuelo,
     Promocion,
     PromocionEntrada,
     PromocionResumen,
@@ -135,24 +133,29 @@ def _a_vuelo_admin(gestion: service.VueloGestion) -> VueloAdmin:
             total=vuelo.capacidad_primera + vuelo.capacidad_economica,
         ),
         estado=vuelo.estado,
-        ocupacion=Ocupacion(
-            primera=_ocupacion_clase(
-                vuelo.capacidad_primera,
-                ocupacion.vendidas_primera,
-                ocupacion.reservadas_primera,
-            ),
-            economica=_ocupacion_clase(
-                vuelo.capacidad_economica,
-                ocupacion.vendidas_economica,
-                ocupacion.reservadas_economica,
-            ),
-        ),
+        ocupacion=_a_ocupacion(vuelo, ocupacion),
         reservas_activas=ocupacion.reservas_activas,
         tiquetes_vendidos=ocupacion.tiquetes_vendidos,
         editable=gestion.editable,
         motivo_no_editable=gestion.motivo_no_editable,
         cancelable=gestion.cancelable,
         promociones=[],
+    )
+
+
+def _a_ocupacion(vuelo: VueloModelo, ocupacion: reservas_service.OcupacionVuelo) -> Ocupacion:
+    """Capacidad, vendidas, reservadas y disponibles de cada clase (HU-15, HU-18)."""
+    return Ocupacion(
+        primera=_ocupacion_clase(
+            vuelo.capacidad_primera,
+            ocupacion.vendidas_primera,
+            ocupacion.reservadas_primera,
+        ),
+        economica=_ocupacion_clase(
+            vuelo.capacidad_economica,
+            ocupacion.vendidas_economica,
+            ocupacion.reservadas_economica,
+        ),
     )
 
 
@@ -334,7 +337,25 @@ def cancelar_vuelo(vuelo_id: int, usuario: Admin, db: DbSession) -> CancelacionV
 )
 def listar_pasajeros_vuelo(vuelo_id: int, usuario: Admin, db: DbSession) -> PasajerosVueloSalida:
     """Pasajeros con clase y silla, y ocupación por clase (HU-18)."""
-    raise NoImplementado()
+    return _a_pasajeros(service.listar_pasajeros_vuelo(db, vuelo_id))
+
+
+def _a_pasajeros(gestion: service.PasajerosVueloGestion) -> PasajerosVueloSalida:
+    """Vuelo, ocupación por clase y la lista de pasajeros con su silla (HU-18)."""
+    return PasajerosVueloSalida(
+        vuelo=_a_vuelo(gestion.vuelo, gestion.origen, gestion.destino),
+        ocupacion=_a_ocupacion(gestion.vuelo, gestion.ocupacion),
+        pasajeros=[
+            PasajeroVuelo(
+                nombres=pasajero.nombres,
+                apellidos=pasajero.apellidos,
+                clase=pasajero.clase,
+                silla=pasajero.silla,
+                numero_silla=pasajero.numero_silla,
+            )
+            for pasajero in gestion.pasajeros
+        ],
+    )
 
 
 @vuelos.post(

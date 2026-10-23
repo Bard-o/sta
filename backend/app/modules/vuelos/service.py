@@ -2,7 +2,8 @@
 
 Concentra la lógica que comparten programar, editar y las series: catálogo de ciudades,
 rutas permitidas, conversión de la hora local del origen a UTC, llegada, tipo y capacidad
-(RF-12 a RF-16); y las promociones por clase con su precio vigente (RF-23, RF-24, RF-25).
+(RF-12 a RF-16); las promociones por clase con su precio vigente (RF-23, RF-24, RF-25); y el
+paso automático a realizado con los pasajeros del vuelo (HU-18, RF-21).
 Ninguna función hace commit: van en la transacción de quien llama.
 """
 
@@ -66,6 +67,10 @@ _MENSAJE_CLASE_OCUPADA = "Ya hay una promoción vigente o programada para esta c
 # El estado efectivo se deriva de las fechas salvo cuando ya es terminal (RF-23).
 _ESTADOS_TERMINALES: tuple[EstadoPromocion, ...] = ("vencida", "agotada", "cancelada")
 _NOMBRE_TAREA_VENCER = "vuelos.vencer_promociones"
+_NOMBRE_TAREA_REALIZADOS = "vuelos.marcar_realizados"
+# Sillas (SUP-25, SUP-26): la base conserva el número interno y la interfaz muestra fila y letra.
+_LETRAS_POR_FILA_CINCO = "ABCDE"
+_LETRAS_ECONOMICA_INTERNACIONAL = "ABCDEFGHJK"  # sin la I, para no confundirla con el 1
 
 
 class RutaNoPermitida(DatosInvalidos):
@@ -209,6 +214,28 @@ class VueloDetalleGestion:
     destino: Ciudad
     economica: ClaseDetalleVuelo
     primera: ClaseDetalleVuelo
+
+
+@dataclass(frozen=True)
+class PasajeroGestion:
+    """Pasajero del vuelo con su clase y su silla (HU-18, SUP-26)."""
+
+    nombres: str
+    apellidos: str
+    clase: Clase
+    numero_silla: int
+    silla: str
+
+
+@dataclass(frozen=True)
+class PasajerosVueloGestion:
+    """Pasajeros y ocupación por clase de un vuelo (HU-18)."""
+
+    vuelo: Vuelo
+    origen: Ciudad
+    destino: Ciudad
+    ocupacion: reservas_service.OcupacionVuelo
+    pasajeros: list[PasajeroGestion]
 
 
 @dataclass(frozen=True)
@@ -997,6 +1024,67 @@ def _existe_vuelo(
     return db.scalar(consulta.limit(1)) is not None
 
 
+# ---------- Vuelos realizados y pasajeros (HU-18, RF-21) ----------
+
+
+def marcar_realizados(db: Session, ahora: datetime) -> int:
+    """Pasa a `realizado` cada vuelo programado cuya llegada ya pasó (HU-18, RF-21, RNF-18).
+
+    La ejecuta el planificador cada minuto; procesa todo lo atrasado, incluido lo que llegó
+    mientras el servidor estuvo apagado, y es idempotente. Retira las noticias del vuelo para
+    que salga del carrusel. No hace commit: el planificador confirma la transacción.
+    """
+    vuelos = list(
+        db.scalars(select(Vuelo).where(Vuelo.estado == "programado", Vuelo.llegada <= ahora))
+    )
+    for vuelo in vuelos:
+        vuelo.estado = "realizado"
+        noticias_service.retirar_noticias_de_vuelo(db, vuelo.id)
+    return len(vuelos)
+
+
+def listar_pasajeros_vuelo(db: Session, vuelo_id: int) -> PasajerosVueloGestion:
+    """Pasajeros con su clase y silla y la ocupación por clase (HU-18, RF-21).
+
+    Los pasajeros salen de `reservas.pasajeros_de_vuelo`; hasta la iteración 2 la lista está
+    vacía. Responde para cualquier estado del vuelo. No hace commit.
+    """
+    vuelo = _vuelo_o_no_encontrado(db, vuelo_id)
+    origen, destino = _obtener_ciudades(db, vuelo.origen_codigo, vuelo.destino_codigo)
+    ocupacion = reservas_service.ocupacion_de_vuelos(db, [vuelo.id]).get(
+        vuelo.id, reservas_service.OcupacionVuelo()
+    )
+    pasajeros = [
+        PasajeroGestion(
+            nombres=pasajero.nombres,
+            apellidos=pasajero.apellidos,
+            clase=pasajero.clase,
+            numero_silla=pasajero.numero_silla,
+            silla=nombre_de_silla(vuelo.tipo, pasajero.clase, pasajero.numero_silla),
+        )
+        for pasajero in reservas_service.pasajeros_de_vuelo(db, vuelo.id)
+    ]
+    return PasajerosVueloGestion(
+        vuelo=vuelo,
+        origen=origen,
+        destino=destino,
+        ocupacion=ocupacion,
+        pasajeros=pasajeros,
+    )
+
+
+def nombre_de_silla(tipo: TipoVuelo, clase: Clase, numero: int) -> str:
+    """Fila y letra de una silla a partir de su número interno (Apéndice A, SUP-25, SUP-26).
+
+    Nacional y primera internacional: cinco sillas por fila, letras A–E. Económica
+    internacional: diez por fila desde la 11, letras A–K sin la I.
+    """
+    if tipo == "internacional" and clase == "economica":
+        m = numero - 50
+        return f"{10 + (m - 1) // 10 + 1}{_LETRAS_ECONOMICA_INTERNACIONAL[(m - 1) % 10]}"
+    return f"{(numero - 1) // 5 + 1}{_LETRAS_POR_FILA_CINCO[(numero - 1) % 5]}"
+
+
 # ---------- Promociones (HU-17, RF-23 a RF-26) ----------
 
 
@@ -1351,5 +1439,8 @@ def _vuelos_por_id(db: Session, vuelo_ids: set[int]) -> dict[int, Vuelo]:
 
 # El planificador importa los services para que registren sus tareas (HU-18). La guarda evita
 # el error de nombre repetido cuando un test reimporta el módulo para comprobar la carga.
+if _NOMBRE_TAREA_REALIZADOS not in planificador.tareas:
+    registrar_tarea(_NOMBRE_TAREA_REALIZADOS, marcar_realizados, cada=timedelta(minutes=1))
+
 if _NOMBRE_TAREA_VENCER not in planificador.tareas:
     registrar_tarea(_NOMBRE_TAREA_VENCER, vencer_promociones, cada=timedelta(minutes=1))
