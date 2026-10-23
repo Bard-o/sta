@@ -11,15 +11,31 @@ export interface ProfileImageProps {
   error?: string;
   /** Imagen que ya tiene la cuenta, si la hay. */
   urlActual?: string | null;
+  /** Mostrar la imagen elegida antes de enviarla (registro). En el perfil se sube al elegirla y
+   *  solo se muestra la que guardó el servidor. */
+  previsualizar?: boolean;
+  /** Agrega «(opcional)» al título (en el registro; en el perfil ya no aplica). */
+  opcional?: boolean;
+  /** Hay una subida o un borrado en curso. */
+  ocupado?: boolean;
   className?: string;
 }
 
 /** Imagen de perfil opcional (S01, S05): vista previa circular, «Subir imagen» y «Quitar». */
-export function ProfileImage({ onChange, error, urlActual, className }: ProfileImageProps) {
+export function ProfileImage({
+  onChange,
+  error,
+  urlActual,
+  previsualizar = true,
+  opcional = true,
+  ocupado,
+  className,
+}: ProfileImageProps) {
   const entrada = useRef<HTMLInputElement>(null);
   const vistaActual = useRef<string | null>(null);
   const [vista, setVista] = useState<string | null>(null);
   const [errorLocal, setErrorLocal] = useState<string | null>(null);
+  const [fallida, setFallida] = useState<string | null>(null);
 
   useEffect(
     () => () => {
@@ -39,8 +55,10 @@ export function ProfileImage({ onChange, error, urlActual, className }: ProfileI
     const problema = validarImagen(archivo);
     setErrorLocal(problema);
     if (problema) return;
-    poner(URL.createObjectURL(archivo));
+    if (previsualizar) poner(URL.createObjectURL(archivo));
     onChange(archivo);
+    // Permite elegir de nuevo el mismo archivo si la subida falla.
+    if (!previsualizar && entrada.current) entrada.current.value = "";
   }
 
   function quitar() {
@@ -50,7 +68,8 @@ export function ProfileImage({ onChange, error, urlActual, className }: ProfileI
     if (entrada.current) entrada.current.value = "";
   }
 
-  const imagen = vista ?? urlActual ?? null;
+  const imagen = vista ?? (urlActual && urlActual !== fallida ? urlActual : null);
+  const hayImagen = Boolean(vista ?? urlActual);
   const mensaje = errorLocal ?? error;
 
   return (
@@ -59,15 +78,16 @@ export function ProfileImage({ onChange, error, urlActual, className }: ProfileI
         {imagen ? (
           <img
             src={imagen}
-            alt="Vista previa de tu imagen de perfil"
+            alt="Tu imagen de perfil"
             className="size-full object-cover"
+            onError={() => setFallida(imagen)}
           />
         ) : (
           <span className="label sta-muted">Foto</span>
         )}
       </div>
       <div>
-        <p className="label">Imagen de perfil (opcional)</p>
+        <p className="label">Imagen de perfil{opcional ? " (opcional)" : ""}</p>
         <p className="caption sta-muted">JPG o PNG, máximo 2 MB</p>
       </div>
       <input
@@ -80,11 +100,11 @@ export function ProfileImage({ onChange, error, urlActual, className }: ProfileI
         onChange={(e) => alElegir(e.target.files?.[0])}
       />
       <div className="flex flex-wrap justify-center gap-2">
-        <Button size="sm" onClick={() => entrada.current?.click()}>
-          {vista ? "Cambiar imagen" : "Subir imagen"}
+        <Button size="sm" onClick={() => entrada.current?.click()} disabled={ocupado}>
+          {hayImagen ? "Cambiar imagen" : "Subir imagen"}
         </Button>
-        {vista && (
-          <Button size="sm" variant="ghost" onClick={quitar}>
+        {hayImagen && (
+          <Button size="sm" variant="ghost" onClick={quitar} disabled={ocupado}>
             Quitar
           </Button>
         )}
