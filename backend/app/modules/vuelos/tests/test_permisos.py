@@ -8,8 +8,10 @@ from collections.abc import Callable
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 
 from app.core.security import Rol
+from app.modules.vuelos.tests.fabricas import crear_vuelo
 
 PUBLICO = None
 ADMIN = (Rol.ADMIN,)
@@ -167,3 +169,20 @@ def test_cancelacion_solo_para_administradores(client_como: Callable[[Rol], Test
 
     assert respuesta.status_code == 403
     assert respuesta.json()["error"]["codigo"] == "sin_permiso"
+
+
+@pytest.mark.parametrize("rol", [None, *Rol], ids=lambda r: r or "visitante")
+def test_detalle_de_vuelo_es_publico_para_todos_los_roles(
+    rol: Rol | None,
+    client: TestClient,
+    client_como: Callable[[Rol], TestClient],
+    db: Session,
+) -> None:
+    """HU-19 · RNF-10: el detalle del vuelo responde 200 sin sesión y con cualquier rol,
+    porque lo abren las noticias y el carrusel."""
+    vuelo = crear_vuelo(db)
+    cliente_http = client_como(rol) if rol else client
+
+    respuesta = cliente_http.get(f"/api/v1/vuelos/{vuelo.id}")
+
+    assert respuesta.status_code == 200, respuesta.text
