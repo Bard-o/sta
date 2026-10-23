@@ -96,6 +96,13 @@ class VueloCerrado(Conflicto):
     mensaje = "El vuelo ya salió, se realizó o está cancelado."
 
 
+class VueloConTiquetes(Conflicto):
+    """RF-19: el vuelo tiene tiquetes vendidos y solo se cancela por fuerza mayor (HU-32)."""
+
+    codigo = "vuelo_con_tiquetes"
+    mensaje = "El vuelo tiene tiquetes vendidos; requiere cancelación por fuerza mayor."
+
+
 class PromocionDuplicada(Conflicto):
     """RF-23: el vuelo ya tiene una promoción activa para alguna de las clases pedidas."""
 
@@ -141,6 +148,14 @@ class VueloGestion:
     editable: bool
     motivo_no_editable: str | None
     cancelable: bool
+
+
+@dataclass(frozen=True)
+class CancelacionVuelo:
+    """Vuelo cancelado y cuántas reservas se anularon (HU-16)."""
+
+    vuelo: VueloGestion
+    reservas_anuladas: int
 
 
 @dataclass(frozen=True)
@@ -549,6 +564,55 @@ def editar_vuelo(
     return _armar_gestion(vuelo, calculado.origen, calculado.destino, ocupacion, ahora=momento)
 
 
+def cancelar_vuelo(
+    db: Session,
+    vuelo_id: int,
+    *,
+    usuario_id: int,
+    ahora: datetime | None = None,
+) -> CancelacionVuelo:
+    """Cancela un vuelo programado sin tiquetes vendidos (HU-16, RF-19, RF-26).
+
+    En la misma transacción anula las reservas vigentes (que liberan sus sillas y encolan el
+    correo a cada cliente), pasa a `cancelada` sus promociones activas, retira las noticias del
+    carrusel y audita la cancelación. El código del vuelo no se reutiliza (SUP-01). No hace
+    commit: el commit y el rollback son de quien llama.
+    """
+    momento = ahora or datetime.now(UTC)
+    # El lock serializa dos cancelaciones simultáneas y la creación de promociones del vuelo.
+    vuelo = _vuelo_bloqueado(db, vuelo_id)
+    ocupacion = reservas_service.ocupacion_de_vuelos(db, [vuelo.id]).get(
+        vuelo.id, reservas_service.OcupacionVuelo()
+    )
+    evaluar_cancelacion(vuelo, ocupacion, ahora=momento)
+
+    vuelo.estado = "cancelado"
+    reservas_anuladas = reservas_service.anular_reservas_de_vuelo(db, vuelo.id)
+    promociones_canceladas = _cancelar_promociones_de_vuelo(db, vuelo.id, ahora=momento)
+    noticias_service.retirar_noticias_de_vuelo(db, vuelo.id)
+    auditoria_service.registrar(
+        db,
+        usuario_id=usuario_id,
+        accion="vuelo.cancelar",
+        entidad="vuelo",
+        entidad_id=vuelo.id,
+        antes={"estado": "programado"},
+        despues={
+            "estado": "cancelado",
+            "reservas_anuladas": reservas_anuladas,
+            "promociones_canceladas": promociones_canceladas,
+        },
+    )
+    origen, destino = _obtener_ciudades(db, vuelo.origen_codigo, vuelo.destino_codigo)
+    # Sin tiquetes vendidos y con las reservas anuladas ya no queda ocupación que informar.
+    return CancelacionVuelo(
+        vuelo=_armar_gestion(
+            vuelo, origen, destino, reservas_service.OcupacionVuelo(), ahora=momento
+        ),
+        reservas_anuladas=reservas_anuladas,
+    )
+
+
 def evaluar_gestion(
     vuelo: Vuelo,
     ocupacion: reservas_service.OcupacionVuelo,
@@ -584,6 +648,30 @@ def evaluar_edicion(
         raise VueloCerrado()
     if _tiene_ventas(ocupacion):
         raise VueloConReservas()
+
+
+def evaluar_cancelacion(
+    vuelo: Vuelo,
+    ocupacion: reservas_service.OcupacionVuelo,
+    *,
+    ahora: datetime | None = None,
+) -> None:
+    """RF-19: rechaza cancelar un vuelo cerrado o con tiquetes vendidos."""
+    momento = ahora or datetime.now(UTC)
+    if vuelo.estado != "programado" or vuelo.salida <= momento:
+        raise VueloCerrado()
+    if ocupacion.tiquetes_vendidos > 0:
+        raise VueloConTiquetes()
+
+
+def _cancelar_promociones_de_vuelo(db: Session, vuelo_id: int, *, ahora: datetime) -> list[int]:
+    """Pasa a `cancelada` las promociones activas y cierra su noticia (HU-16, RF-23, RF-25)."""
+    canceladas: list[int] = []
+    for promocion in _promociones_activas(db, vuelo_id, ahora=ahora):
+        promocion.estado = "cancelada"
+        noticias_service.terminar_noticia_promocion(db, promocion.id, "cancelada")
+        canceladas.append(promocion.id)
+    return canceladas
 
 
 def _tiene_ventas(ocupacion: reservas_service.OcupacionVuelo) -> bool:
