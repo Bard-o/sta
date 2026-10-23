@@ -19,6 +19,8 @@ REGISTRO = "/api/v1/usuarios/registro"
 PERFIL = "/api/v1/usuarios/me/perfil"
 VERIFICACION = "/api/v1/usuarios/verificacion"
 REENVIAR = "/api/v1/usuarios/me/verificacion/reenviar"
+SUSCRIPCION = "/api/v1/usuarios/me/suscripcion"
+BAJA = "/api/v1/usuarios/suscripcion/baja"
 LOGIN = "/api/v1/auth/login"
 ME = "/api/v1/auth/me"
 
@@ -406,6 +408,103 @@ def test_correo_se_guarda_en_minusculas(client: TestClient, correos):
 
     assert respuesta.status_code == 200
     assert respuesta.json()["email_pendiente"] == "nueva.correo@ejemplo.co"
+
+
+def test_perfil_de_cliente_suscrito_muestra_la_suscripcion_activa(
+    client: TestClient, correos: list[tuple[str, str, str, str | None]]
+):
+    """HU-07 (AC1) y HU-08 / RF-09: al reabrir el perfil la suscripción se ve activa."""
+    assert _registrar(client).status_code == 201
+    assert (
+        client.post(VERIFICACION, json={"token": _token_del_correo(correos[0][2])}).status_code
+        == 204
+    )
+    assert client.put(SUSCRIPCION, json={"noticias": True}).status_code == 200
+
+    assert client.get(PERFIL).json()["suscrito_noticias"] is True
+
+    # HU-07 (AC1): editar los datos del perfil no resetea la suscripción y la respuesta
+    # del PUT también la refleja.
+    respuesta = client.put(PERFIL, json=_entrada(nombres="Laura Sofía"))
+    assert respuesta.status_code == 200
+    assert respuesta.json()["suscrito_noticias"] is True
+    assert client.get(PERFIL).json()["suscrito_noticias"] is True
+
+
+def test_perfil_de_cliente_no_suscrito_muestra_la_suscripcion_apagada(
+    client: TestClient, correos: list[tuple[str, str, str, str | None]]
+):
+    """HU-08 / RF-09: un cliente verificado que no se suscribió ve la opción apagada."""
+    assert _registrar(client).status_code == 201
+    assert (
+        client.post(VERIFICACION, json={"token": _token_del_correo(correos[0][2])}).status_code
+        == 204
+    )
+
+    assert client.get(PERFIL).json()["suscrito_noticias"] is False
+
+
+def test_perfil_refleja_la_baja_hecha_desde_el_perfil(
+    client: TestClient, correos: list[tuple[str, str, str, str | None]]
+):
+    """HU-08 / RF-09: darse de baja desde el perfil deja la opción apagada al reabrir."""
+    assert _registrar(client).status_code == 201
+    assert (
+        client.post(VERIFICACION, json={"token": _token_del_correo(correos[0][2])}).status_code
+        == 204
+    )
+    assert client.put(SUSCRIPCION, json={"noticias": True}).status_code == 200
+
+    assert client.put(SUSCRIPCION, json={"noticias": False}).status_code == 200
+
+    assert client.get(PERFIL).json()["suscrito_noticias"] is False
+
+
+def test_perfil_refleja_la_baja_hecha_con_el_enlace_del_correo(
+    client: TestClient, db: Session, correos: list[tuple[str, str, str, str | None]]
+):
+    """HU-08 (AC3) y RF-56: el enlace «cancelar suscripción» apaga la opción en el perfil."""
+    assert _registrar(client).status_code == 201
+    assert (
+        client.post(VERIFICACION, json={"token": _token_del_correo(correos[0][2])}).status_code
+        == 204
+    )
+    assert client.put(SUSCRIPCION, json={"noticias": True}).status_code == 200
+    token = _usuario(db).token_baja
+    assert token is not None
+
+    assert client.post(BAJA, json={"token": token}).status_code == 204
+
+    assert client.get(PERFIL).json()["suscrito_noticias"] is False
+
+
+def test_perfil_de_administrador_siempre_muestra_la_suscripcion_apagada(
+    client: TestClient, db: Session, crear_usuario
+):
+    """HU-08 y contrato de PerfilSalida: el administrador nunca aparece suscrito.
+
+    La API no permite suscribir a un administrador; el valor se fuerza en la base de datos
+    para comprobar que el perfil no depende solo de que ese estado sea inalcanzable.
+    """
+    admin = crear_usuario(Rol.ADMIN, nombre_usuario="adminperfil", email="admin@correo.co")
+    admin.tipo_documento = "CC"
+    admin.numero_documento = "80123456"
+    admin.nombres = "Carlos"
+    admin.apellidos = "Ruiz"
+    admin.fecha_nacimiento = date(1988, 7, 2)
+    admin.lugar_nacimiento = "Bogotá, Cundinamarca"
+    admin.direccion_facturacion = "Calle 100 # 15-20, Bogotá"
+    admin.genero = "masculino"
+    admin.email_verificado = True
+    admin.suscrito_noticias = True
+    admin.token_baja = "token-de-administrador"
+    db.commit()
+    assert (
+        client.post(LOGIN, json={"usuario": "adminperfil", "contrasena": "Clave1234"}).status_code
+        == 200
+    )
+
+    assert client.get(PERFIL).json()["suscrito_noticias"] is False
 
 
 def test_administrador_ve_y_edita_su_perfil(
