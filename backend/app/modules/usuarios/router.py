@@ -248,8 +248,8 @@ administradores = APIRouter(prefix="/administradores", tags=["administradores"])
 
 @administradores.get("", response_model=list[AdministradorSalida])
 def listar_administradores(usuario: Root, db: DbSession) -> list[AdministradorSalida]:
-    """Administradores con su estado (HU-11)."""
-    raise NoImplementado()
+    """Administradores con su estado, del más reciente al más antiguo (HU-10, HU-11)."""
+    return service.listar_administradores(db)
 
 
 @administradores.post(
@@ -262,7 +262,7 @@ def crear_administrador(
     datos: AdministradorEntrada, usuario: Root, db: DbSession
 ) -> AdministradorSalida:
     """Crea un administrador con contraseña temporal (HU-10, RF-02)."""
-    raise NoImplementado()
+    return service.crear_administrador(db, datos, usuario_id=usuario.id)
 
 
 @administradores.post(
