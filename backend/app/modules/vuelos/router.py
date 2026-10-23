@@ -14,6 +14,8 @@ from app.core.db import DbSession
 from app.core.errors import NoImplementado, respuestas_error
 from app.core.security import Rol
 from app.modules.vuelos import service
+from app.modules.vuelos.models import Ciudad as CiudadModelo
+from app.modules.vuelos.models import Vuelo as VueloModelo
 from app.modules.vuelos.schemas import (
     CancelacionVueloSalida,
     Capacidad,
@@ -21,6 +23,7 @@ from app.modules.vuelos.schemas import (
     CiudadResumen,
     EstadoPromocion,
     EstadoVuelo,
+    FechaOmitida,
     Ocupacion,
     OcupacionClase,
     PaginaPromociones,
@@ -31,6 +34,7 @@ from app.modules.vuelos.schemas import (
     SerieVistaPrevia,
     SerieVuelosEntrada,
     SerieVuelosSalida,
+    Vuelo,
     VueloAdmin,
     VueloDetalle,
     VueloEntrada,
@@ -169,7 +173,17 @@ def programar_vuelos_recurrentes(
     datos: SerieVuelosEntrada, usuario: Admin, db: DbSession
 ) -> SerieVuelosSalida:
     """Crea un vuelo independiente por cada fecha de la serie (HU-14)."""
-    raise NoImplementado()
+    try:
+        serie = service.programar_serie(db, datos, usuario_id=usuario.id)
+        db.commit()
+    except Exception:
+        # RNF-17: si falla una ocurrencia no queda ninguna de la serie.
+        db.rollback()
+        raise
+    return SerieVuelosSalida(
+        creados=[_a_vuelo(vuelo, serie.origen, serie.destino) for vuelo in serie.creados],
+        omitidas=_a_omitidas(serie.omitidas),
+    )
 
 
 @vuelos.post("/recurrentes/vista-previa", response_model=SerieVistaPrevia)
@@ -177,7 +191,47 @@ def previsualizar_vuelos_recurrentes(
     datos: SerieVuelosEntrada, usuario: Admin, db: DbSession
 ) -> SerieVistaPrevia:
     """Fechas que se crearían y las que se omitirían, sin guardar nada (HU-14)."""
-    raise NoImplementado()
+    serie = service.previsualizar_serie(db, datos)
+    capacidad_primera, capacidad_economica = service.capacidad_de(serie.tipo)
+    return SerieVistaPrevia(
+        tipo=serie.tipo,
+        capacidad=Capacidad(
+            primera=capacidad_primera,
+            economica=capacidad_economica,
+            total=capacidad_primera + capacidad_economica,
+        ),
+        fechas=serie.fechas,
+        omitidas=_a_omitidas(serie.omitidas),
+    )
+
+
+def _a_omitidas(omitidas: list[service.OcurrenciaOmitida]) -> list[FechaOmitida]:
+    return [
+        FechaOmitida(fecha=omitida.fecha, codigo=omitida.codigo, motivo=omitida.motivo)
+        for omitida in omitidas
+    ]
+
+
+def _a_vuelo(vuelo: VueloModelo, origen: CiudadModelo, destino: CiudadModelo) -> Vuelo:
+    """Forma pública de un vuelo de la serie, sin ocupación ni bloqueos."""
+    return Vuelo(
+        id=vuelo.id,
+        codigo=vuelo.codigo,
+        tipo=vuelo.tipo,
+        origen=CiudadResumen.model_validate(origen),
+        destino=CiudadResumen.model_validate(destino),
+        salida=vuelo.salida,
+        llegada=vuelo.llegada,
+        duracion_minutos=vuelo.duracion_minutos,
+        precio_economica=vuelo.precio_economica,
+        precio_primera=vuelo.precio_primera,
+        capacidad=Capacidad(
+            primera=vuelo.capacidad_primera,
+            economica=vuelo.capacidad_economica,
+            total=vuelo.capacidad_primera + vuelo.capacidad_economica,
+        ),
+        estado=vuelo.estado,
+    )
 
 
 @vuelos.get("/{vuelo_id}", response_model=VueloDetalle, responses=respuestas_error(404))

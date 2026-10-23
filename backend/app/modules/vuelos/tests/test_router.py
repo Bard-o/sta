@@ -1,8 +1,8 @@
-"""Endpoints de catálogo, vista previa y creación de vuelos (HU-13, RF-12 a RF-16)."""
+"""Endpoints de catálogo, vista previa y creación de vuelos (HU-13, HU-14, RF-12 a RF-17)."""
 
 import re
 from collections.abc import Callable
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -22,6 +22,20 @@ from app.modules.vuelos.tests.fabricas import crear_vuelo
 
 RUTA = "/api/v1/vuelos/vista-previa"
 RUTA_CREAR = "/api/v1/vuelos"
+RUTA_SERIE = "/api/v1/vuelos/recurrentes"
+RUTA_SERIE_VISTA = "/api/v1/vuelos/recurrentes/vista-previa"
+_ZONA_NEGOCIO = ZoneInfo("America/Bogota")
+
+
+def hoy_local() -> date:
+    """Fecha de hoy en Colombia, igual que el límite de 12 meses del backend."""
+    return datetime.now(UTC).astimezone(_ZONA_NEGOCIO).date()
+
+
+def proximo_lunes(desde: date) -> date:
+    """El lunes siguiente a `desde`, siempre en el futuro."""
+    dias = (0 - desde.weekday()) % 7 or 7
+    return desde + timedelta(days=dias)
 
 
 def iniciar_sesion_admin(client: TestClient, crear_usuario: Callable[..., Any]) -> Any:
@@ -506,3 +520,240 @@ def test_si_falla_la_auditoria_no_queda_el_vuelo_ni_la_noticia(
 
     assert db.scalar(select(func.count(Vuelo.id))) == vuelos_antes
     assert db.scalar(select(func.count(Noticia.id))) == noticias_antes
+
+
+# ---------- POST /vuelos/recurrentes (HU-14) ----------
+
+
+def cuerpo_serie(**cambios: object) -> dict[str, object]:
+    base: dict[str, object] = {
+        "origen": "PEI",
+        "destino": "BOG",
+        "hora_salida": "06:00",
+        "duracion_minutos": 50,
+        "precio_economica": 280_000,
+        "precio_primera": 750_000,
+        "dias_semana": ["lun"],
+        "desde": "2027-01-04",
+        "hasta": "2027-01-25",
+    }
+    base.update(cambios)
+    return base
+
+
+def serie_de_cuatro_lunes() -> dict[str, object]:
+    """Serie de cuatro lunes en el futuro, sin depender del calendario de la corrida."""
+    desde = proximo_lunes(hoy_local() + timedelta(days=30))
+    return cuerpo_serie(desde=desde.isoformat(), hasta=(desde + timedelta(days=21)).isoformat())
+
+
+def fechas_de_lunes(cuerpo: dict[str, object]) -> list[date]:
+    desde = date.fromisoformat(str(cuerpo["desde"]))
+    return [desde + timedelta(days=7 * indice) for indice in range(4)]
+
+
+def test_vista_previa_de_la_serie_devuelve_tipo_capacidad_y_fechas(
+    db: Session, client: TestClient, crear_usuario: Callable[..., Any]
+) -> None:
+    """HU-14 · contrato: la vista previa devuelve las fechas que se crearían, sin guardar."""
+    iniciar_sesion_admin(client, crear_usuario)
+    cuerpo = serie_de_cuatro_lunes()
+    fechas = fechas_de_lunes(cuerpo)
+    vuelos_antes = db.scalar(select(func.count(Vuelo.id)))
+
+    respuesta = client.post(RUTA_SERIE_VISTA, json=cuerpo)
+
+    assert respuesta.status_code == 200
+    datos = respuesta.json()
+    assert datos["tipo"] == "nacional"
+    assert datos["capacidad"] == {"primera": 25, "economica": 125, "total": 150}
+    assert datos["fechas"] == [fecha.isoformat() for fecha in fechas]
+    assert datos["omitidas"] == []
+    assert db.scalar(select(func.count(Vuelo.id))) == vuelos_antes
+
+
+def test_programar_serie_crea_un_vuelo_independiente_por_fecha(
+    client: TestClient, crear_usuario: Callable[..., Any]
+) -> None:
+    """HU-14 · RF-17: publicar la serie responde 201 con un vuelo por cada lunes."""
+    iniciar_sesion_admin(client, crear_usuario)
+    cuerpo = serie_de_cuatro_lunes()
+    fechas = fechas_de_lunes(cuerpo)
+
+    respuesta = client.post(RUTA_SERIE, json=cuerpo)
+
+    assert respuesta.status_code == 201
+    datos = respuesta.json()
+    assert datos["omitidas"] == []
+    assert len(datos["creados"]) == len(fechas)
+    codigos = {vuelo["codigo"] for vuelo in datos["creados"]}
+    assert len(codigos) == len(fechas)
+    for vuelo, fecha in zip(datos["creados"], fechas, strict=True):
+        assert re.fullmatch(r"STA-\d{5}", vuelo["codigo"])
+        assert vuelo["estado"] == "programado"
+        assert vuelo["origen"]["codigo"] == "PEI"
+        assert vuelo["destino"]["codigo"] == "BOG"
+        assert vuelo["salida"] == f"{fecha.isoformat()}T11:00:00Z"
+        assert vuelo["capacidad"] == {"primera": 25, "economica": 125, "total": 150}
+
+
+def test_cada_ocurrencia_de_la_serie_tiene_noticia_y_auditoria(
+    db: Session, client: TestClient, crear_usuario: Callable[..., Any]
+) -> None:
+    """HU-14 · RF-17/RF-26: cada ocurrencia tiene su noticia y su registro de auditoría."""
+    iniciar_sesion_admin(client, crear_usuario)
+
+    respuesta = client.post(RUTA_SERIE, json=serie_de_cuatro_lunes())
+
+    assert respuesta.status_code == 201
+    creados = respuesta.json()["creados"]
+    noticias = {noticia.vuelo_id: noticia for noticia in db.scalars(select(Noticia))}
+    registros = list(
+        db.scalars(select(RegistroAuditoria).where(RegistroAuditoria.accion == "vuelo.crear"))
+    )
+    assert set(noticias) == {vuelo["id"] for vuelo in creados}
+    assert {registro.entidad_id for registro in registros} == {vuelo["id"] for vuelo in creados}
+    for vuelo in creados:
+        assert noticias[vuelo["id"]].vuelo_codigo == vuelo["codigo"]
+    for registro in registros:
+        assert registro.despues is not None
+        assert registro.despues["codigo"] == next(
+            vuelo["codigo"] for vuelo in creados if vuelo["id"] == registro.entidad_id
+        )
+
+
+def test_la_serie_omite_los_duplicados_y_los_informa(
+    db: Session, client: TestClient, crear_usuario: Callable[..., Any]
+) -> None:
+    """HU-14 · RF-16: una fecha con un vuelo igual se omite con su motivo, sin ser un error."""
+    cuerpo = serie_de_cuatro_lunes()
+    fechas = fechas_de_lunes(cuerpo)
+    crear_vuelo(
+        db,
+        origen="PEI",
+        destino="BOG",
+        salida=datetime(fechas[1].year, fechas[1].month, fechas[1].day, 11, tzinfo=UTC),
+    )
+    iniciar_sesion_admin(client, crear_usuario)
+
+    respuesta = client.post(RUTA_SERIE, json=cuerpo)
+
+    assert respuesta.status_code == 201
+    datos = respuesta.json()
+    assert len(datos["creados"]) == len(fechas) - 1
+    assert datos["omitidas"] == [
+        {
+            "fecha": fechas[1].isoformat(),
+            "codigo": "vuelo_duplicado",
+            "motivo": "Ya existe un vuelo igual.",
+        }
+    ]
+
+
+def test_una_serie_totalmente_pasada_responde_201_con_las_fechas_omitidas(
+    client: TestClient, crear_usuario: Callable[..., Any]
+) -> None:
+    """HU-14 · RF-17: una serie pasada no es un error; se informan todas sus fechas omitidas."""
+    iniciar_sesion_admin(client, crear_usuario)
+    ayer = hoy_local() - timedelta(days=1)
+    cuerpo = cuerpo_serie(
+        dias_semana=["lun", "mar", "mie", "jue", "vie", "sab", "dom"],
+        desde=(ayer - timedelta(days=7)).isoformat(),
+        hasta=ayer.isoformat(),
+    )
+
+    respuesta = client.post(RUTA_SERIE, json=cuerpo)
+
+    assert respuesta.status_code == 201
+    datos = respuesta.json()
+    assert datos["creados"] == []
+    assert len(datos["omitidas"]) == 8
+    assert {omitida["codigo"] for omitida in datos["omitidas"]} == {"salida_en_pasado"}
+    assert {omitida["motivo"] for omitida in datos["omitidas"]} == {"La salida ya pasó."}
+
+
+@pytest.mark.parametrize("ruta", [RUTA_SERIE, RUTA_SERIE_VISTA])
+@pytest.mark.parametrize(
+    ("cambios", "campo", "mensaje"),
+    [
+        (
+            {
+                "desde": (hoy_local() + timedelta(days=20)).isoformat(),
+                "hasta": (hoy_local() + timedelta(days=10)).isoformat(),
+            },
+            "hasta",
+            "La fecha final no puede ser anterior a la inicial.",
+        ),
+        (
+            {
+                "desde": hoy_local().isoformat(),
+                "hasta": (hoy_local() + timedelta(days=370)).isoformat(),
+            },
+            "hasta",
+            "Máximo 12 meses desde hoy.",
+        ),
+        ({"dias_semana": []}, "dias_semana", "Debe tener al menos 1 elemento(s)."),
+    ],
+)
+def test_los_periodos_invalidos_rechazan_toda_la_serie(
+    client: TestClient,
+    crear_usuario: Callable[..., Any],
+    ruta: str,
+    cambios: dict[str, object],
+    campo: str,
+    mensaje: str,
+) -> None:
+    """HU-14 · SUP-37/contrato: periodo invertido, de más de 12 meses o sin días → 422."""
+    iniciar_sesion_admin(client, crear_usuario)
+
+    respuesta = client.post(ruta, json=cuerpo_serie(**cambios))
+
+    assert respuesta.status_code == 422
+    error = respuesta.json()["error"]
+    assert error["codigo"] == "datos_invalidos"
+    assert error["campos"][campo] == mensaje
+
+
+def test_la_serie_rechaza_la_ruta_no_permitida(
+    client: TestClient, crear_usuario: Callable[..., Any]
+) -> None:
+    """HU-14 · RF-14: una ruta prohibida rechaza toda la serie, igual que en HU-13."""
+    iniciar_sesion_admin(client, crear_usuario)
+
+    respuesta = client.post(RUTA_SERIE_VISTA, json=cuerpo_serie(origen="MZL", destino="MIA"))
+
+    assert respuesta.status_code == 422
+    error = respuesta.json()["error"]
+    assert error["codigo"] == "ruta_no_permitida"
+    assert "destino" in error["campos"]
+
+
+def test_si_falla_una_ocurrencia_no_queda_ninguna_de_la_serie(
+    db: Session,
+    client: TestClient,
+    crear_usuario: Callable[..., Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """HU-14 · RNF-17: la serie es atómica; el fallo de una ocurrencia revierte todas."""
+    iniciar_sesion_admin(client, crear_usuario)
+    publicar = noticias_service.publicar_noticia_vuelo
+    llamadas = 0
+
+    def fallar_en_la_segunda(db: Session, vuelo: noticias_service.VueloPublicado) -> None:
+        nonlocal llamadas
+        llamadas += 1
+        if llamadas == 2:
+            raise RuntimeError("falla al publicar la segunda noticia")
+        publicar(db, vuelo)
+
+    monkeypatch.setattr(noticias_service, "publicar_noticia_vuelo", fallar_en_la_segunda)
+    vuelos_antes = db.scalar(select(func.count(Vuelo.id)))
+    noticias_antes = db.scalar(select(func.count(Noticia.id)))
+    auditorias_antes = db.scalar(select(func.count(RegistroAuditoria.id)))
+
+    with pytest.raises(RuntimeError):
+        client.post(RUTA_SERIE, json=serie_de_cuatro_lunes())
+
+    assert db.scalar(select(func.count(Vuelo.id))) == vuelos_antes
+    assert db.scalar(select(func.count(Noticia.id))) == noticias_antes
+    assert db.scalar(select(func.count(RegistroAuditoria.id))) == auditorias_antes
