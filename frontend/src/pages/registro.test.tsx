@@ -187,7 +187,7 @@ describe("S01 · Registro de cliente (HU-01)", () => {
     const user = await llenar();
     const archivo = new File(["x"], "laura.png", { type: "image/png" });
     await user.upload(screen.getByLabelText("Archivo de imagen de perfil"), archivo);
-    expect(await screen.findByAltText("Vista previa de tu imagen de perfil")).toBeInTheDocument();
+    expect(await screen.findByAltText("Tu imagen de perfil")).toBeInTheDocument();
     await crear(user);
 
     await screen.findByText("Inicio del cliente");
@@ -209,7 +209,7 @@ describe("S01 · Registro de cliente (HU-01)", () => {
     Object.defineProperty(grande, "size", { value: 3 * 1024 * 1024 });
     await user.upload(entrada, grande);
     expect(await screen.findByText(/pesa más de 2 MB/)).toBeInTheDocument();
-    expect(screen.queryByAltText("Vista previa de tu imagen de perfil")).toBeInTheDocument();
+    expect(screen.queryByAltText("Tu imagen de perfil")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Quitar" }));
     await crear(user);

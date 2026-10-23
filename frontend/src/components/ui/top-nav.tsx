@@ -15,7 +15,7 @@ export interface NavItem {
 export interface TopNavProps {
   items?: NavItem[];
   right?: ReactNode;
-  user?: { name: string; role?: string };
+  user?: { name: string; role?: string; href?: string };
   homeHref?: string;
   brand?: string;
 }
@@ -28,6 +28,27 @@ function initials(name: string) {
     .map((w) => w[0])
     .join("")
     .toUpperCase();
+}
+
+/** Avatar + nombre. Con `href` es un enlace (a «Mi perfil»). */
+function UserChip({ user }: { user: NonNullable<TopNavProps["user"]> }) {
+  const contenido = (
+    <>
+      <span className="sta-avatar" aria-hidden="true">
+        {initials(user.name)}
+      </span>
+      <span>
+        <span className="sta-user__name">{user.name}</span>
+        {user.role && <span className="sta-user__role">{user.role}</span>}
+      </span>
+    </>
+  );
+  if (!user.href) return <div className="sta-user">{contenido}</div>;
+  return (
+    <Link className="sta-user" to={user.href} aria-label={`Mi perfil, ${user.name}`}>
+      {contenido}
+    </Link>
+  );
 }
 
 /** La barra «letrero» (IU-02). El item activo es una píldora invert, no amarilla. */
@@ -59,17 +80,7 @@ export function TopNav({
       </nav>
       <div className="sta-nav__right">
         {right}
-        {user && (
-          <div className="sta-user">
-            <span className="sta-avatar" aria-hidden="true">
-              {initials(user.name)}
-            </span>
-            <span>
-              <span className="sta-user__name">{user.name}</span>
-              {user.role && <span className="sta-user__role">{user.role}</span>}
-            </span>
-          </div>
-        )}
+        {user && <UserChip user={user} />}
       </div>
     </header>
   );

@@ -6,7 +6,10 @@ import { InicioRolPage } from "@/pages/inicio-rol";
 import { LoginPage } from "@/pages/login";
 import { NoEncontradaPage } from "@/pages/no-encontrada";
 import { NoticiasPage } from "@/pages/noticias";
+import { PerfilPage } from "@/pages/perfil";
 import { RegistroPage } from "@/pages/registro";
+import { RestablecerContrasenaPage } from "@/pages/restablecer-contrasena";
+import { VerificarCorreoPage } from "@/pages/verificar-correo";
 import { VueloDetallePage } from "@/pages/vuelo-detalle";
 
 export const router = createBrowserRouter([
@@ -17,6 +20,8 @@ export const router = createBrowserRouter([
       { path: "/", element: <InicioPage /> },
       { path: "/noticias", element: <NoticiasPage /> },
       { path: "/vuelos/:vueloId", element: <VueloDetallePage /> },
+      { path: "/verificar-correo", element: <VerificarCorreoPage /> },
+      { path: "/restablecer-contrasena", element: <RestablecerContrasenaPage /> },
       {
         element: <SoloVisitantes />,
         children: [
@@ -29,6 +34,10 @@ export const router = createBrowserRouter([
       {
         element: <RequireRole roles={["cliente"]} />,
         children: [{ path: "/cliente", element: <InicioRolPage /> }],
+      },
+      {
+        element: <RequireRole roles={["cliente", "admin"]} />,
+        children: [{ path: "/perfil", element: <PerfilPage /> }],
       },
       {
         element: <RequireRole roles={["admin"]} />,
