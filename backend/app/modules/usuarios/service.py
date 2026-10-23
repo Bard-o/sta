@@ -21,13 +21,19 @@ from app.core.security import (
     hash_contrasena,
     verificar_contrasena,
 )
-from app.modules.usuarios.models import TokenVerificacion, Usuario
+from app.modules.usuarios.models import TokenRestablecimiento, TokenVerificacion, Usuario
 from app.modules.usuarios.schemas import RegistroClienteEntrada
 
 logger = logging.getLogger(__name__)
 
 # SUP-19: el enlace de verificación de correo vence en 24 horas.
 HORAS_VERIFICACION = 24
+# SUP-19: el enlace de restablecimiento de contraseña vence en 30 minutos.
+MINUTOS_RESTABLECIMIENTO = 30
+# RF-07: la solicitud responde lo mismo exista o no el correo.
+MENSAJE_RESTABLECIMIENTO = (
+    "Si el correo está registrado, recibirás un enlace válido por 30 minutos."
+)
 
 
 class CredencialesInvalidas(AppError):
@@ -411,6 +417,151 @@ def reenviar_verificacion(db: Session, usuario_id: int) -> None:
     db.commit()
 
     enviar_verificacion(usuario, email, token)
+
+
+# ---------- Restablecimiento de contraseña (HU-05) ----------
+
+
+def solicitar_restablecimiento(db: Session, email: str) -> None:
+    """Envía un enlace de restablecimiento por cada cuenta activa con ese correo (HU-05).
+
+    RF-07: no revela si el correo está registrado. Si el mismo correo pertenece a un cliente
+    y a un administrador (SUP-18) se envía un enlace por cada cuenta. El root nunca recibe
+    enlace. Al pedir uno nuevo, los enlaces anteriores sin usar dejan de servir.
+    """
+    destinatario = email.strip().lower()
+    ahora = datetime.now(UTC)
+    cuentas = db.scalars(
+        select(Usuario)
+        .where(
+            Usuario.email == destinatario,
+            Usuario.rol.in_((Rol.CLIENTE, Rol.ADMIN)),
+            Usuario.activo.is_(True),
+        )
+        .order_by(Usuario.id)
+    ).all()
+
+    enviados: list[tuple[Usuario, str, str]] = []
+    for usuario in cuentas:
+        correo_cuenta = usuario.email
+        if correo_cuenta is None:  # lo garantiza el filtro de la consulta
+            continue
+        db.execute(
+            update(TokenRestablecimiento)
+            .where(
+                TokenRestablecimiento.usuario_id == usuario.id,
+                TokenRestablecimiento.usado_en.is_(None),
+            )
+            .values(usado_en=ahora)
+        )
+        token = _crear_token_restablecimiento(db, usuario.id, ahora)
+        enviados.append((usuario, correo_cuenta, token))
+
+    if enviados:
+        db.commit()
+        for usuario, correo_cuenta, token in enviados:
+            enviar_restablecimiento(usuario, correo_cuenta, token)
+
+
+def _crear_token_restablecimiento(db: Session, usuario_id: int, ahora: datetime) -> str:
+    """Crea un token de un solo uso y devuelve el valor en claro para el enlace (SUP-19)."""
+    token = secrets.token_urlsafe(32)
+    db.add(
+        TokenRestablecimiento(
+            usuario_id=usuario_id,
+            token_hash=hash_token(token),
+            expira_en=ahora + timedelta(minutes=MINUTOS_RESTABLECIMIENTO),
+        )
+    )
+    db.flush()
+    return token
+
+
+def enviar_restablecimiento(usuario: Usuario, email: str, token: str) -> None:
+    """Envía el enlace `/restablecer-contrasena?token=…` (HU-05).
+
+    El correo identifica la cuenta para que el titular distinga los enlaces cuando su correo
+    pertenece a una cuenta de cliente y a una de administrador. Un fallo de SMTP no cambia la
+    respuesta de la solicitud: queda en el log y el usuario puede pedir otro enlace.
+    """
+    tipo_cuenta = "administrador" if usuario.rol == Rol.ADMIN else "cliente"
+    enlace = f"{get_settings().frontend_url}/restablecer-contrasena?token={token}"
+    nombre = escape(usuario.nombres or usuario.nombre_usuario)
+    nombre_usuario = escape(usuario.nombre_usuario)
+    texto = (
+        f"Hola {usuario.nombres or usuario.nombre_usuario},\n\n"
+        f"Recibimos una solicitud para restablecer la contraseña de tu cuenta de "
+        f"{tipo_cuenta} «{usuario.nombre_usuario}» en AVIANCO. Define una contraseña nueva "
+        f"con este enlace; vence en {MINUTOS_RESTABLECIMIENTO} minutos y sirve una sola vez:\n\n"
+        f"{enlace}\n\n"
+        "Si no solicitaste el cambio, ignora este mensaje: tu contraseña actual sigue "
+        "funcionando.\n"
+    )
+    html = (
+        f"<p>Hola {nombre},</p>"
+        f"<p>Recibimos una solicitud para restablecer la contraseña de tu cuenta de "
+        f"{tipo_cuenta} «{nombre_usuario}» en AVIANCO. Define una contraseña nueva con este "
+        f"enlace; vence en {MINUTOS_RESTABLECIMIENTO} minutos y sirve una sola vez.</p>"
+        f'<p><a href="{enlace}">Restablecer mi contraseña</a></p>'
+        "<p>Si no solicitaste el cambio, ignora este mensaje: tu contraseña actual sigue "
+        "funcionando.</p>"
+    )
+    try:
+        enviar_correo(
+            email,
+            f"Restablece la contraseña de tu cuenta de {tipo_cuenta} en AVIANCO",
+            texto,
+            html,
+        )
+    except Exception:
+        # Sin el correo en el log: es un dato personal (Ley 1581 de 2012).
+        logger.exception(
+            "No se pudo enviar el correo de restablecimiento al usuario %s", usuario.id
+        )
+
+
+def confirmar_restablecimiento(
+    db: Session,
+    token: str,
+    *,
+    contrasena_nueva: str,
+    confirmacion: str,
+) -> None:
+    """Define la contraseña nueva con el token del enlace (HU-05, RF-07).
+
+    El token es de un solo uso y vence en 30 minutos (SUP-19). Se valida antes que la
+    contraseña para que un enlace vencido o usado siempre responda EnlaceInvalido. Al
+    confirmar se invalidan los demás tokens de la cuenta, la contraseña anterior deja de
+    funcionar y se cierran todas las sesiones (se incrementa `version_sesion`).
+    """
+    ahora = datetime.now(UTC)
+    fila = db.scalar(
+        select(TokenRestablecimiento)
+        .where(TokenRestablecimiento.token_hash == hash_token(token))
+        .with_for_update()
+    )
+    if fila is None or fila.usado_en is not None or fila.expira_en <= ahora:
+        raise EnlaceInvalido()
+
+    usuario = db.get(Usuario, fila.usuario_id)
+    if usuario is None or usuario.rol == Rol.ROOT or not usuario.activo:
+        raise EnlaceInvalido()
+
+    _validar_contrasena_nueva(contrasena_nueva, confirmacion)
+
+    fila.usado_en = ahora
+    usuario.password_hash = hash_contrasena(contrasena_nueva)
+    usuario.version_sesion = (usuario.version_sesion or 0) + 1
+    db.execute(
+        update(TokenRestablecimiento)
+        .where(
+            TokenRestablecimiento.usuario_id == usuario.id,
+            TokenRestablecimiento.id != fila.id,
+            TokenRestablecimiento.usado_en.is_(None),
+        )
+        .values(usado_en=ahora)
+    )
+    db.commit()
 
 
 def asegurar_root(db: Session, nombre_usuario: str, contrasena: str) -> bool:
