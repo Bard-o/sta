@@ -1,7 +1,7 @@
 """usuarios: agrega la imagen de perfil
 
 Revision ID: e0173070e9cb
-Revises: d24066b8c1d9
+Revises: cfbc16d2bdd9
 Create Date: 2026-10-23 03:25:54.201306
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "e0173070e9cb"
-down_revision: str | None = "d24066b8c1d9"
+down_revision: str | None = "cfbc16d2bdd9"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
