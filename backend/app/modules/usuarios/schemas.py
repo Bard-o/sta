@@ -42,11 +42,10 @@ class UsuarioSalida(BaseModel):
     rol: Rol
     email_verificado: bool
     # HU-12: un administrador con el registro incompleto solo puede completar su registro.
-    # Hasta que usuarios guarde este dato, todas las cuentas existentes lo tienen completo.
-    registro_completo: bool = True
+    registro_completo: bool
     # Para el saludo del menú. El root y el administrador sin registro completo no tienen nombre.
-    nombres: str | None = None
-    apellidos: str | None = None
+    nombres: str | None
+    apellidos: str | None
 
 
 # ---------- Datos personales (HU-01, HU-07, HU-12) ----------

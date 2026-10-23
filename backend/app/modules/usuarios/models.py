@@ -52,10 +52,16 @@ class Usuario(TimestampMixin, Base):
         )
     )
     email_verificado: Mapped[bool] = mapped_column(Boolean, server_default=false())
+    # HU-12: un administrador con el registro incompleto solo puede completar sus datos.
+    # Los clientes y el root nacen con el registro completo.
+    registro_completo: Mapped[bool] = mapped_column(Boolean, server_default=true())
     # Borrado lógico (RF-02, RF-10): una cuenta inactiva no inicia sesión.
     activo: Mapped[bool] = mapped_column(Boolean, server_default=true())
     # Se incrementa para invalidar en el servidor todas las sesiones abiertas (HU-04, RF-07).
     version_sesion: Mapped[int] = mapped_column(Integer, server_default=text("0"))
+    # RNF-13: intentos fallidos consecutivos y fin del bloqueo de 15 minutos.
+    intentos_fallidos: Mapped[int] = mapped_column(Integer, server_default=text("0"))
+    bloqueado_hasta: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     # HU-01: datos personales del cliente. Son opcionales en la base porque el root y el
     # administrador con el registro incompleto (HU-12) todavía no los tienen.
