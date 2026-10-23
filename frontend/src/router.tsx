@@ -2,6 +2,7 @@ import { createBrowserRouter } from "react-router";
 import { RequireRole, SoloRegistroPendiente, SoloVisitantes } from "@/auth/require-role";
 import { RUTA_PRIMER_INGRESO } from "@/auth/roles";
 import { AppLayout } from "@/layouts/app-layout";
+import { AdministradoresPage } from "@/pages/administradores";
 import { EditarVueloPage } from "@/pages/editar-vuelo";
 import { InicioPage } from "@/pages/inicio";
 import { InicioRolPage } from "@/pages/inicio-rol";
@@ -66,7 +67,10 @@ export const router = createBrowserRouter([
       },
       {
         element: <RequireRole roles={["root"]} />,
-        children: [{ path: "/root", element: <InicioRolPage /> }],
+        children: [
+          { path: "/root", element: <InicioRolPage /> },
+          { path: "/root/administradores", element: <AdministradoresPage /> },
+        ],
       },
 
       { path: "*", element: <NoEncontradaPage /> },
