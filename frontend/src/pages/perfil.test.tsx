@@ -40,6 +40,8 @@ const PERFIL_LAURA: Perfil = {
 };
 
 const SESION = "GET /api/v1/auth/me";
+const DESACTIVACION = "GET /api/v1/usuarios/me/desactivacion";
+const LIBRE = { status: 200, body: { puede_desactivar: true, bloqueos: [] } };
 const PERFIL = "GET /api/v1/usuarios/me/perfil";
 const GUARDAR = "PUT /api/v1/usuarios/me/perfil";
 const IMAGEN = "PUT /api/v1/usuarios/me/imagen";
@@ -59,6 +61,7 @@ function servidor(inicial: Perfil = PERFIL_LAURA, usuario = CLIENTE) {
   const estado = { perfil: inicial };
   responderApi({
     [SESION]: sesionDe(usuario),
+    [DESACTIVACION]: LIBRE,
     [PERFIL]: () => ({ status: 200, body: estado.perfil }),
     [GUARDAR]: () => ({ status: 200, body: estado.perfil }),
   });
@@ -144,6 +147,7 @@ describe("S05 · Datos personales (HU-07)", () => {
     servidor();
     responderApi({
       [SESION]: sesionDe(CLIENTE),
+      [DESACTIVACION]: LIBRE,
       [PERFIL]: { status: 200, body: PERFIL_LAURA },
       [GUARDAR]: {
         status: 409,
@@ -224,6 +228,7 @@ describe("S05 · Imagen de perfil (HU-07)", () => {
     servidor();
     responderApi({
       [SESION]: sesionDe(CLIENTE),
+      [DESACTIVACION]: LIBRE,
       [PERFIL]: { status: 200, body: PERFIL_LAURA },
       [IMAGEN]: {
         status: 200,
@@ -243,7 +248,11 @@ describe("S05 · Imagen de perfil (HU-07)", () => {
 
   it("no envía un archivo que no es JPG o PNG", async () => {
     servidor();
-    responderApi({ [SESION]: sesionDe(CLIENTE), [PERFIL]: { status: 200, body: PERFIL_LAURA } });
+    responderApi({
+      [SESION]: sesionDe(CLIENTE),
+      [DESACTIVACION]: LIBRE,
+      [PERFIL]: { status: 200, body: PERFIL_LAURA },
+    });
     renderRutas(rutas, "/perfil");
     const entrada = await screen.findByLabelText("Archivo de imagen de perfil");
 
@@ -259,6 +268,7 @@ describe("S05 · Imagen de perfil (HU-07)", () => {
   it("muestra el error del servidor si rechaza la imagen", async () => {
     responderApi({
       [SESION]: sesionDe(CLIENTE),
+      [DESACTIVACION]: LIBRE,
       [PERFIL]: { status: 200, body: PERFIL_LAURA },
       [IMAGEN]: {
         status: 422,
@@ -281,6 +291,7 @@ describe("S05 · Imagen de perfil (HU-07)", () => {
   it("quita la imagen actual", async () => {
     responderApi({
       [SESION]: sesionDe(CLIENTE),
+      [DESACTIVACION]: LIBRE,
       [PERFIL]: {
         status: 200,
         body: { ...PERFIL_LAURA, imagen_url: "/api/v1/usuarios/me/imagen?v=3" },
@@ -313,6 +324,7 @@ describe("S05 · Contraseña (HU-06)", () => {
     servidor();
     responderApi({
       [SESION]: sesionDe(CLIENTE),
+      [DESACTIVACION]: LIBRE,
       [PERFIL]: { status: 200, body: PERFIL_LAURA },
       [CONTRASENA]: { status: 204 },
     });
@@ -332,6 +344,7 @@ describe("S05 · Contraseña (HU-06)", () => {
   it("si la actual es incorrecta, lo indica junto al campo y no cambia nada", async () => {
     responderApi({
       [SESION]: sesionDe(CLIENTE),
+      [DESACTIVACION]: LIBRE,
       [PERFIL]: { status: 200, body: PERFIL_LAURA },
       [CONTRASENA]: {
         status: 422,
@@ -375,6 +388,7 @@ describe("S05 · Correos que recibes (HU-08)", () => {
   it("el cliente se suscribe a las noticias", async () => {
     responderApi({
       [SESION]: sesionDe(CLIENTE),
+      [DESACTIVACION]: LIBRE,
       [PERFIL]: { status: 200, body: PERFIL_LAURA },
       [SUSCRIPCION]: { status: 200, body: { noticias: true } },
     });
@@ -393,6 +407,7 @@ describe("S05 · Correos que recibes (HU-08)", () => {
   it("el cliente suscrito se da de baja", async () => {
     responderApi({
       [SESION]: sesionDe(CLIENTE),
+      [DESACTIVACION]: LIBRE,
       [PERFIL]: { status: 200, body: { ...PERFIL_LAURA, suscrito_noticias: true } },
       [SUSCRIPCION]: { status: 200, body: { noticias: false } },
     });
@@ -424,6 +439,7 @@ describe("S05 · Correos que recibes (HU-08)", () => {
   it("si el servidor responde correo_no_verificado, ofrece verificarlo", async () => {
     responderApi({
       [SESION]: sesionDe(CLIENTE),
+      [DESACTIVACION]: LIBRE,
       [PERFIL]: { status: 200, body: PERFIL_LAURA },
       [SUSCRIPCION]: {
         status: 403,
