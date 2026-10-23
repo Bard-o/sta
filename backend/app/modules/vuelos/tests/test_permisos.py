@@ -1,7 +1,6 @@
 """RNF-10: cada endpoint del módulo responde 401 o 403 a los roles que no lo tienen permitido.
 
-Matriz del contrato en docs/api/iteracion-1.md. Los endpoints que todavía son stubs responden
-501 (o 422 si el cuerpo vacío no pasa la validación) al rol permitido.
+Matriz del contrato en docs/api/iteracion-1.md.
 """
 
 from collections.abc import Callable
@@ -186,3 +185,32 @@ def test_detalle_de_vuelo_es_publico_para_todos_los_roles(
     respuesta = cliente_http.get(f"/api/v1/vuelos/{vuelo.id}")
 
     assert respuesta.status_code == 200, respuesta.text
+
+
+RUTAS_REALIZADOS = [
+    ("GET", "/api/v1/vuelos?estado=realizado"),
+    ("GET", "/api/v1/vuelos/1/pasajeros"),
+]
+
+
+@pytest.mark.parametrize(("metodo", "ruta"), RUTAS_REALIZADOS)
+def test_vuelos_realizados_sin_sesion_responde_no_autenticado(
+    client: TestClient, metodo: str, ruta: str
+):
+    """HU-18 · RNF-10: sin sesión, los realizados y sus pasajeros responden 401."""
+    respuesta = client.request(metodo, ruta)
+
+    assert respuesta.status_code == 401
+    assert respuesta.json()["error"]["codigo"] == "no_autenticado"
+
+
+@pytest.mark.parametrize(("metodo", "ruta"), RUTAS_REALIZADOS)
+@pytest.mark.parametrize("rol", [Rol.CLIENTE, Rol.ROOT])
+def test_vuelos_realizados_solo_para_administradores(
+    client_como: Callable[[Rol], TestClient], metodo: str, ruta: str, rol: Rol
+):
+    """HU-18 · RNF-10: un cliente o root recibe 403 sin_permiso en los realizados."""
+    respuesta = client_como(rol).request(metodo, ruta)
+
+    assert respuesta.status_code == 403
+    assert respuesta.json()["error"]["codigo"] == "sin_permiso"
