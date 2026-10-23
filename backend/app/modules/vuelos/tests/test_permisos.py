@@ -147,3 +147,23 @@ def test_promociones_solo_para_administradores(
 
     assert respuesta.status_code == 403
     assert respuesta.json()["error"]["codigo"] == "sin_permiso"
+
+
+RUTA_CANCELACION = "/api/v1/vuelos/1/cancelar"
+
+
+def test_cancelacion_sin_sesion_responde_no_autenticado(client: TestClient):
+    """HU-16 · RNF-10: sin sesión, cancelar un vuelo responde 401 no_autenticado."""
+    respuesta = client.post(RUTA_CANCELACION)
+
+    assert respuesta.status_code == 401
+    assert respuesta.json()["error"]["codigo"] == "no_autenticado"
+
+
+@pytest.mark.parametrize("rol", [Rol.CLIENTE, Rol.ROOT])
+def test_cancelacion_solo_para_administradores(client_como: Callable[[Rol], TestClient], rol: Rol):
+    """HU-16 · RNF-10: un cliente o root recibe 403 sin_permiso al cancelar un vuelo."""
+    respuesta = client_como(rol).post(RUTA_CANCELACION)
+
+    assert respuesta.status_code == 403
+    assert respuesta.json()["error"]["codigo"] == "sin_permiso"

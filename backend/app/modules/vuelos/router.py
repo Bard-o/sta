@@ -280,7 +280,17 @@ def editar_vuelo(vuelo_id: int, datos: VueloEntrada, usuario: Admin, db: DbSessi
 )
 def cancelar_vuelo(vuelo_id: int, usuario: Admin, db: DbSession) -> CancelacionVueloSalida:
     """Cancela un vuelo sin tiquetes vendidos y anula sus reservas (HU-16, RF-19)."""
-    raise NoImplementado()
+    try:
+        cancelado = service.cancelar_vuelo(db, vuelo_id, usuario_id=usuario.id)
+        db.commit()
+    except Exception:
+        # RNF-17: si falla la anulación, la noticia o la auditoría no queda nada del cambio.
+        db.rollback()
+        raise
+    return CancelacionVueloSalida(
+        vuelo=_a_vuelo_admin(cancelado.vuelo),
+        reservas_anuladas=cancelado.reservas_anuladas,
+    )
 
 
 @vuelos.get(
