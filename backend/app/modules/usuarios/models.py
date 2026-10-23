@@ -94,6 +94,10 @@ class Usuario(TimestampMixin, Base):
     telefono: Mapped[str | None] = mapped_column(String(20))
     # Ley 1581 de 2012 (RF-03): se guarda cuándo aceptó la política de tratamiento de datos.
     fecha_aceptacion_politica: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # HU-07: cambia en cada subida para que el navegador no muestre la imagen anterior en caché.
+    imagen_version: Mapped[int] = mapped_column(Integer, server_default=text("0"))
+    # HU-07: media type de la imagen guardada (image/png, image/jpeg); None si no hay imagen.
+    imagen_tipo: Mapped[str | None] = mapped_column(String(11))
 
     # HU-08, RF-09: suscripción al correo de noticias. Nace desactivada.
     suscrito_noticias: Mapped[bool] = mapped_column(Boolean, server_default=false())
