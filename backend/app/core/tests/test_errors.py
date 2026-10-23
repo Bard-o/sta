@@ -33,7 +33,25 @@ def test_health(client: TestClient):
 def test_un_stub_del_contrato_responde_501_con_el_formato_unico(
     client_como: Callable[[Rol], TestClient],
 ):
-    respuesta = client_como(Rol.ADMIN).get("/api/v1/vuelos/1/pasajeros")
+    # HU-12 sigue siendo el único stub con un cuerpo sencillo de armar; los de vuelos ya se
+    # implementaron (HU-18) y los de desactivar/reactivar administradores están en revisión.
+    respuesta = client_como(Rol.ADMIN).post(
+        "/api/v1/administradores/me/registro",
+        json={
+            "nombres": "Ana",
+            "apellidos": "Pérez",
+            "fecha_nacimiento": "1990-01-01",
+            "lugar_nacimiento": "Pereira",
+            "direccion_facturacion": "Calle 1 # 2-3",
+            "genero": "femenino",
+            "email": "ana@example.com",
+            "tipo_documento": "CC",
+            "numero_documento": "12345678",
+            "contrasena_temporal": "Clave1234",
+            "contrasena_nueva": "Clave5678",
+            "confirmacion": "Clave5678",
+        },
+    )
     assert respuesta.status_code == 501
     assert respuesta.json() == {
         "error": {
