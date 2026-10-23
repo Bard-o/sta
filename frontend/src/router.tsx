@@ -2,6 +2,7 @@ import { createBrowserRouter } from "react-router";
 import { RequireRole, SoloRegistroPendiente, SoloVisitantes } from "@/auth/require-role";
 import { RUTA_PRIMER_INGRESO } from "@/auth/roles";
 import { AppLayout } from "@/layouts/app-layout";
+import { EditarVueloPage } from "@/pages/editar-vuelo";
 import { InicioPage } from "@/pages/inicio";
 import { InicioRolPage } from "@/pages/inicio-rol";
 import { LoginPage } from "@/pages/login";
@@ -15,6 +16,7 @@ import { RegistroPage } from "@/pages/registro";
 import { RestablecerContrasenaPage } from "@/pages/restablecer-contrasena";
 import { VerificarCorreoPage } from "@/pages/verificar-correo";
 import { VueloDetallePage } from "@/pages/vuelo-detalle";
+import { VuelosProgramadosPage } from "@/pages/vuelos-programados";
 
 export const router = createBrowserRouter([
   {
@@ -53,7 +55,9 @@ export const router = createBrowserRouter([
             children: [{ path: RUTA_PRIMER_INGRESO, element: <PrimerIngresoPage /> }],
           },
           { path: "/admin", element: <InicioRolPage /> },
+          { path: "/admin/vuelos", element: <VuelosProgramadosPage /> },
           { path: "/admin/vuelos/nuevo", element: <ProgramarVueloPage /> },
+          { path: "/admin/vuelos/:vueloId/editar", element: <EditarVueloPage /> },
         ],
       },
       {
