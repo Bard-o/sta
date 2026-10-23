@@ -40,6 +40,8 @@ class Usuario(TimestampMixin, Base):
     nombre_usuario: Mapped[str] = mapped_column(String(50), unique=True)
     # El root solo tiene identificador y contraseña (RF-01): por eso el correo es opcional.
     email: Mapped[str | None] = mapped_column(String(254))
+    # HU-07: correo nuevo que espera verificación; `email` sigue siendo el de la cuenta.
+    email_pendiente: Mapped[str | None] = mapped_column(String(254))
     password_hash: Mapped[str] = mapped_column(String(255))
     rol: Mapped[Rol] = mapped_column(
         Enum(

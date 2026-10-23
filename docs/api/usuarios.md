@@ -1,6 +1,6 @@
 # Módulo usuarios
 
-Dueño: Backend A. Requisitos: RF-01 a RF-11. Este archivo cubre el registro de clientes (RF-03, RF-04, HU-01), la verificación de correo (RF-05, HU-02), la sesión (RF-06, HU-03, HU-04), el restablecimiento de contraseña (RF-07, HU-05) y el cambio de contraseña (HU-06); el resto de endpoints del módulo se agregan aquí con sus issues. El contrato acordado de todo el módulo está en [iteracion-1.md](iteracion-1.md).
+Dueño: Backend A. Requisitos: RF-01 a RF-11. Este archivo cubre el registro de clientes (RF-03, RF-04, HU-01), la verificación de correo (RF-05, HU-02), la sesión (RF-06, HU-03, HU-04), el restablecimiento de contraseña (RF-07, HU-05), el cambio de contraseña (HU-06), el perfil (HU-07) y la desactivación de la cuenta (RF-10, HU-09); el resto de endpoints del módulo se agregan aquí con sus issues. El contrato acordado de todo el módulo está en [iteracion-1.md](iteracion-1.md).
 
 ## Registro de clientes
 
@@ -82,19 +82,21 @@ Entrada (`TokenEntrada`):
 - Es de un solo uso y vence a las 24 horas (SUP-19). Al usarlo, los demás tokens vigentes de la cuenta quedan invalidados.
 - Marca `email_verificado` como `true`, lo que habilita reservar, comprar y suscribirse a noticias.
 - No exige sesión: el enlace se puede abrir en otro dispositivo.
-- El cambio de correo desde el perfil (HU-07) reutiliza este endpoint; el correo pendiente se documenta con esa historia.
+- Si el token corresponde al correo pendiente de un cambio de perfil (HU-07), ese correo pasa a ser el de la cuenta, se limpia `email_pendiente` y queda verificado.
+- Si otra cuenta del mismo rol tomó ese correo entre el cambio de perfil y la verificación, responde `409 datos_duplicados` con `campos.email`.
 
 | HTTP | `codigo` | Cuándo |
 |---|---|---|
 | 400 | `enlace_invalido` | Token inexistente, vencido, ya usado o de otro correo. El frontend ofrece reenviar. |
+| 409 | `datos_duplicados` | El correo pendiente ya pertenece a otra cuenta del mismo rol. |
 | 422 | `datos_invalidos` | Falta `token` o está vacío. |
 
 ### `POST /api/v1/usuarios/me/verificacion/reenviar`
 
-Con sesión de cliente o administrador. Envía un enlace nuevo al correo vigente de la cuenta y responde `204` sin cuerpo. El root no puede usarlo.
+Con sesión de cliente o administrador. Envía un enlace nuevo al correo pendiente si hay un cambio de perfil sin verificar; si no, al correo vigente de la cuenta. Responde `204` sin cuerpo. El root no puede usarlo.
 
 - Reenviar invalida todos los enlaces vigentes anteriores de la cuenta.
-- Si el correo ya está verificado no hay nada pendiente que reenviar.
+- Si el correo ya está verificado y no hay un cambio pendiente, no hay nada que reenviar.
 - Si el correo no se puede enviar, el enlace queda creado igual y el fallo se anota en el log; el cliente puede volver a pedirlo.
 - El enlace tiene la misma vigencia de 24 horas y también es de un solo uso.
 
@@ -103,6 +105,78 @@ Con sesión de cliente o administrador. Envía un enlace nuevo al correo vigente
 | 409 | `correo_ya_verificado` | El correo ya está verificado (o la cuenta no tiene correo). |
 | 401 | `no_autenticado` | Sin sesión o sesión vencida. |
 | 403 | `sin_permiso` | El rol no es cliente ni administrador. |
+
+## Perfil
+
+### `GET /api/v1/usuarios/me/perfil`
+
+Con sesión de cliente o administrador. Devuelve `200 PerfilSalida`:
+
+```json
+{
+  "id": 12,
+  "nombre_usuario": "lauragomez",
+  "rol": "cliente",
+  "tipo_documento": "CC",
+  "numero_documento": "1088345921",
+  "nombres": "Laura",
+  "apellidos": "Gómez Ríos",
+  "fecha_nacimiento": "1995-03-14",
+  "lugar_nacimiento": "Pereira, Risaralda",
+  "direccion_facturacion": "Cra. 7 # 19-28, Pereira",
+  "genero": "femenino",
+  "email": "laura.gomez@correo.co",
+  "email_verificado": true,
+  "email_pendiente": null,
+  "telefono": "310 555 0192",
+  "imagen_url": null,
+  "suscrito_noticias": false
+}
+```
+
+- El root no tiene perfil (`403 sin_permiso`).
+- `email` es el correo vigente de la cuenta; `email_pendiente` es el correo nuevo que espera verificación (HU-07).
+- `imagen_url` es `null` sin imagen y `suscrito_noticias` es `false` para un administrador.
+- Un administrador que todavía no completó su registro (HU-12) no tiene perfil: `404 no_encontrado`.
+
+| HTTP | `codigo` | Cuándo |
+|---|---|---|
+| 401 | `no_autenticado` | Sin sesión o sesión vencida. |
+| 403 | `sin_permiso` | El rol es root. |
+| 404 | `no_encontrado` | La cuenta aún no tiene sus datos personales. |
+
+### `PUT /api/v1/usuarios/me/perfil`
+
+Con sesión de cliente o administrador. Actualiza los datos editables y devuelve `200 PerfilSalida` con el perfil ya guardado. Entrada (`PerfilEntrada`):
+
+```json
+{
+  "nombres": "Laura",
+  "apellidos": "Gómez Ríos",
+  "fecha_nacimiento": "1995-03-14",
+  "lugar_nacimiento": "Pereira, Risaralda",
+  "direccion_facturacion": "Cra. 7 # 19-28, Pereira",
+  "genero": "femenino",
+  "email": "laura.gomez@correo.co",
+  "telefono": "310 555 0192"
+}
+```
+
+- `tipo_documento`, `numero_documento` y `nombre_usuario` identifican la cuenta y no se editan: no hacen parte de `PerfilEntrada` y el servidor los ignora si llegan.
+- `fecha_nacimiento` no puede ser futura.
+- Un correo distinto del vigente queda en `email_pendiente` y se envía el enlace de HU-02 al correo nuevo; `email` sigue siendo el de la cuenta hasta verificarlo (SUP-42).
+- Un correo que ya usa otra cuenta del mismo rol, o que otra cuenta del mismo rol tiene pendiente, se rechaza con `409 datos_duplicados` en `campos.email`.
+- Guardar de nuevo el correo pendiente actualiza el resto de los datos sin enviar otro enlace; para pedir uno nuevo se usa `POST /usuarios/me/verificacion/reenviar`. Volver a escribir el correo vigente descarta el pendiente.
+- Un `email_verificado` que ya era `true` sigue siéndolo mientras el correo nuevo esté pendiente.
+
+| HTTP | `codigo` | `campos` | Cuándo |
+|---|---|---|---|
+| 409 | `datos_duplicados` | `email` | El correo pertenece a otra cuenta del mismo rol. |
+| 422 | `datos_invalidos` | `fecha_nacimiento` | La fecha es futura. |
+| 422 | `datos_invalidos` | otro campo | Formato inválido (`email`, `telefono`, `genero`, etc.). |
+| 401 | `no_autenticado` | | Sin sesión o sesión vencida. |
+| 403 | `sin_permiso` | | El rol es root. |
+| 404 | `no_encontrado` | | La cuenta aún no tiene sus datos personales. |
 
 ## Sesión
 
@@ -243,6 +317,59 @@ Entrada:
 | 422 | `datos_invalidos` | `contrasena_nueva` | No cumple la política de RNF-08. |
 | 422 | `datos_invalidos` | `confirmacion` | No coincide con la contraseña nueva. |
 | 401 | `no_autenticado` | | Sin sesión, token inválido o sesión vencida. |
+
+## Desactivación de cuenta
+
+### `GET /api/v1/usuarios/me/desactivacion`
+
+Con sesión de cliente. Indica si la cuenta se puede desactivar y, si no, qué compras o reservas
+activas en vuelos futuros lo impiden (HU-09, RF-10). La pantalla del perfil muestra el aviso y
+deshabilita el botón antes de intentarlo.
+
+```json
+{
+  "puede_desactivar": false,
+  "bloqueos": [
+    {
+      "tipo": "compra",
+      "codigo_reserva": "K7Q2MX",
+      "vuelo_id": 88,
+      "vuelo_codigo": "STA-00088",
+      "origen": "Bogotá",
+      "destino": "Madrid",
+      "salida": "2026-12-11T03:00:00Z"
+    }
+  ]
+}
+```
+
+- `tipo` es `compra` o `reserva`; `codigo_reserva` es `null` en una reserva.
+- `salida` va en ISO 8601 y UTC (RF-15).
+- Los bloqueos salen de `reservas.tiquetes_activos_futuros_de_cliente`. En la iteración 1
+  todavía no hay ventas, así que la lista siempre sale vacía.
+
+| HTTP | `codigo` | Cuándo |
+|---|---|---|
+| 401 | `no_autenticado` | Sin sesión o sesión vencida. |
+| 403 | `sin_permiso` | El rol no es cliente. |
+
+### `POST /api/v1/usuarios/me/desactivacion`
+
+Con sesión de cliente. Desactiva la cuenta y responde `204` sin cuerpo; la respuesta borra la
+cookie de sesión.
+
+- Es un borrado lógico (RF-10): la fila de `usuarios` queda con `activo: false` y se conservan
+  los datos personales, el histórico, las preferencias y el saldo del monedero.
+- Se cierran todas las sesiones abiertas de la cuenta y el siguiente inicio de sesión responde
+  `403 cuenta_inactiva`.
+- Antes de desactivar se consultan las compras y reservas activas en vuelos futuros; si hay
+  alguna, no se cambia nada.
+
+| HTTP | `codigo` | Cuándo |
+|---|---|---|
+| 409 | `tiquetes_activos` | Tiene compras o reservas activas en vuelos futuros: debe cancelarlas o esperar. |
+| 401 | `no_autenticado` | Sin sesión o sesión vencida. |
+| 403 | `sin_permiso` | El rol no es cliente. |
 
 ## Usuario root
 

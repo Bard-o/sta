@@ -13,7 +13,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.core.errors import AppError, DatosInvalidos, DemasiadosIntentos, NoAutenticado
+from app.core.errors import (
+    AppError,
+    DatosInvalidos,
+    DemasiadosIntentos,
+    NoAutenticado,
+    NoEncontrado,
+)
 from app.core.mail import enviar_correo
 from app.core.security import (
     MENSAJE_POLITICA_CONTRASENA,
@@ -22,8 +28,9 @@ from app.core.security import (
     hash_contrasena,
     verificar_contrasena,
 )
+from app.modules.reservas import service as reservas_service
 from app.modules.usuarios.models import TokenRestablecimiento, TokenVerificacion, Usuario
-from app.modules.usuarios.schemas import RegistroClienteEntrada
+from app.modules.usuarios.schemas import PerfilEntrada, PerfilSalida, RegistroClienteEntrada
 
 logger = logging.getLogger(__name__)
 
@@ -85,11 +92,22 @@ class CorreoYaVerificado(AppError):
     mensaje = "Tu correo ya está verificado."
 
 
+class TiquetesActivos(AppError):
+    """HU-09: el cliente tiene compras o reservas activas en vuelos futuros."""
+
+    status_code = 409
+    codigo = "tiquetes_activos"
+    mensaje = "Tienes compras o reservas activas en vuelos futuros."
+
+
 MENSAJES_DUPLICADO = {
     "nombre_usuario": "Ese nombre de usuario ya está en uso.",
     "email": "Ese correo ya está registrado en otra cuenta de cliente.",
     "numero_documento": "Ese número de documento ya está registrado en otra cuenta de cliente.",
 }
+
+# HU-07: el correo se comparte entre clientes y, por separado, entre administradores (SUP-18).
+MENSAJE_EMAIL_DUPLICADO = "Ese correo ya está registrado en otra cuenta."
 
 # Restricciones de la tabla usuarios que pueden saltar al registrar un cliente.
 _CAMPO_POR_RESTRICCION = {
@@ -386,27 +404,62 @@ def _crear_token_verificacion(db: Session, usuario_id: int, email: str) -> str:
     return token
 
 
-def enviar_verificacion(usuario: Usuario, email: str, token: str) -> None:
-    """Envía el enlace `/verificar-correo?token=…` (HU-02). Un fallo de SMTP no tumba el
-    registro: queda en el log y el cliente puede pedir el reenvío."""
+def _invalidar_tokens(db: Session, usuario_id: int, ahora: datetime) -> None:
+    """Marca como usados todos los enlaces de verificación vigentes de la cuenta."""
+    db.execute(
+        update(TokenVerificacion)
+        .where(
+            TokenVerificacion.usuario_id == usuario_id,
+            TokenVerificacion.usado_en.is_(None),
+        )
+        .values(usado_en=ahora)
+    )
+
+
+def enviar_verificacion(usuario: Usuario, email: str, token: str, *, cambio: bool = False) -> None:
+    """Envía el enlace `/verificar-correo?token=…` (HU-02, HU-07). Un fallo de SMTP no tumba
+    la operación: queda en el log y el usuario puede pedir el reenvío."""
     enlace = f"{get_settings().frontend_url}/verificar-correo?token={token}"
-    nombres = escape(usuario.nombres or usuario.nombre_usuario)
-    texto = (
-        f"Hola {usuario.nombres or usuario.nombre_usuario},\n\n"
-        "Gracias por registrarte en AVIANCO. Confirma tu correo con este enlace; "
-        f"vence en {HORAS_VERIFICACION} horas y sirve una sola vez:\n\n"
-        f"{enlace}\n\n"
-        "Si no creaste esta cuenta, ignora este mensaje.\n"
-    )
-    html = (
-        f"<p>Hola {nombres},</p>"
-        "<p>Gracias por registrarte en AVIANCO. Confirma tu correo con este enlace; "
-        f"vence en {HORAS_VERIFICACION} horas y sirve una sola vez.</p>"
-        f'<p><a href="{enlace}">Verificar mi correo</a></p>'
-        "<p>Si no creaste esta cuenta, ignora este mensaje.</p>"
-    )
+    nombre = usuario.nombres or usuario.nombre_usuario
+    nombres = escape(nombre)
+    if cambio:
+        asunto = "Confirma tu nuevo correo en AVIANCO"
+        texto = (
+            f"Hola {nombre},\n\n"
+            "Recibimos una solicitud para cambiar el correo de tu cuenta AVIANCO. "
+            f"Confirma el correo nuevo con este enlace; vence en {HORAS_VERIFICACION} horas "
+            "y sirve una sola vez. Mientras no lo confirmes, el correo anterior sigue siendo "
+            "el de la cuenta:\n\n"
+            f"{enlace}\n\n"
+            "Si no solicitaste el cambio, ignora este mensaje.\n"
+        )
+        html = (
+            f"<p>Hola {nombres},</p>"
+            "<p>Recibimos una solicitud para cambiar el correo de tu cuenta AVIANCO. "
+            f"Confirma el correo nuevo con este enlace; vence en {HORAS_VERIFICACION} horas "
+            "y sirve una sola vez. Mientras no lo confirmes, el correo anterior sigue siendo "
+            "el de la cuenta.</p>"
+            f'<p><a href="{enlace}">Confirmar mi nuevo correo</a></p>'
+            "<p>Si no solicitaste el cambio, ignora este mensaje.</p>"
+        )
+    else:
+        asunto = "Confirma tu correo en AVIANCO"
+        texto = (
+            f"Hola {nombre},\n\n"
+            "Gracias por registrarte en AVIANCO. Confirma tu correo con este enlace; "
+            f"vence en {HORAS_VERIFICACION} horas y sirve una sola vez:\n\n"
+            f"{enlace}\n\n"
+            "Si no creaste esta cuenta, ignora este mensaje.\n"
+        )
+        html = (
+            f"<p>Hola {nombres},</p>"
+            "<p>Gracias por registrarte en AVIANCO. Confirma tu correo con este enlace; "
+            f"vence en {HORAS_VERIFICACION} horas y sirve una sola vez.</p>"
+            f'<p><a href="{enlace}">Verificar mi correo</a></p>'
+            "<p>Si no creaste esta cuenta, ignora este mensaje.</p>"
+        )
     try:
-        enviar_correo(email, "Confirma tu correo en AVIANCO", texto, html)
+        enviar_correo(email, asunto, texto, html)
     except Exception:
         # Sin el correo en el log: es un dato personal (Ley 1581 de 2012).
         logger.exception("No se pudo enviar el correo de verificación al usuario %s", usuario.id)
@@ -419,10 +472,9 @@ def verificar_correo(db: Session, token: str) -> None:
     """Marca como verificado el correo del enlace (HU-02, RF-05).
 
     El token es de un solo uso y vence en 24 horas (SUP-19). Al usarlo se invalidan los
-    demás tokens vigentes de la cuenta. Lanza EnlaceInvalido si no existe, venció, ya se usó
-    o no corresponde al correo vigente.
-
-    El intercambio de un correo pendiente (HU-07) se implementa con esa historia.
+    demás tokens vigentes de la cuenta. Si el enlace es de un cambio de perfil (HU-07), el
+    correo pendiente pasa a ser el de la cuenta. Lanza EnlaceInvalido si no existe, venció,
+    ya se usó o no corresponde al correo vigente ni al pendiente.
     """
     ahora = datetime.now(UTC)
     fila = db.scalar(
@@ -434,7 +486,15 @@ def verificar_correo(db: Session, token: str) -> None:
         raise EnlaceInvalido()
 
     usuario = db.get(Usuario, fila.usuario_id)
-    if usuario is None or usuario.email is None or usuario.email != fila.email:
+    if usuario is None or usuario.email is None:
+        raise EnlaceInvalido()
+
+    if fila.email == usuario.email:
+        pass
+    elif fila.email == usuario.email_pendiente:
+        usuario.email = fila.email
+        usuario.email_pendiente = None
+    else:
         raise EnlaceInvalido()
 
     fila.usado_en = ahora
@@ -448,37 +508,152 @@ def verificar_correo(db: Session, token: str) -> None:
         )
         .values(usado_en=ahora)
     )
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        # Carrera: otra cuenta tomó ese correo entre el PUT del perfil y la verificación.
+        db.rollback()
+        raise DatosDuplicados(campos={"email": MENSAJE_EMAIL_DUPLICADO}) from exc
 
 
 def reenviar_verificacion(db: Session, usuario_id: int) -> None:
-    """Envía un enlace nuevo e invalida los anteriores (HU-02).
+    """Envía un enlace nuevo e invalida los anteriores (HU-02, HU-07).
 
-    El destino es el correo vigente de la cuenta. Si ya está verificado no hay nada que
-    reenviar y responde CorreoYaVerificado. El correo de un cambio de perfil (HU-07) se
-    agregará con esa historia.
+    El destino es el correo pendiente si hay un cambio de perfil sin verificar; si no, el
+    correo vigente. Si el correo vigente ya está verificado y no hay pendiente, responde
+    CorreoYaVerificado.
     """
     usuario = db.get(Usuario, usuario_id)
     if usuario is None:
         raise NoAutenticado()
 
-    email = usuario.email
-    if email is None or usuario.email_verificado:
+    email = usuario.email_pendiente or usuario.email
+    if email is None or (usuario.email_pendiente is None and usuario.email_verificado):
         raise CorreoYaVerificado()
 
     ahora = datetime.now(UTC)
-    db.execute(
-        update(TokenVerificacion)
-        .where(
-            TokenVerificacion.usuario_id == usuario.id,
-            TokenVerificacion.usado_en.is_(None),
-        )
-        .values(usado_en=ahora)
-    )
+    _invalidar_tokens(db, usuario.id, ahora)
     token = _crear_token_verificacion(db, usuario.id, email)
     db.commit()
 
-    enviar_verificacion(usuario, email, token)
+    enviar_verificacion(usuario, email, token, cambio=usuario.email_pendiente is not None)
+
+
+# ---------- Perfil (HU-07) ----------
+
+
+def _validar_datos_editables(datos: PerfilEntrada) -> None:
+    """RF-08: la fecha de nacimiento no puede ser futura."""
+    if datos.fecha_nacimiento > date.today():
+        raise DatosInvalidos(
+            campos={"fecha_nacimiento": "La fecha de nacimiento no puede ser futura."}
+        )
+
+
+def _email_en_uso(db: Session, email: str, rol: Rol, excluir_id: int) -> bool:
+    """RF-04, SUP-18: el correo es único dentro de cada rol, también si está pendiente."""
+    return (
+        db.scalar(
+            select(Usuario.id).where(
+                Usuario.rol == rol,
+                Usuario.id != excluir_id,
+                or_(Usuario.email == email, Usuario.email_pendiente == email),
+            )
+        )
+        is not None
+    )
+
+
+def _perfil_salida(usuario: Usuario) -> PerfilSalida:
+    """Arma la respuesta del perfil. `NoEncontrado` si la cuenta aún no tiene sus datos.
+
+    Un administrador con el registro incompleto (HU-12) no tiene perfil todavía; el bloqueo
+    de `core` (HU-12) lo atiende antes de llegar aquí.
+    """
+    if (
+        usuario.email is None
+        or usuario.tipo_documento is None
+        or usuario.numero_documento is None
+        or usuario.nombres is None
+        or usuario.apellidos is None
+        or usuario.fecha_nacimiento is None
+        or usuario.lugar_nacimiento is None
+        or usuario.direccion_facturacion is None
+        or usuario.genero is None
+    ):
+        raise NoEncontrado()
+
+    return PerfilSalida(
+        id=usuario.id,
+        nombre_usuario=usuario.nombre_usuario,
+        rol=usuario.rol.value,
+        tipo_documento=usuario.tipo_documento,
+        numero_documento=usuario.numero_documento,
+        nombres=usuario.nombres,
+        apellidos=usuario.apellidos,
+        fecha_nacimiento=usuario.fecha_nacimiento,
+        lugar_nacimiento=usuario.lugar_nacimiento,
+        direccion_facturacion=usuario.direccion_facturacion,
+        genero=usuario.genero,
+        email=usuario.email,
+        email_verificado=usuario.email_verificado,
+        email_pendiente=usuario.email_pendiente,
+        telefono=usuario.telefono,
+        # HU-07: la imagen de perfil llega con su issue (#29).
+        imagen_url=None,
+        # HU-08: la suscripción a noticias llega con su issue (#30). Para admin siempre false.
+        suscrito_noticias=False,
+    )
+
+
+def obtener_perfil(db: Session, usuario_id: int) -> PerfilSalida:
+    """Perfil del cliente o administrador de la sesión (HU-07)."""
+    usuario = db.get(Usuario, usuario_id)
+    if usuario is None:
+        raise NoAutenticado()
+    return _perfil_salida(usuario)
+
+
+def actualizar_perfil(db: Session, usuario_id: int, datos: PerfilEntrada) -> PerfilSalida:
+    """Actualiza los datos editables del perfil (HU-07, RF-08).
+
+    El documento y el nombre de usuario no se tocan porque no están en `PerfilEntrada`. Un
+    correo distinto del vigente queda en `email_pendiente` y se envía el enlace de HU-02 al
+    correo nuevo; el anterior sigue siendo el de la cuenta hasta verificarlo (SUP-42).
+    """
+    usuario = db.get(Usuario, usuario_id)
+    if usuario is None:
+        raise NoAutenticado()
+
+    _validar_datos_editables(datos)
+    email = datos.email.strip().lower()
+    token: str | None = None
+
+    if email != usuario.email:
+        if email != usuario.email_pendiente:
+            if _email_en_uso(db, email, usuario.rol, usuario.id):
+                raise DatosDuplicados(campos={"email": MENSAJE_EMAIL_DUPLICADO})
+            usuario.email_pendiente = email
+            _invalidar_tokens(db, usuario.id, datetime.now(UTC))
+            token = _crear_token_verificacion(db, usuario.id, email)
+    elif usuario.email_pendiente is not None:
+        # Volvió a escribir el correo vigente: se descarta el cambio pendiente.
+        usuario.email_pendiente = None
+        _invalidar_tokens(db, usuario.id, datetime.now(UTC))
+
+    usuario.nombres = datos.nombres.strip()
+    usuario.apellidos = datos.apellidos.strip()
+    usuario.fecha_nacimiento = datos.fecha_nacimiento
+    usuario.lugar_nacimiento = datos.lugar_nacimiento.strip()
+    usuario.direccion_facturacion = datos.direccion_facturacion.strip()
+    usuario.genero = datos.genero
+    usuario.telefono = datos.telefono.strip() if datos.telefono else None
+    db.commit()
+
+    if token is not None:
+        enviar_verificacion(usuario, email, token, cambio=True)
+
+    return _perfil_salida(usuario)
 
 
 # ---------- Restablecimiento de contraseña (HU-05) ----------
@@ -622,6 +797,38 @@ def confirmar_restablecimiento(
             TokenRestablecimiento.usado_en.is_(None),
         )
         .values(usado_en=ahora)
+    )
+    db.commit()
+
+
+# ---------- Desactivación de cuenta (HU-09) ----------
+
+
+def bloqueos_de_desactivacion(db: Session, usuario_id: int) -> list[reservas_service.TiqueteActivo]:
+    """Compras y reservas activas del cliente en vuelos futuros (HU-09, RF-10).
+
+    La regla vive en reservas; esta función solo la expone para el aviso del perfil. En la
+    iteración 1 todavía no hay ventas y la lista siempre sale vacía.
+    """
+    return reservas_service.tiquetes_activos_futuros_de_cliente(db, usuario_id)
+
+
+def desactivar_cuenta(db: Session, usuario_id: int) -> None:
+    """Desactiva la cuenta del cliente y cierra todas sus sesiones (HU-09, RF-10).
+
+    Es un borrado lógico: los datos, el histórico y el saldo se conservan. Lanza
+    TiquetesActivos si el cliente tiene compras o reservas activas en vuelos futuros.
+    La cookie la borra el router.
+    """
+    if bloqueos_de_desactivacion(db, usuario_id):
+        raise TiquetesActivos()
+
+    # `activo` ya invalida la sesión en core/auth; `version_sesion` cierra además todas las
+    # sesiones abiertas en otros dispositivos.
+    db.execute(
+        update(Usuario)
+        .where(Usuario.id == usuario_id)
+        .values(activo=False, version_sesion=Usuario.version_sesion + 1)
     )
     db.commit()
 
