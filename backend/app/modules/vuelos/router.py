@@ -21,6 +21,7 @@ from app.modules.vuelos.schemas import (
     Capacidad,
     Ciudad,
     CiudadResumen,
+    ClaseDetalle,
     EstadoPromocion,
     EstadoVuelo,
     FechaOmitida,
@@ -31,6 +32,7 @@ from app.modules.vuelos.schemas import (
     PasajerosVueloSalida,
     Promocion,
     PromocionEntrada,
+    PromocionResumen,
     SerieVistaPrevia,
     SerieVuelosEntrada,
     SerieVuelosSalida,
@@ -251,7 +253,39 @@ def _a_vuelo(vuelo: VueloModelo, origen: CiudadModelo, destino: CiudadModelo) ->
 @vuelos.get("/{vuelo_id}", response_model=VueloDetalle, responses=respuestas_error(404))
 def obtener_vuelo(vuelo_id: int, db: DbSession) -> VueloDetalle:
     """Detalle público de un vuelo, con precio vigente y disponibilidad por clase (HU-19)."""
-    raise NoImplementado()
+    return _a_vuelo_detalle(service.obtener_vuelo_detalle(db, vuelo_id))
+
+
+def _a_vuelo_detalle(detalle: service.VueloDetalleGestion) -> VueloDetalle:
+    """Los datos del vuelo más el precio y las sillas de cada clase (HU-19)."""
+    base = _a_vuelo(detalle.vuelo, detalle.origen, detalle.destino)
+    return VueloDetalle(
+        **base.model_dump(),
+        economica=_a_clase_detalle(detalle.economica),
+        primera=_a_clase_detalle(detalle.primera),
+    )
+
+
+def _a_clase_detalle(clase: service.ClaseDetalleVuelo) -> ClaseDetalle:
+    promocion = clase.promocion
+    return ClaseDetalle(
+        precio_base=clase.precio_base,
+        precio_vigente=clase.precio,
+        promocion=(
+            None
+            if promocion is None
+            else PromocionResumen(
+                id=promocion.id,
+                porcentaje=promocion.porcentaje,
+                clases=promocion.clases,
+                inicio=promocion.inicio,
+                fin=promocion.fin,
+                estado=promocion.estado,
+            )
+        ),
+        disponibles=clase.disponibles,
+        agotada=clase.agotada,
+    )
 
 
 @vuelos.get("/{vuelo_id}/gestion", response_model=VueloAdmin, responses=respuestas_error(404))
