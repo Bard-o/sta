@@ -331,7 +331,7 @@ export interface paths {
     };
     /**
      * Listar Administradores
-     * @description Administradores con su estado (HU-11).
+     * @description Administradores con su estado, del más reciente al más antiguo (HU-10, HU-11).
      */
     get: operations["listar_administradores"];
     put?: never;

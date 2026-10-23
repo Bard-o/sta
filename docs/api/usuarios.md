@@ -1,6 +1,6 @@
 # Módulo usuarios
 
-Dueño: Backend A. Requisitos: RF-01 a RF-11 y RF-56. Este archivo cubre el registro de clientes (RF-03, RF-04, HU-01), la verificación de correo (RF-05, HU-02), la sesión (RF-06, HU-03, HU-04), el restablecimiento de contraseña (RF-07, HU-05), el cambio de contraseña (HU-06), el perfil (HU-07), la suscripción a noticias (RF-09, HU-08), la desactivación de la cuenta (RF-10, HU-09) y los destinatarios del correo de noticias (RF-56); el resto de endpoints del módulo se agregan aquí con sus issues. El contrato acordado de todo el módulo está en [iteracion-1.md](iteracion-1.md).
+Dueño: Backend A. Requisitos: RF-01 a RF-11 y RF-56. Este archivo cubre el registro de clientes (RF-03, RF-04, HU-01), la verificación de correo (RF-05, HU-02), la sesión (RF-06, HU-03, HU-04), el restablecimiento de contraseña (RF-07, HU-05), el cambio de contraseña (HU-06), el perfil (HU-07), la suscripción a noticias (RF-09, HU-08), la desactivación de la cuenta (RF-10, HU-09), la creación y el listado de administradores (RF-02, HU-10) y los destinatarios del correo de noticias (RF-56); el resto de endpoints del módulo se agregan aquí con sus issues. El contrato acordado de todo el módulo está en [iteracion-1.md](iteracion-1.md).
 
 ## Registro de clientes
 
@@ -462,6 +462,67 @@ Sin sesión (público). Da de baja al cliente con el token del enlace «cancelar
 ### `suscriptores_noticias(db)`
 
 Función pública que llama `noticias` para enviar el correo de cada noticia nueva (RF-56). Devuelve los clientes activos, con el correo verificado y suscritos, cada uno con `usuario_id`, `email`, `nombres` y `token_baja` para el enlace de baja. No hace commit: se ejecuta dentro de la transacción de quien llama. Los administradores, el root, las cuentas inactivas y los clientes sin verificar o no suscritos quedan fuera.
+
+## Administradores
+
+Solo el root crea y lista administradores (RF-01, RF-02, Apéndice B). El listado también lo usa
+HU-11 para mostrar el estado de cada uno.
+
+### `GET /api/v1/administradores`
+
+Con sesión de root. Devuelve `200 AdministradorSalida[]`, del más reciente al más antiguo
+(`creado_en` descendente y, en empate, `id` descendente). No incluye al root ni a los clientes.
+
+```json
+[
+  {
+    "id": 5,
+    "nombre_usuario": "jtorres",
+    "nombres": null,
+    "apellidos": null,
+    "estado": "registro_incompleto",
+    "creado_en": "2026-09-29T21:40:00Z"
+  }
+]
+```
+
+- `estado`: `activo`, `inactivo` o `registro_incompleto`. Un administrador desactivado se
+  muestra siempre como `inactivo`; sus banderas guardan el estado al que vuelve cuando se
+  reactive (HU-11).
+
+| HTTP | `codigo` | Cuándo |
+|---|---|---|
+| 401 | `no_autenticado` | Sin sesión o sesión vencida. |
+| 403 | `sin_permiso` | El rol no es root. |
+
+### `POST /api/v1/administradores`
+
+Con sesión de root. Crea un administrador con una contraseña temporal y responde
+`201 AdministradorSalida`.
+
+```json
+{ "nombre_usuario": "jtorres", "contrasena_temporal": "Temporal123" }
+```
+
+- El administrador nace activo y con `estado: "registro_incompleto"`: no tiene datos personales
+  ni correo hasta que complete su registro (HU-12). Su primer ingreso solo le permite completar
+  los datos y cambiar la contraseña.
+- `nombre_usuario`: 3 a 50 caracteres entre letras, números, punto, guion y guion bajo; es
+  único en todo el sistema sin distinguir mayúsculas, así que tampoco puede repetir el del root
+  ni el de un cliente (SUP-18).
+- `contrasena_temporal`: cumple la política de RNF-08 (8 caracteres o más, con al menos una
+  letra y un número) y se guarda con Argon2id.
+- El cuerpo no tiene campo `rol` y el rol se fija en el servidor: no existe forma de crear un
+  segundo root (RF-01).
+- La creación queda en la auditoría como `administrador.crear` con el nombre de usuario, el rol
+  y el estado; la contraseña nunca se registra (RF-26, RNF-08).
+
+| HTTP | `codigo` | Cuándo |
+|---|---|---|
+| 409 | `datos_duplicados` | `campos.nombre_usuario`: ya pertenece a otra cuenta. |
+| 422 | `datos_invalidos` | `campos.contrasena_temporal` (política) o `campos.nombre_usuario` (formato). |
+| 401 | `no_autenticado` | Sin sesión o sesión vencida. |
+| 403 | `sin_permiso` | El rol no es root. |
 
 ## Usuario root
 

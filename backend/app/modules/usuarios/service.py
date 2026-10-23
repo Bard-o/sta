@@ -30,9 +30,17 @@ from app.core.security import (
     hash_contrasena,
     verificar_contrasena,
 )
+from app.modules.auditoria import service as auditoria_service
 from app.modules.reservas import service as reservas_service
 from app.modules.usuarios.models import TokenRestablecimiento, TokenVerificacion, Usuario
-from app.modules.usuarios.schemas import PerfilEntrada, PerfilSalida, RegistroClienteEntrada
+from app.modules.usuarios.schemas import (
+    AdministradorEntrada,
+    AdministradorSalida,
+    EstadoAdministrador,
+    PerfilEntrada,
+    PerfilSalida,
+    RegistroClienteEntrada,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -383,9 +391,7 @@ def _campos_duplicados(
 ) -> dict[str, str]:
     """RF-04, SUP-18: el nombre de usuario es único global; correo y documento, por rol."""
     campos: dict[str, str] = {}
-    if db.scalar(
-        select(Usuario.id).where(func.lower(Usuario.nombre_usuario) == nombre_usuario.lower())
-    ):
+    if _nombre_usuario_en_uso(db, nombre_usuario):
         campos["nombre_usuario"] = MENSAJES_DUPLICADO["nombre_usuario"]
     if db.scalar(select(Usuario.id).where(Usuario.rol == Rol.CLIENTE, Usuario.email == email)):
         campos["email"] = MENSAJES_DUPLICADO["email"]
@@ -398,6 +404,18 @@ def _campos_duplicados(
     ):
         campos["numero_documento"] = MENSAJES_DUPLICADO["numero_documento"]
     return campos
+
+
+def _nombre_usuario_en_uso(db: Session, nombre_usuario: str) -> bool:
+    """SUP-18: el nombre de usuario es único en todo el sistema, sin distinguir mayúsculas."""
+    return (
+        db.scalar(
+            select(Usuario.id).where(
+                func.lower(Usuario.nombre_usuario) == nombre_usuario.strip().lower()
+            )
+        )
+        is not None
+    )
 
 
 def _campo_por_restriccion(exc: IntegrityError) -> dict[str, str]:
@@ -925,6 +943,105 @@ def asegurar_root(db: Session, nombre_usuario: str, contrasena: str) -> bool:
         return False
     crear_usuario(db, nombre_usuario=nombre_usuario, contrasena=contrasena, rol=Rol.ROOT)
     return True
+
+
+# ---------- Administradores (HU-10, HU-11) ----------
+
+
+def _estado_administrador(usuario: Usuario) -> EstadoAdministrador:
+    """Estado que ve el root (HU-11).
+
+    Una cuenta desactivada se muestra como inactiva y guarda en sus banderas el estado al que
+    vuelve cuando se reactive: activo o registro incompleto (HU-11, HU-12).
+    """
+    if not usuario.activo:
+        return "inactivo"
+    if not usuario.registro_completo:
+        return "registro_incompleto"
+    return "activo"
+
+
+def _administrador_salida(usuario: Usuario) -> AdministradorSalida:
+    return AdministradorSalida(
+        id=usuario.id,
+        nombre_usuario=usuario.nombre_usuario,
+        nombres=usuario.nombres,
+        apellidos=usuario.apellidos,
+        estado=_estado_administrador(usuario),
+        creado_en=usuario.creado_en,
+    )
+
+
+def _detalle_administrador(usuario: Usuario) -> dict[str, object]:
+    """Copia para la auditoría, sin la contraseña (RF-26, RNF-08)."""
+    return {
+        "nombre_usuario": usuario.nombre_usuario,
+        "rol": usuario.rol.value,
+        "estado": _estado_administrador(usuario),
+    }
+
+
+def crear_administrador(
+    db: Session, datos: AdministradorEntrada, *, usuario_id: int
+) -> AdministradorSalida:
+    """HU-10, RF-02: el root crea un administrador con una contraseña temporal.
+
+    Nace activo y con el registro incompleto: en su primer ingreso solo puede completar sus
+    datos y cambiar la contraseña (HU-12). La creación y la auditoría entran en la misma
+    transacción (RF-26, RNF-17). Lanza DatosInvalidos o DatosDuplicados.
+    """
+    nombre_usuario = datos.nombre_usuario.strip()
+    if not cumple_politica_contrasena(datos.contrasena_temporal):
+        raise DatosInvalidos(campos={"contrasena_temporal": MENSAJE_POLITICA_CONTRASENA})
+    if _nombre_usuario_en_uso(db, nombre_usuario):
+        raise DatosDuplicados(campos={"nombre_usuario": MENSAJES_DUPLICADO["nombre_usuario"]})
+
+    # RF-01: el rol no se elige en el cuerpo; este endpoint nunca crea otro root.
+    administrador = Usuario(
+        nombre_usuario=nombre_usuario,
+        email=None,
+        email_verificado=False,
+        password_hash=hash_contrasena(datos.contrasena_temporal),
+        rol=Rol.ADMIN,
+        registro_completo=False,
+        activo=True,
+    )
+    db.add(administrador)
+    try:
+        db.flush()  # asigna el id antes de auditar
+        auditoria_service.registrar(
+            db,
+            usuario_id=usuario_id,
+            accion="administrador.crear",
+            entidad="usuario",
+            entidad_id=administrador.id,
+            despues=_detalle_administrador(administrador),
+        )
+        db.commit()
+    except IntegrityError as exc:
+        # Carrera entre la verificación anterior y el commit: la restricción única decide.
+        db.rollback()
+        if _nombre_usuario_en_uso(db, nombre_usuario):
+            raise DatosDuplicados(
+                campos={"nombre_usuario": MENSAJES_DUPLICADO["nombre_usuario"]}
+            ) from exc
+        raise
+    except Exception:
+        # RNF-17: si falla la auditoría no queda el administrador.
+        db.rollback()
+        raise
+
+    return _administrador_salida(administrador)
+
+
+def listar_administradores(db: Session) -> list[AdministradorSalida]:
+    """Administradores con su estado, del más reciente al más antiguo (HU-10, HU-11)."""
+    administradores = db.scalars(
+        select(Usuario)
+        .where(Usuario.rol == Rol.ADMIN)
+        .order_by(Usuario.creado_en.desc(), Usuario.id.desc())
+    )
+    return [_administrador_salida(administrador) for administrador in administradores]
 
 
 @dataclass(frozen=True)
