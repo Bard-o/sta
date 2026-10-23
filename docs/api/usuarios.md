@@ -524,6 +524,43 @@ Con sesión de root. Crea un administrador con una contraseña temporal y respon
 | 401 | `no_autenticado` | Sin sesión o sesión vencida. |
 | 403 | `sin_permiso` | El rol no es root. |
 
+### `POST /api/v1/administradores/{admin_id}/desactivar`
+
+Con sesión de root. Desactiva un administrador (borrado lógico) y responde `200
+AdministradorSalida` con `estado: "inactivo"`.
+
+- Conserva los datos y las acciones pasadas del administrador (RF-02, RF-26).
+- Cierra todas sus sesiones abiertas: la siguiente petición con esa cookie responde `401
+  no_autenticado` y el siguiente inicio de sesión `403 cuenta_inactiva`.
+- La bandera `registro_completo` no cambia: al reactivarlo vuelve al estado que tenía, `activo`
+  o `registro_incompleto`.
+- Queda en la auditoría como `administrador.desactivar` con el estado anterior (`activo` o
+  `registro_incompleto`) y el nuevo (`inactivo`).
+
+| HTTP | `codigo` | Cuándo |
+|---|---|---|
+| 404 | `no_encontrado` | El id no es de un administrador (no existe, es un cliente o es el root). |
+| 409 | `estado_invalido` | El administrador ya está inactivo. |
+| 401 | `no_autenticado` | Sin sesión o sesión vencida. |
+| 403 | `sin_permiso` | El rol no es root. |
+
+### `POST /api/v1/administradores/{admin_id}/reactivar`
+
+Con sesión de root. Reactiva un administrador desactivado y responde `200 AdministradorSalida`
+con su estado anterior: `activo` o `registro_incompleto`.
+
+- Queda en la auditoría como `administrador.reactivar` con `inactivo` como estado anterior y el
+  estado recuperado como nuevo (RF-26).
+- La reactivación no reabre las sesiones que se cerraron al desactivarlo: el administrador debe
+  iniciar sesión otra vez.
+
+| HTTP | `codigo` | Cuándo |
+|---|---|---|
+| 404 | `no_encontrado` | El id no es de un administrador (no existe, es un cliente o es el root). |
+| 409 | `estado_invalido` | El administrador sigue activo (incluido `registro_incompleto`). |
+| 401 | `no_autenticado` | Sin sesión o sesión vencida. |
+| 403 | `sin_permiso` | El rol no es root. |
+
 ## Usuario root
 
 `python -m app.seed` (lo corre el contenedor del backend al arrancar) crea el root con `ROOT_USERNAME` y `ROOT_PASSWORD` del `.env` si todavía no existe un usuario con rol root. Si ya existe, no lo modifica: el root cambia su contraseña desde su sesión (RF-01).

@@ -273,7 +273,7 @@ def crear_administrador(
 )
 def desactivar_administrador(admin_id: int, usuario: Root, db: DbSession) -> AdministradorSalida:
     """Desactiva un administrador y cierra sus sesiones (HU-11)."""
-    raise NoImplementado()
+    return service.desactivar_administrador(db, admin_id, usuario_id=usuario.id)
 
 
 @administradores.post(
@@ -283,7 +283,7 @@ def desactivar_administrador(admin_id: int, usuario: Root, db: DbSession) -> Adm
 )
 def reactivar_administrador(admin_id: int, usuario: Root, db: DbSession) -> AdministradorSalida:
     """Reactiva un administrador desactivado (HU-11)."""
-    raise NoImplementado()
+    return service.reactivar_administrador(db, admin_id, usuario_id=usuario.id)
 
 
 @administradores.post("/me/registro", response_model=UsuarioSalida, responses=respuestas_error(409))
