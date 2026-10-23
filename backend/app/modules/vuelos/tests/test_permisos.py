@@ -63,3 +63,30 @@ def test_programar_vuelo_solo_para_administradores(
 
     assert respuesta.status_code == 403
     assert respuesta.json()["error"]["codigo"] == "sin_permiso"
+
+
+@pytest.mark.parametrize(
+    "ruta",
+    ["/api/v1/vuelos/recurrentes", "/api/v1/vuelos/recurrentes/vista-previa"],
+)
+def test_serie_sin_sesion_responde_no_autenticado(client: TestClient, ruta: str):
+    """HU-14 · RNF-10: sin sesión, los endpoints de la serie responden 401 no_autenticado."""
+    respuesta = client.post(ruta, json={})
+
+    assert respuesta.status_code == 401
+    assert respuesta.json()["error"]["codigo"] == "no_autenticado"
+
+
+@pytest.mark.parametrize(
+    "ruta",
+    ["/api/v1/vuelos/recurrentes", "/api/v1/vuelos/recurrentes/vista-previa"],
+)
+@pytest.mark.parametrize("rol", [Rol.CLIENTE, Rol.ROOT])
+def test_serie_solo_para_administradores(
+    client_como: Callable[[Rol], TestClient], rol: Rol, ruta: str
+):
+    """HU-14 · RNF-10: un cliente o root recibe 403 sin_permiso en los endpoints de la serie."""
+    respuesta = client_como(rol).post(ruta, json={})
+
+    assert respuesta.status_code == 403
+    assert respuesta.json()["error"]["codigo"] == "sin_permiso"
