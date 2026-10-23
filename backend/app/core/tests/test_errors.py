@@ -1,8 +1,7 @@
-from collections.abc import Callable
-
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.core.security import Rol
+from app.core.errors import NoImplementado, registrar_manejadores
 
 
 def test_ruta_inexistente_usa_el_formato_unico(client: TestClient):
@@ -30,10 +29,16 @@ def test_health(client: TestClient):
     assert respuesta.json() == {"estado": "ok", "base_de_datos": "ok"}
 
 
-def test_un_stub_del_contrato_responde_501_con_el_formato_unico(
-    client_como: Callable[[Rol], TestClient],
-):
-    respuesta = client_como(Rol.ADMIN).get("/api/v1/vuelos/1/pasajeros")
+def test_no_implementado_responde_501_con_el_formato_unico():
+    # Ya no quedan stubs en el contrato, así que se prueba con una ruta propia del test.
+    app = FastAPI()
+    registrar_manejadores(app)
+
+    @app.get("/stub")
+    def stub() -> None:
+        raise NoImplementado()
+
+    respuesta = TestClient(app).get("/stub")
     assert respuesta.status_code == 501
     assert respuesta.json() == {
         "error": {
