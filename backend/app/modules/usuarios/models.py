@@ -99,6 +99,13 @@ class Usuario(TimestampMixin, Base):
     # HU-07: media type de la imagen guardada (image/png, image/jpeg); None si no hay imagen.
     imagen_tipo: Mapped[str | None] = mapped_column(String(11))
 
+    # HU-08, RF-09: suscripción al correo de noticias. Nace desactivada.
+    suscrito_noticias: Mapped[bool] = mapped_column(Boolean, server_default=false())
+    # Token del enlace «cancelar suscripción» (HU-08, RF-56): no vence. Se guarda en claro
+    # porque `suscriptores_noticias` lo devuelve para incluirlo en cada correo; solo permite
+    # darse de baja.
+    token_baja: Mapped[str | None] = mapped_column(String(64), unique=True)
+
 
 class TokenVerificacion(TimestampMixin, Base):
     """Enlace de verificación de correo (HU-01, HU-02, HU-07).

@@ -101,6 +101,14 @@ class CorreoYaVerificado(AppError):
     mensaje = "Tu correo ya está verificado."
 
 
+class CorreoNoVerificado(AppError):
+    """HU-08: sin el correo verificado no se puede suscribir a noticias."""
+
+    status_code = 403
+    codigo = "correo_no_verificado"
+    mensaje = "Verifica tu correo para suscribirte a noticias."
+
+
 class TiquetesActivos(AppError):
     """HU-09: el cliente tiene compras o reservas activas en vuelos futuros."""
 
@@ -928,9 +936,70 @@ class SuscriptorNoticias:
     token_baja: str
 
 
+def _nuevo_token_baja() -> str:
+    """Token del enlace de baja (HU-08): no vence y solo permite cancelar la suscripción."""
+    return secrets.token_urlsafe(32)
+
+
+def cambiar_suscripcion(db: Session, usuario_id: int, *, noticias: bool) -> bool:
+    """Suscribe o da de baja al cliente del correo de noticias (HU-08, RF-09).
+
+    Suscribirse exige el correo verificado; darse de baja siempre se permite. El token de
+    baja se crea con la primera suscripción y no se rota: los enlaces de correos anteriores
+    siguen sirviendo. El cambio aplica desde el siguiente envío.
+    """
+    usuario = db.get(Usuario, usuario_id)
+    if usuario is None:
+        raise NoAutenticado()
+    if noticias and not usuario.email_verificado:
+        raise CorreoNoVerificado()
+
+    if noticias and usuario.token_baja is None:
+        usuario.token_baja = _nuevo_token_baja()
+    usuario.suscrito_noticias = noticias
+    db.commit()
+    return usuario.suscrito_noticias
+
+
+def dar_baja_con_token(db: Session, token: str) -> None:
+    """Da de baja al cliente con el token del enlace del correo (HU-08, RF-56).
+
+    No exige sesión y el token no vence. Un token inexistente responde EnlaceInvalido. Es
+    idempotente: volver a abrir el enlace de una cuenta ya dada de baja también responde 204.
+    """
+    usuario = db.scalar(select(Usuario).where(Usuario.token_baja == token).with_for_update())
+    if usuario is None:
+        raise EnlaceInvalido()
+
+    usuario.suscrito_noticias = False
+    db.commit()
+
+
 def suscriptores_noticias(db: Session) -> list[SuscriptorNoticias]:
     """Clientes activos, con el correo verificado y suscritos a noticias (RF-09, RF-56).
 
-    La usa noticias para enviar el correo de cada noticia nueva.
+    La usa noticias para enviar el correo de cada noticia nueva. No hace commit: se ejecuta
+    dentro de la transacción de quien llama. `nombres` cae al nombre de usuario si faltara.
     """
-    raise NotImplementedError("HU-08")
+    usuarios = db.scalars(
+        select(Usuario)
+        .where(
+            Usuario.rol == Rol.CLIENTE,
+            Usuario.activo.is_(True),
+            Usuario.email_verificado.is_(True),
+            Usuario.suscrito_noticias.is_(True),
+            Usuario.email.is_not(None),
+            # Invariante: toda suscripción activa nace con token de baja.
+            Usuario.token_baja.is_not(None),
+        )
+        .order_by(Usuario.id)
+    ).all()
+    return [
+        SuscriptorNoticias(
+            usuario_id=usuario.id,
+            email=usuario.email,
+            nombres=usuario.nombres or usuario.nombre_usuario,
+            token_baja=usuario.token_baja,
+        )
+        for usuario in usuarios
+    ]
