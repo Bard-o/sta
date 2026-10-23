@@ -49,7 +49,8 @@ def test_matriz_de_permisos(
 ):
     cliente_http = client_como(rol) if rol else client
     for metodo, ruta, permitidos in ENDPOINTS:
-        estado = cliente_http.request(metodo, ruta, json={}).status_code
+        respuesta = cliente_http.request(metodo, ruta, json={})
+        estado = respuesta.status_code
         if permitidos is VISITANTE:
             permitido = rol is None
         elif rol is None:
@@ -60,4 +61,6 @@ def test_matriz_de_permisos(
             assert estado not in (401, 403), f"{metodo} {ruta} como {rol}: {estado}"
         else:
             esperado = 401 if rol is None else 403
+            codigo = "no_autenticado" if rol is None else "sin_permiso"
             assert estado == esperado, f"{metodo} {ruta} como {rol}: {estado}"
+            assert respuesta.json()["error"]["codigo"] == codigo, f"{metodo} {ruta} como {rol}"
