@@ -303,7 +303,33 @@ def crear_promocion(
     vuelo_id: int, datos: PromocionEntrada, usuario: Admin, db: DbSession
 ) -> Promocion:
     """Crea una promoción, publica su noticia y la audita (HU-17, RF-23)."""
-    raise NoImplementado()
+    try:
+        creada = service.crear_promocion(db, vuelo_id, datos, usuario_id=usuario.id)
+        db.commit()
+    except Exception:
+        # RNF-17: si falla la noticia o la auditoría no queda nada de la promoción.
+        db.rollback()
+        raise
+    return _a_promocion(creada)
+
+
+def _a_promocion(gestion: service.PromocionGestion) -> Promocion:
+    """Forma pública de la promoción, con el vuelo y su estado efectivo (HU-17)."""
+    promocion = gestion.promocion
+    return Promocion(
+        id=promocion.id,
+        porcentaje=promocion.porcentaje,
+        clases=gestion.clases,
+        inicio=promocion.inicio,
+        fin=promocion.fin,
+        estado=gestion.estado,
+        vuelo_id=gestion.vuelo.id,
+        vuelo_codigo=gestion.vuelo.codigo,
+        origen=CiudadResumen.model_validate(gestion.origen),
+        destino=CiudadResumen.model_validate(gestion.destino),
+        salida=gestion.vuelo.salida,
+        creada_en=promocion.creada_en,
+    )
 
 
 # ---------- Promociones ----------
@@ -320,7 +346,15 @@ def listar_promociones(
     por_pagina: PorPagina = 20,
 ) -> PaginaPromociones:
     """Promociones de todos los vuelos, las más recientes primero (HU-17)."""
-    raise NoImplementado()
+    pagina_promociones = service.listar_promociones(
+        db, estado=estado, pagina=pagina, por_pagina=por_pagina
+    )
+    return PaginaPromociones(
+        items=[_a_promocion(item) for item in pagina_promociones.items],
+        total=pagina_promociones.total,
+        pagina=pagina_promociones.pagina,
+        por_pagina=pagina_promociones.por_pagina,
+    )
 
 
 router = APIRouter()

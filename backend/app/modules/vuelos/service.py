@@ -2,24 +2,35 @@
 
 Concentra la lógica que comparten programar, editar y las series: catálogo de ciudades,
 rutas permitidas, conversión de la hora local del origen a UTC, llegada, tipo y capacidad
-(RF-12 a RF-16). Ninguna función hace commit: van en la transacción de quien llama.
+(RF-12 a RF-16); y las promociones por clase con su precio vigente (RF-23, RF-24, RF-25).
+Ninguna función hace commit: van en la transacción de quien llama.
 """
 
 import unicodedata
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Literal
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import case, func, literal, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.errors import Conflicto, DatosInvalidos, NoEncontrado
+from app.core.planificador import planificador, registrar_tarea
 from app.modules.auditoria import service as auditoria_service
 from app.modules.noticias import service as noticias_service
 from app.modules.reservas import service as reservas_service
-from app.modules.vuelos.models import Ciudad, EstadoVuelo, TipoVuelo, Vuelo
-from app.modules.vuelos.schemas import SerieVuelosEntrada, VueloEntrada
+from app.modules.vuelos.models import (
+    Ciudad,
+    Clase,
+    EstadoPromocion,
+    EstadoVuelo,
+    Promocion,
+    TipoVuelo,
+    Vuelo,
+)
+from app.modules.vuelos.schemas import PromocionEntrada, SerieVuelosEntrada, VueloEntrada
 
 # RF-13: nacional 25 + 125; internacional 50 + 200.
 _CAPACIDADES: dict[TipoVuelo, tuple[int, int]] = {
@@ -47,6 +58,14 @@ _MOTIVO_DUPLICADO = "Ya existe un vuelo igual."
 _MOTIVO_CERRADO = "El vuelo ya se realizó o está cancelado."
 _MOTIVO_SALIO = "El vuelo ya salió."
 _MOTIVO_VENTAS = "El vuelo tiene reservas activas o compras."
+# Promociones (HU-17, RF-23): textos del contrato y del mock del frontend.
+_MENSAJE_PROMOCION_DUPLICADA = (
+    "Este vuelo ya tiene una promoción para esa clase. Las promociones no se acumulan."
+)
+_MENSAJE_CLASE_OCUPADA = "Ya hay una promoción vigente o programada para esta clase."
+# El estado efectivo se deriva de las fechas salvo cuando ya es terminal (RF-23).
+_ESTADOS_TERMINALES: tuple[EstadoPromocion, ...] = ("vencida", "agotada", "cancelada")
+_NOMBRE_TAREA_VENCER = "vuelos.vencer_promociones"
 
 
 class RutaNoPermitida(DatosInvalidos):
@@ -75,6 +94,13 @@ class VueloCerrado(Conflicto):
 
     codigo = "vuelo_cerrado"
     mensaje = "El vuelo ya salió, se realizó o está cancelado."
+
+
+class PromocionDuplicada(Conflicto):
+    """RF-23: el vuelo ya tiene una promoción activa para alguna de las clases pedidas."""
+
+    codigo = "promocion_duplicada"
+    mensaje = _MENSAJE_PROMOCION_DUPLICADA
 
 
 @dataclass(frozen=True)
@@ -122,6 +148,47 @@ class PaginaVuelosGestion:
     """Página del listado del administrador (HU-15, HU-16, HU-18)."""
 
     items: list[VueloGestion]
+    total: int
+    pagina: int
+    por_pagina: int
+
+
+@dataclass(frozen=True)
+class PromocionVigente:
+    """Datos mínimos de la promoción que aplica hoy a una clase (RF-24)."""
+
+    id: int
+    porcentaje: int
+    inicio: datetime
+    fin: datetime
+
+
+@dataclass(frozen=True)
+class PrecioVigente:
+    """Precio base y precio con descuento de una clase (RF-24)."""
+
+    precio_base: int
+    precio: int
+    promocion: PromocionVigente | None
+
+
+@dataclass(frozen=True)
+class PromocionGestion:
+    """Promoción guardada con los datos del vuelo y su estado efectivo (HU-17)."""
+
+    promocion: Promocion
+    vuelo: Vuelo
+    origen: Ciudad
+    destino: Ciudad
+    clases: list[Clase]
+    estado: EstadoPromocion
+
+
+@dataclass(frozen=True)
+class PaginaPromocionesGestion:
+    """Página del listado de promociones (HU-17)."""
+
+    items: list[PromocionGestion]
     total: int
     pagina: int
     por_pagina: int
@@ -579,15 +646,20 @@ def _cambios(nuevo: dict[str, object], anterior: dict[str, object]) -> dict[str,
 
 def _vuelo_publicado(vuelo: Vuelo, calculado: VueloCalculado) -> noticias_service.VueloPublicado:
     """Copia del vuelo para la noticia, con la imagen de la ciudad destino (RF-22)."""
+    return _publicado_de(vuelo, calculado.origen, calculado.destino)
+
+
+def _publicado_de(vuelo: Vuelo, origen: Ciudad, destino: Ciudad) -> noticias_service.VueloPublicado:
+    """Copia del vuelo para una noticia, con la imagen de la ciudad destino (RF-22, RF-25)."""
     return noticias_service.VueloPublicado(
         vuelo_id=vuelo.id,
         codigo=vuelo.codigo,
-        origen=_ciudad_publicada(calculado.origen),
-        destino=_ciudad_publicada(calculado.destino),
+        origen=_ciudad_publicada(origen),
+        destino=_ciudad_publicada(destino),
         salida=vuelo.salida,
         precio_economica=vuelo.precio_economica,
         precio_primera=vuelo.precio_primera,
-        imagen_url=calculado.destino.imagen_url,
+        imagen_url=destino.imagen_url,
     )
 
 
@@ -744,3 +816,354 @@ def _existe_vuelo(
     if excepto_id is not None:
         consulta = consulta.where(Vuelo.id != excepto_id)
     return db.scalar(consulta.limit(1)) is not None
+
+
+# ---------- Promociones (HU-17, RF-23 a RF-26) ----------
+
+
+def estado_de(promocion: Promocion, *, ahora: datetime | None = None) -> EstadoPromocion:
+    """Estado efectivo de la promoción (RF-23).
+
+    Los estados terminales guardados (`vencida`, `agotada`, `cancelada`) ganan; el resto se
+    deriva de `inicio` y `fin` con la hora inyectada. Así un `inicio` pasado queda vigente
+    de inmediato y una promoción vence a su hora aunque el planificador no haya corrido.
+    """
+    if promocion.estado in _ESTADOS_TERMINALES:
+        return promocion.estado
+    momento = ahora or datetime.now(UTC)
+    if momento < promocion.inicio:
+        return "programada"
+    if momento < promocion.fin:
+        return "vigente"
+    return "vencida"
+
+
+def clases_de(promocion: Promocion) -> list[Clase]:
+    """Clases a las que aplica la promoción, en el orden del contrato (SUP-05)."""
+    return [clase for clase in ("economica", "primera") if _aplica(promocion, clase)]
+
+
+def precio_con_descuento(precio_base: int, porcentaje: int) -> int:
+    """RF-24: el precio con descuento se redondea hacia abajo al peso entero."""
+    return precio_base * (100 - porcentaje) // 100
+
+
+def precio_vigente(
+    db: Session, vuelo_id: int, clase: Clase, *, ahora: datetime | None = None
+) -> PrecioVigente:
+    """Precio base y precio con descuento de una clase (RF-24).
+
+    Es la función que usarán la búsqueda y el detalle público: un tiquete anterior conserva
+    el precio que pagó porque el precio base del vuelo nunca se modifica.
+    """
+    vuelo = _vuelo_o_no_encontrado(db, vuelo_id)
+    base = vuelo.precio_economica if clase == "economica" else vuelo.precio_primera
+    promocion = _promocion_vigente(db, vuelo_id, clase, ahora=ahora)
+    if promocion is None:
+        return PrecioVigente(precio_base=base, precio=base, promocion=None)
+    return PrecioVigente(
+        precio_base=base,
+        precio=precio_con_descuento(base, promocion.porcentaje),
+        promocion=PromocionVigente(
+            id=promocion.id,
+            porcentaje=promocion.porcentaje,
+            inicio=promocion.inicio,
+            fin=promocion.fin,
+        ),
+    )
+
+
+def crear_promocion(
+    db: Session,
+    vuelo_id: int,
+    datos: PromocionEntrada,
+    *,
+    usuario_id: int,
+    ahora: datetime | None = None,
+) -> PromocionGestion:
+    """Crea una promoción, publica su noticia y la audita (HU-17, RF-23, RF-25, RF-26).
+
+    No hace commit: el commit y el rollback son de quien llama. Bloquea el vuelo para que dos
+    creaciones simultáneas no acumulen promociones en la misma clase (RF-23). Si las clases
+    ya no tienen sillas disponibles, la promoción nace `agotada`.
+    """
+    momento = ahora or datetime.now(UTC)
+    vuelo = _vuelo_bloqueado(db, vuelo_id)
+    _validar_promocion(vuelo, datos, momento)
+    # Libera el índice único de las que ya vencieron pero el planificador aún no marcó.
+    # El flush es necesario porque la sesión no hace autoflush: el índice parcial todavía
+    # vería la promoción vieja como programada al insertar la nueva.
+    _vencer_promociones(db, momento, vuelo_id=vuelo.id)
+    db.flush()
+
+    clases = _clases_de_entrada(datos.clases)
+    if _clases_ocupadas(db, vuelo.id, clases, ahora=momento):
+        raise PromocionDuplicada(campos={"clases": _MENSAJE_CLASE_OCUPADA})
+
+    promocion = Promocion(
+        vuelo_id=vuelo.id,
+        porcentaje=datos.porcentaje,
+        aplica_economica="economica" in clases,
+        aplica_primera="primera" in clases,
+        inicio=datos.inicio.astimezone(UTC),
+        fin=datos.fin.astimezone(UTC),
+        estado="programada",
+        creada_en=momento,
+    )
+    db.add(promocion)
+    db.flush()
+
+    origen, destino = _obtener_ciudades(db, vuelo.origen_codigo, vuelo.destino_codigo)
+    noticias_service.publicar_noticia_promocion(
+        db, _promocion_publicada(promocion, vuelo, origen, destino)
+    )
+    auditoria_service.registrar(
+        db,
+        usuario_id=usuario_id,
+        accion="promocion.crear",
+        entidad="promocion",
+        entidad_id=promocion.id,
+        despues=_detalle_auditoria_promocion(promocion),
+    )
+    # Caso borde: si las clases ya están agotadas, no se ofrece una promoción falsa.
+    marcar_promociones_agotadas(db, vuelo.id, ahora=momento)
+    return _armar_promocion(promocion, vuelo, origen, destino, ahora=momento)
+
+
+def listar_promociones(
+    db: Session,
+    *,
+    estado: EstadoPromocion | None = None,
+    pagina: int = 1,
+    por_pagina: int = 20,
+    ahora: datetime | None = None,
+) -> PaginaPromocionesGestion:
+    """Promociones de todos los vuelos, de la más reciente a la más antigua (HU-17).
+
+    `estado` filtra por el estado efectivo calculado en la propia consulta, así una
+    promoción que acaba de vencer no espera al planificador. No hace commit.
+    """
+    momento = ahora or datetime.now(UTC)
+    filtros = []
+    if estado is not None:
+        filtros.append(_estado_efectivo_sql(momento) == estado)
+    total = db.scalar(select(func.count()).select_from(Promocion).where(*filtros)) or 0
+    promociones = list(
+        db.scalars(
+            select(Promocion)
+            .where(*filtros)
+            .order_by(Promocion.creada_en.desc(), Promocion.id.desc())
+            .offset((pagina - 1) * por_pagina)
+            .limit(por_pagina)
+        )
+    )
+    vuelos = _vuelos_por_id(db, {promocion.vuelo_id for promocion in promociones})
+    ciudades = _ciudades_por_codigo(
+        db,
+        {
+            codigo
+            for vuelo in vuelos.values()
+            for codigo in (vuelo.origen_codigo, vuelo.destino_codigo)
+        },
+    )
+    items = [
+        _armar_promocion(
+            promocion,
+            vuelos[promocion.vuelo_id],
+            ciudades[vuelos[promocion.vuelo_id].origen_codigo],
+            ciudades[vuelos[promocion.vuelo_id].destino_codigo],
+            ahora=momento,
+        )
+        for promocion in promociones
+    ]
+    return PaginaPromocionesGestion(items=items, total=total, pagina=pagina, por_pagina=por_pagina)
+
+
+def marcar_promociones_agotadas(
+    db: Session, vuelo_id: int, *, ahora: datetime | None = None
+) -> list[int]:
+    """Marca agotadas las promociones cuyas clases ya no tienen sillas (RF-23).
+
+    Si la promoción aplica a dos clases, sigue disponible mientras quede al menos una silla
+    en cualquiera de ellas. La llama `reservas` al vender la última silla; también la usa la
+    creación para el caso en que la clase ya estaba llena. No hace commit.
+    """
+    momento = ahora or datetime.now(UTC)
+    vuelo = _vuelo_o_no_encontrado(db, vuelo_id)
+    ocupacion = reservas_service.ocupacion_de_vuelos(db, [vuelo.id]).get(
+        vuelo.id, reservas_service.OcupacionVuelo()
+    )
+    disponibles: dict[Clase, int] = {
+        "economica": (
+            vuelo.capacidad_economica
+            - ocupacion.vendidas_economica
+            - ocupacion.reservadas_economica
+        ),
+        "primera": (
+            vuelo.capacidad_primera - ocupacion.vendidas_primera - ocupacion.reservadas_primera
+        ),
+    }
+    agotadas: list[int] = []
+    for promocion in _promociones_activas(db, vuelo.id, ahora=momento):
+        if all(disponibles[clase] <= 0 for clase in clases_de(promocion)):
+            promocion.estado = "agotada"
+            noticias_service.terminar_noticia_promocion(db, promocion.id, "agotada")
+            agotadas.append(promocion.id)
+    return agotadas
+
+
+def vencer_promociones(db: Session, ahora: datetime) -> int:
+    """Pasa a `vencida` toda promoción cuyo fin ya pasó (RF-23, RNF-18).
+
+    La ejecuta el planificador cada minuto; procesa todo lo vencido hasta `ahora` y es
+    idempotente. No hace commit: el planificador confirma la transacción.
+    """
+    return _vencer_promociones(db, ahora)
+
+
+def _vencer_promociones(db: Session, ahora: datetime, *, vuelo_id: int | None = None) -> int:
+    consulta = select(Promocion).where(Promocion.estado == "programada", Promocion.fin <= ahora)
+    if vuelo_id is not None:
+        consulta = consulta.where(Promocion.vuelo_id == vuelo_id)
+    promociones = list(db.scalars(consulta))
+    for promocion in promociones:
+        promocion.estado = "vencida"
+    return len(promociones)
+
+
+def _validar_promocion(vuelo: Vuelo, datos: PromocionEntrada, momento: datetime) -> None:
+    """RF-23: solo vuelos programados que no han salido, con fin futuro y posterior al inicio."""
+    if vuelo.estado != "programado" or vuelo.salida <= momento:
+        raise VueloCerrado()
+    if datos.fin <= datos.inicio:
+        raise DatosInvalidos(campos={"fin": "El fin debe ser posterior al inicio."})
+    if datos.fin <= momento:
+        raise DatosInvalidos(campos={"fin": "El fin debe ser una fecha futura."})
+
+
+def _vuelo_bloqueado(db: Session, vuelo_id: int) -> Vuelo:
+    """Vuelo con lock de fila: serializa las creaciones de promociones del mismo vuelo."""
+    vuelo = db.scalar(select(Vuelo).where(Vuelo.id == vuelo_id).with_for_update())
+    if vuelo is None:
+        raise NoEncontrado("El vuelo no existe.")
+    return vuelo
+
+
+def _promociones_activas(
+    db: Session, vuelo_id: int, *, ahora: datetime | None = None
+) -> list[Promocion]:
+    """Promociones programadas o vigentes del vuelo, sin las que ya vencieron por fecha."""
+    momento = ahora or datetime.now(UTC)
+    promociones = db.scalars(
+        select(Promocion).where(Promocion.vuelo_id == vuelo_id, Promocion.estado == "programada")
+    )
+    return [
+        promocion
+        for promocion in promociones
+        if estado_de(promocion, ahora=momento) in ("programada", "vigente")
+    ]
+
+
+def _clases_ocupadas(
+    db: Session, vuelo_id: int, clases: Sequence[Clase], *, ahora: datetime
+) -> bool:
+    """RF-23: ¿alguna de las clases pedidas ya tiene una promoción activa?"""
+    pedidas = set(clases)
+    return any(
+        pedidas.intersection(clases_de(promocion))
+        for promocion in _promociones_activas(db, vuelo_id, ahora=ahora)
+    )
+
+
+def _promocion_vigente(
+    db: Session, vuelo_id: int, clase: Clase, *, ahora: datetime | None = None
+) -> Promocion | None:
+    momento = ahora or datetime.now(UTC)
+    aplica = Promocion.aplica_economica if clase == "economica" else Promocion.aplica_primera
+    promociones = db.scalars(
+        select(Promocion).where(
+            Promocion.vuelo_id == vuelo_id,
+            Promocion.estado == "programada",
+            aplica.is_(True),
+        )
+    )
+    for promocion in promociones:
+        if estado_de(promocion, ahora=momento) == "vigente":
+            return promocion
+    return None
+
+
+def _estado_efectivo_sql(ahora: datetime) -> object:
+    """El mismo cálculo de `estado_de`, en SQL, para filtrar y paginar en la base."""
+    return case(
+        (Promocion.estado.in_(_ESTADOS_TERMINALES), Promocion.estado),
+        (Promocion.inicio > ahora, literal("programada")),
+        (Promocion.fin > ahora, literal("vigente")),
+        else_=literal("vencida"),
+    )
+
+
+def _aplica(promocion: Promocion, clase: Clase) -> bool:
+    return promocion.aplica_economica if clase == "economica" else promocion.aplica_primera
+
+
+def _clases_de_entrada(clases: Sequence[Clase]) -> list[Clase]:
+    """Quita clases repetidas y las deja en el orden del contrato."""
+    return [clase for clase in ("economica", "primera") if clase in clases]
+
+
+def _armar_promocion(
+    promocion: Promocion,
+    vuelo: Vuelo,
+    origen: Ciudad,
+    destino: Ciudad,
+    *,
+    ahora: datetime | None = None,
+) -> PromocionGestion:
+    return PromocionGestion(
+        promocion=promocion,
+        vuelo=vuelo,
+        origen=origen,
+        destino=destino,
+        clases=clases_de(promocion),
+        estado=estado_de(promocion, ahora=ahora),
+    )
+
+
+def _promocion_publicada(
+    promocion: Promocion, vuelo: Vuelo, origen: Ciudad, destino: Ciudad
+) -> noticias_service.PromocionPublicada:
+    """Copia de la promoción para la noticia y el carrusel (RF-25)."""
+    return noticias_service.PromocionPublicada(
+        promocion_id=promocion.id,
+        vuelo=_publicado_de(vuelo, origen, destino),
+        porcentaje=promocion.porcentaje,
+        clases=tuple(clases_de(promocion)),
+        inicio=promocion.inicio,
+        fin=promocion.fin,
+    )
+
+
+def _detalle_auditoria_promocion(promocion: Promocion) -> dict[str, object]:
+    """Copia serializable de la promoción para la auditoría (RF-26)."""
+    return {
+        "vuelo_id": promocion.vuelo_id,
+        "porcentaje": promocion.porcentaje,
+        "clases": clases_de(promocion),
+        "inicio": promocion.inicio.isoformat(),
+        "fin": promocion.fin.isoformat(),
+        "estado": promocion.estado,
+    }
+
+
+def _vuelos_por_id(db: Session, vuelo_ids: set[int]) -> dict[int, Vuelo]:
+    """Los vuelos de la página en una sola consulta, sin N+1."""
+    if not vuelo_ids:
+        return {}
+    return {vuelo.id: vuelo for vuelo in db.scalars(select(Vuelo).where(Vuelo.id.in_(vuelo_ids)))}
+
+
+# El planificador importa los services para que registren sus tareas (HU-18). La guarda evita
+# el error de nombre repetido cuando un test reimporta el módulo para comprobar la carga.
+if _NOMBRE_TAREA_VENCER not in planificador.tareas:
+    registrar_tarea(_NOMBRE_TAREA_VENCER, vencer_promociones, cada=timedelta(minutes=1))
