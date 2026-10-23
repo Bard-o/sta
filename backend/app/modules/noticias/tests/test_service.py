@@ -1,6 +1,6 @@
 """Funciones públicas de noticias (HU-19, RF-22, RF-25, RF-55, RF-56, RNF-17)."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import event, select
@@ -9,7 +9,15 @@ from sqlalchemy.orm import Session
 from app.modules.noticias import service
 from app.modules.noticias.models import Noticia
 from app.modules.noticias.service import CiudadPublicada
-from app.modules.noticias.tests.fabricas import promocion_publicada, vuelo_publicado
+from app.modules.noticias.tests.fabricas import (
+    PUBLICADA_EN,
+    guardar_noticia,
+    guardar_promocion,
+    promocion_publicada,
+    vuelo_publicado,
+)
+
+AHORA = PUBLICADA_EN
 
 
 def _noticias(db: Session) -> list[Noticia]:
@@ -256,3 +264,220 @@ def test_retirar_y_terminar_no_fallan_si_no_hay_noticias(db: Session):
     service.terminar_noticia_promocion(db, 999, "cancelada")
 
     assert _noticias(db) == []
+
+
+# ---------- Consulta pública (HU-19, RF-22, RF-25, RF-55) ----------
+
+
+def test_listar_noticias_incluye_las_no_vigentes_de_la_mas_reciente_a_la_mas_antigua(db: Session):
+    """HU-19 · RF-55: el listado trae vigentes y no vigentes, de la más reciente a la más vieja."""
+    reciente = guardar_noticia(db, publicada_en=AHORA - timedelta(hours=1))
+    antigua = guardar_noticia(
+        db, vuelo_id=77, publicada_en=AHORA - timedelta(days=2), vigente=False
+    )
+
+    pagina = service.listar_noticias(db, ahora=AHORA)
+
+    assert [noticia.id for noticia in pagina.items] == [reciente.id, antigua.id]
+    assert pagina.total == 2
+    assert pagina.pagina == 1
+    assert pagina.por_pagina == 10
+    assert pagina.items[1].vigente is False
+
+
+def test_listar_noticias_pagina_y_cuenta_el_total(db: Session):
+    """HU-19 · RF-55: `total` cuenta todas y la página devuelve solo su tramo."""
+    creadas = [
+        guardar_noticia(db, vuelo_id=100 + indice, publicada_en=AHORA - timedelta(minutes=indice))
+        for indice in range(12)
+    ]
+
+    segunda = service.listar_noticias(db, pagina=2, por_pagina=10, ahora=AHORA)
+
+    assert segunda.total == 12
+    assert segunda.pagina == 2
+    assert segunda.por_pagina == 10
+    assert [noticia.id for noticia in segunda.items] == [creadas[10].id, creadas[11].id]
+
+
+def test_listar_noticias_desempata_por_id_desc(db: Session):
+    """HU-19: dos noticias publicadas en el mismo instante mantienen un orden estable."""
+    primera = guardar_noticia(db, publicada_en=AHORA)
+    segunda = guardar_noticia(db, vuelo_id=77, publicada_en=AHORA)
+
+    pagina = service.listar_noticias(db, ahora=AHORA)
+
+    assert [noticia.id for noticia in pagina.items] == [segunda.id, primera.id]
+
+
+@pytest.mark.parametrize(
+    ("inicio", "fin", "estado", "vigente"),
+    [
+        (AHORA + timedelta(hours=1), AHORA + timedelta(hours=2), "programada", False),
+        (AHORA, AHORA + timedelta(hours=1), "vigente", True),
+        (AHORA - timedelta(hours=1), AHORA + timedelta(seconds=1), "vigente", True),
+        (AHORA - timedelta(hours=1), AHORA, "vencida", False),
+    ],
+)
+def test_el_estado_de_la_promocion_se_deriva_de_las_fechas(
+    db: Session, inicio: datetime, fin: datetime, estado: str, vigente: bool
+):
+    """HU-19 · RF-25: programada antes de `inicio`, vigente hasta `fin` y vencida al llegar."""
+    guardar_promocion(db, promocion_inicio=inicio, promocion_fin=fin)
+
+    (noticia,) = service.listar_noticias(db, ahora=AHORA).items
+
+    assert noticia.promocion is not None
+    assert noticia.promocion.estado == estado
+    assert noticia.vigente is vigente
+
+
+@pytest.mark.parametrize("estado", ["agotada", "cancelada"])
+def test_una_promocion_terminada_conserva_su_estado_guardado(db: Session, estado: str):
+    """HU-19 · RF-25: agotada o cancelada no es vigente aunque sus fechas sigan corriendo."""
+    guardar_promocion(db, vigente=False, promocion_estado=estado)
+
+    (noticia,) = service.listar_noticias(db, ahora=AHORA).items
+
+    assert noticia.promocion is not None
+    assert noticia.promocion.estado == estado
+    assert noticia.vigente is False
+    assert service.carrusel(db, ahora=AHORA) == []
+
+
+def test_el_carrusel_pone_las_promociones_vigentes_antes_que_los_vuelos(db: Session):
+    """HU-19 · RF-22 · RF-25: primero las promociones y luego los vuelos, aunque el vuelo sea
+    más reciente."""
+    vuelo = guardar_noticia(db, vuelo_id=90, publicada_en=AHORA + timedelta(minutes=1))
+    promocion = guardar_promocion(db, vuelo_id=91, promocion_id=1)
+
+    carrusel = service.carrusel(db, ahora=AHORA)
+
+    assert [noticia.id for noticia in carrusel] == [promocion.id, vuelo.id]
+    assert [noticia.tipo for noticia in carrusel] == ["promocion", "vuelo"]
+
+
+def test_el_carrusel_muestra_como_maximo_diez(db: Session):
+    """HU-19 · SUP-06: con más de 10 vigentes se muestran solo las 10 más recientes."""
+    promociones = [
+        guardar_promocion(
+            db,
+            vuelo_id=200 + indice,
+            promocion_id=300 + indice,
+            publicada_en=AHORA - timedelta(minutes=indice),
+        )
+        for indice in range(12)
+    ]
+
+    carrusel = service.carrusel(db, ahora=AHORA)
+
+    assert len(carrusel) == 10
+    assert [noticia.id for noticia in carrusel] == [promocion.id for promocion in promociones[:10]]
+
+
+def test_el_carrusel_muestra_cada_vuelo_una_sola_vez(db: Session):
+    """HU-19 · SUP-06 · SUP-41: un vuelo con promoción vigente aparece una sola vez, con ella."""
+    guardar_noticia(db, vuelo_id=76, publicada_en=AHORA - timedelta(hours=2))
+    promocion = guardar_promocion(db, vuelo_id=76, publicada_en=AHORA - timedelta(hours=1))
+
+    carrusel = service.carrusel(db, ahora=AHORA)
+
+    assert [noticia.id for noticia in carrusel] == [promocion.id]
+    assert carrusel[0].tipo == "promocion"
+    assert carrusel[0].vuelo_id == 76
+
+
+def test_dos_promociones_vigentes_del_mismo_vuelo_aparecen_una_sola_vez(db: Session):
+    """HU-19 · SUP-41: si el vuelo tiene dos promociones vigentes, se queda la más reciente."""
+    guardar_promocion(
+        db,
+        vuelo_id=76,
+        promocion_id=1,
+        publicada_en=AHORA - timedelta(hours=2),
+        promocion_aplica_economica=True,
+        promocion_aplica_primera=False,
+    )
+    reciente = guardar_promocion(
+        db,
+        vuelo_id=76,
+        promocion_id=2,
+        publicada_en=AHORA - timedelta(hours=1),
+        promocion_aplica_economica=False,
+        promocion_aplica_primera=True,
+    )
+
+    carrusel = service.carrusel(db, ahora=AHORA)
+
+    assert [noticia.id for noticia in carrusel] == [reciente.id]
+
+
+def test_si_la_promocion_esta_programada_el_vuelo_sigue_en_el_carrusel(db: Session):
+    """HU-19 · RF-25: la promoción programada no destaca todavía, pero el vuelo sigue visible."""
+    vuelo = guardar_noticia(db, vuelo_id=76, publicada_en=AHORA - timedelta(hours=2))
+    guardar_promocion(
+        db,
+        vuelo_id=76,
+        publicada_en=AHORA - timedelta(hours=1),
+        promocion_inicio=AHORA + timedelta(hours=1),
+        promocion_fin=AHORA + timedelta(days=1),
+    )
+
+    carrusel = service.carrusel(db, ahora=AHORA)
+
+    assert [noticia.id for noticia in carrusel] == [vuelo.id]
+    assert carrusel[0].tipo == "vuelo"
+
+
+def test_el_carrusel_excluye_promociones_vencidas_y_retiradas(db: Session):
+    """HU-19 · RF-25: una promoción vencida por fecha o retirada no aparece en el carrusel."""
+    guardar_promocion(
+        db,
+        vuelo_id=76,
+        promocion_id=1,
+        publicada_en=AHORA - timedelta(hours=2),
+        promocion_inicio=AHORA - timedelta(days=2),
+        promocion_fin=AHORA - timedelta(days=1),
+    )
+    guardar_promocion(
+        db,
+        vuelo_id=77,
+        promocion_id=2,
+        publicada_en=AHORA - timedelta(hours=1),
+        vigente=False,
+        promocion_estado="agotada",
+    )
+
+    assert service.carrusel(db, ahora=AHORA) == []
+
+
+def test_los_precios_de_la_promocion_se_redondean_hacia_abajo(db: Session):
+    """HU-19 · RF-24: el precio con descuento se redondea hacia abajo al peso."""
+    guardar_promocion(
+        db,
+        precio_economica=999_999,
+        promocion_porcentaje=30,
+        promocion_aplica_economica=True,
+        promocion_aplica_primera=True,
+    )
+
+    (noticia,) = service.listar_noticias(db, ahora=AHORA).items
+
+    assert noticia.promocion is not None
+    assert noticia.promocion.precio_economica == 699_999
+    assert noticia.promocion.precio_primera == 3_150_000
+
+
+def test_la_promocion_solo_calcula_el_precio_de_la_clase_a_la_que_aplica(db: Session):
+    """HU-19 · RF-23: la clase sin descuento viaja como `null`."""
+    guardar_promocion(
+        db,
+        promocion_aplica_economica=False,
+        promocion_aplica_primera=True,
+    )
+
+    (noticia,) = service.listar_noticias(db, ahora=AHORA).items
+
+    assert noticia.promocion is not None
+    assert noticia.promocion.clases == ["primera"]
+    assert noticia.promocion.precio_economica is None
+    assert noticia.promocion.precio_primera == 3_150_000
