@@ -179,6 +179,28 @@ describe("Menú de cada rol (HU-03)", () => {
   });
 });
 
+describe("Enlace a Mi perfil (HU-07)", () => {
+  it.each([
+    ["cliente", CLIENTE, "/cliente"],
+    ["administrador", ADMIN, "/admin"],
+    ["root", ROOT, "/root"],
+  ])("el nombre del %s en el menú lleva a su perfil o cuenta", async (_rol, usuario, inicio) => {
+    responderApi({ "GET /api/v1/auth/me": sesionDe(usuario) });
+    renderRutas(rutas, inicio);
+
+    const enlace = await screen.findByRole("link", { name: /^Mi perfil/ });
+    expect(enlace).toHaveAttribute("href", "/perfil");
+  });
+
+  it("el administrador con el registro pendiente no tiene enlace al perfil", async () => {
+    responderApi({ "GET /api/v1/auth/me": sesionDe(ADMIN_INCOMPLETO) });
+    renderRutas(rutas, "/admin/primer-ingreso");
+
+    await screen.findByRole("button", { name: "Cerrar sesión" });
+    expect(screen.queryByRole("link", { name: /^Mi perfil/ })).not.toBeInTheDocument();
+  });
+});
+
 describe("Aviso de correo sin verificar (HU-02)", () => {
   it("el cliente con el correo sin verificar ve el aviso con el enlace a la verificación", async () => {
     responderApi({ "GET /api/v1/auth/me": sesionDe({ ...CLIENTE, email_verificado: false }) });

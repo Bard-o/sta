@@ -26,6 +26,9 @@ services:
       - "${BACKEND_PORT:-8000}:8000"
     volumes:
       - ./backend:/app
+      # Archivos que suben los usuarios (imagen de perfil), fuera del código montado.
+      # Debe coincidir con ARCHIVOS_DIR (app/core/config.py). `down -v` lo borra.
+      - archivos:/data/archivos
     depends_on:
       db:
         condition: service_healthy
@@ -57,4 +60,5 @@ services:
 
 volumes:
   db-data:
+  archivos:
   frontend-node-modules:

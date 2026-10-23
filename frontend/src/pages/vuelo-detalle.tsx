@@ -12,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { cop, desfase, fecha, fechaHora, hora, ZONA_COLOMBIA } from "@/lib/format";
+import { cop, desfase, duracion, fecha, fechaHora, hora, ZONA_COLOMBIA } from "@/lib/format";
 import { NoEncontradaPage } from "./no-encontrada";
 import { useVueloDetalle } from "./noticias-comunes/api";
 import { NOMBRE_CLASE, type ClaseVuelo } from "./noticias-comunes/estado";
@@ -21,12 +21,6 @@ const AVISO_ESTADO = {
   realizado: "Este vuelo ya se realizó y no está disponible para la venta.",
   cancelado: "Este vuelo fue cancelado y no está disponible.",
 } as const;
-
-function duracion(minutos: number): string {
-  const h = Math.floor(minutos / 60);
-  const m = minutos % 60;
-  return m === 0 ? `${h} h` : h === 0 ? `${m} min` : `${h} h ${m} min`;
-}
 
 /** Detalle público de un vuelo (HU-19): lo abren las noticias y el carrusel. Horas locales de cada
  *  ciudad con su desfase (IU-05, RF-15) y aviso si el vuelo ya no está programado. */
