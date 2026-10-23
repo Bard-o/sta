@@ -209,13 +209,15 @@ def cambiar_suscripcion(
     datos: SuscripcionEntrada, usuario: Cliente, db: DbSession
 ) -> SuscripcionSalida:
     """Suscribe o da de baja al cliente del correo de noticias (HU-08, RF-09)."""
-    raise NoImplementado()
+    return SuscripcionSalida(
+        noticias=service.cambiar_suscripcion(db, usuario.id, noticias=datos.noticias)
+    )
 
 
 @cuenta.post("/suscripcion/baja", status_code=status.HTTP_204_NO_CONTENT)
 def dar_baja_suscripcion(datos: TokenEntrada, db: DbSession) -> None:
     """Baja de noticias con el enlace del correo, sin iniciar sesión (HU-08, RF-56)."""
-    raise NoImplementado()
+    service.dar_baja_con_token(db, datos.token)
 
 
 @cuenta.get("/me/desactivacion", response_model=DesactivacionSalida)
