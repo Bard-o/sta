@@ -1,4 +1,8 @@
+from collections.abc import Callable
+
 from fastapi.testclient import TestClient
+
+from app.core.security import Rol
 
 
 def test_ruta_inexistente_usa_el_formato_unico(client: TestClient):
@@ -26,8 +30,10 @@ def test_health(client: TestClient):
     assert respuesta.json() == {"estado": "ok", "base_de_datos": "ok"}
 
 
-def test_un_stub_del_contrato_responde_501_con_el_formato_unico(client: TestClient):
-    respuesta = client.get("/api/v1/vuelos/1")
+def test_un_stub_del_contrato_responde_501_con_el_formato_unico(
+    client_como: Callable[[Rol], TestClient],
+):
+    respuesta = client_como(Rol.ADMIN).get("/api/v1/vuelos/1/pasajeros")
     assert respuesta.status_code == 501
     assert respuesta.json() == {
         "error": {
