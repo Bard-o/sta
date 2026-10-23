@@ -6,17 +6,22 @@ export type VueloAdmin = Schemas["VueloAdmin"];
 
 export const POR_PAGINA = 10;
 
-export interface Filtros {
+export interface ParametrosVuelos {
   q: string;
   desde: string;
   hasta: string;
   pagina: number;
 }
 
-/** Vuelos programados (S09): filtros por texto y por fechas de salida (hora de Colombia). */
-export function useVuelosProgramados(filtros: Filtros, habilitado = true) {
+/** Vuelos del administrador por estado, con filtros por texto y por fechas (hora de Colombia):
+ *  la salida en los programados y cancelados, la llegada en los realizados. */
+export function useVuelosAdmin(
+  estado: VueloAdmin["estado"],
+  filtros: ParametrosVuelos,
+  habilitado = true,
+) {
   return useQuery({
-    queryKey: ["vuelos", "admin", "programado", filtros],
+    queryKey: ["vuelos", "admin", estado, filtros],
     enabled: habilitado,
     placeholderData: (anterior) => anterior,
     queryFn: () =>
@@ -24,7 +29,7 @@ export function useVuelosProgramados(filtros: Filtros, habilitado = true) {
         api.GET("/api/v1/vuelos", {
           params: {
             query: {
-              estado: "programado",
+              estado,
               q: filtros.q || null,
               desde: filtros.desde || null,
               hasta: filtros.hasta || null,
@@ -36,6 +41,10 @@ export function useVuelosProgramados(filtros: Filtros, habilitado = true) {
       ),
   });
 }
+
+/** Vuelos programados (S09). */
+export const useVuelosProgramados = (filtros: ParametrosVuelos, habilitado = true) =>
+  useVuelosAdmin("programado", filtros, habilitado);
 
 /** Un vuelo con lo que hace falta para editarlo o cancelarlo (`editable`, `cancelable`…). */
 export function useVueloGestion(vueloId: number) {

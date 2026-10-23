@@ -1435,10 +1435,7 @@ export interface components {
       rol: components["schemas"]["Rol"];
       /** Email Verificado */
       email_verificado: boolean;
-      /**
-       * Registro Completo
-       * @default true
-       */
+      /** Registro Completo */
       registro_completo: boolean;
       /** Nombres */
       nombres: string | null;

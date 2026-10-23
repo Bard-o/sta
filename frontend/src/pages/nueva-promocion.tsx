@@ -9,7 +9,6 @@ import { CampoFichas, CampoTexto } from "@/components/ui/campos";
 import { FlightPass } from "@/components/ui/flight-pass";
 import { Form } from "@/components/ui/form";
 import { Glass } from "@/components/ui/glass";
-import { Meter } from "@/components/ui/meter";
 import { Notice } from "@/components/ui/notice";
 import { cop, desfase, duracion, fecha, hora } from "@/lib/format";
 import { precioConDescuento } from "@/lib/promocion";
@@ -21,12 +20,12 @@ import {
   VACIO,
   aEntradaApi,
   esquema,
-  nombreClase,
   porcentajeValido,
   type Datos,
   type Entrada,
 } from "./promociones/esquema";
 import { useVueloGestion, type VueloAdmin } from "./vuelos-programados/api";
+import { OcupacionPorClase } from "./vuelos-programados/ocupacion";
 
 const sillas = (n: number) => `${n} ${n === 1 ? "silla disponible" : "sillas disponibles"}`;
 
@@ -54,32 +53,6 @@ function PaseDelVuelo({ vuelo }: { vuelo: VueloAdmin }) {
       price={cop(vuelo.precio_economica)}
       priceNote="Económica"
     />
-  );
-}
-
-function VentasDelVuelo({ vuelo }: { vuelo: VueloAdmin }) {
-  return (
-    <Glass title="Ventas del vuelo">
-      <div className="flex flex-col gap-4">
-        {(["primera", "economica"] as const).map((clase) => {
-          const o = vuelo.ocupacion[clase];
-          return (
-            <div key={clase} className="flex flex-col gap-1">
-              <p className="body">
-                {nombreClase(clase)}: {o.vendidas} de {o.capacidad} vendidas
-                {o.reservadas > 0 && ` (y ${o.reservadas} reservadas)`}
-              </p>
-              <Meter
-                wide
-                value={o.vendidas}
-                max={o.capacidad}
-                label={`${nombreClase(clase)}: ${o.vendidas} de ${o.capacidad} vendidas`}
-              />
-            </div>
-          );
-        })}
-      </div>
-    </Glass>
   );
 }
 
@@ -232,7 +205,9 @@ export function NuevaPromocionPage() {
         <div className="grid items-start gap-6 lg:grid-cols-2">
           <div className="flex flex-col gap-6">
             <PaseDelVuelo vuelo={vuelo} />
-            <VentasDelVuelo vuelo={vuelo} />
+            <Glass title="Ventas del vuelo">
+              <OcupacionPorClase ocupacion={vuelo.ocupacion} />
+            </Glass>
           </div>
           <Formulario key={vuelo.id} vuelo={vuelo} />
         </div>

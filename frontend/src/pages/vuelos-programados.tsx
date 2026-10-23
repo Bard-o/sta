@@ -1,8 +1,6 @@
-import { useEffect, useRef, useState } from "react";
-import { useSearchParams } from "react-router";
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Field } from "@/components/ui/field";
 import { Notice } from "@/components/ui/notice";
 import { Pager } from "@/components/ui/pager";
 import {
@@ -16,6 +14,8 @@ import {
 import { fechaHora } from "@/lib/format";
 import { POR_PAGINA, useVuelosProgramados, type VueloAdmin } from "./vuelos-programados/api";
 import { CancelarVueloDialogo } from "./vuelos-programados/cancelar-dialogo";
+import { useFiltros } from "./vuelos-programados/filtros";
+import { FiltrosVuelos } from "./vuelos-programados/filtros-vuelos";
 
 /** Estado comercial del vuelo, siempre con palabras (el color no va solo). */
 function EstadoVenta({ vuelo }: { vuelo: VueloAdmin }) {
@@ -46,50 +46,11 @@ const ocupadas = (v: VueloAdmin) =>
 
 /** S09 · Vuelos programados (HU-15, HU-16): filtros, edición y cancelación sin ventas. */
 export function VuelosProgramadosPage() {
-  const [params, setParams] = useSearchParams();
-  const desde = params.get("desde") ?? "";
-  const hasta = params.get("hasta") ?? "";
-  const q = params.get("q") ?? "";
-  const pagina = Math.max(1, Number(params.get("pagina")) || 1);
-
-  const [texto, setTexto] = useState(q);
+  const filtros = useFiltros();
+  const { q, desde, hasta, pagina, periodoInvalido, hayFiltros, cambiar } = filtros;
   const [aCancelar, setACancelar] = useState<VueloAdmin | null>(null);
-  const temporizador = useRef<ReturnType<typeof setTimeout>>(undefined);
-  useEffect(() => () => clearTimeout(temporizador.current), []);
 
-  function cambiar(cambios: Record<string, string>) {
-    setParams(
-      (previos) => {
-        const siguiente = new URLSearchParams(previos);
-        for (const [clave, valor] of Object.entries(cambios)) {
-          if (valor) siguiente.set(clave, valor);
-          else siguiente.delete(clave);
-        }
-        return siguiente;
-      },
-      { replace: true },
-    );
-  }
-
-  // El texto se aplica al dejar de escribir (no una petición por tecla) y vuelve a la página 1.
-  // `setParams` no encola: el temporizador debe usar el `cambiar` del último render, no el viejo.
-  const cambiarActual = useRef(cambiar);
-  useEffect(() => {
-    cambiarActual.current = cambiar;
-  });
-
-  function escribir(valor: string) {
-    setTexto(valor);
-    clearTimeout(temporizador.current);
-    temporizador.current = setTimeout(
-      () => cambiarActual.current({ q: valor.trim(), pagina: "" }),
-      400,
-    );
-  }
-
-  const periodoInvalido = desde !== "" && hasta !== "" && hasta < desde;
   const consulta = useVuelosProgramados({ q, desde, hasta, pagina }, !periodoInvalido);
-  const hayFiltros = q !== "" || desde !== "" || hasta !== "";
   const vuelos = consulta.data?.items ?? [];
 
   return (
@@ -104,51 +65,16 @@ export function VuelosProgramadosPage() {
         </Button>
       </div>
 
-      <form
-        role="search"
-        aria-label="Filtrar vuelos"
-        className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
-        onSubmit={(e) => e.preventDefault()}
-      >
-        <Field
-          label="Buscar por código o ciudad"
-          className="lg:col-span-2"
-          icon="search"
-          value={texto}
-          onChange={(e) => escribir(e.target.value)}
-          placeholder="STA-00031, Pereira…"
-        />
-        <Field
-          label="Salida desde"
-          type="date"
-          value={desde}
-          onChange={(e) => cambiar({ desde: e.target.value, pagina: "" })}
-        />
-        <Field
-          label="Salida hasta"
-          type="date"
-          value={hasta}
-          min={desde || undefined}
-          error={periodoInvalido ? "La fecha final no puede ser anterior a la inicial." : undefined}
-          onChange={(e) => cambiar({ hasta: e.target.value, pagina: "" })}
-        />
-      </form>
-
-      {hayFiltros && (
-        <div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              clearTimeout(temporizador.current);
-              setTexto("");
-              setParams({}, { replace: true });
-            }}
-          >
-            Limpiar filtros
-          </Button>
-        </div>
-      )}
+      <FiltrosVuelos
+        filtros={filtros}
+        nombre="Filtrar vuelos"
+        etiquetas={{
+          q: "Buscar por código o ciudad",
+          desde: "Salida desde",
+          hasta: "Salida hasta",
+        }}
+        placeholder="STA-00031, Pereira…"
+      />
 
       {consulta.isError && <Notice tone="danger">{consulta.error.message}</Notice>}
       {consulta.isPending && !periodoInvalido && (
