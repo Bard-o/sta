@@ -65,3 +65,15 @@ export function fechaRelativa(iso: string | Date, ahora: Date = new Date()): str
   }
   return dia;
 }
+
+/** Duración legible: «10 h», «50 min» o «1 h 30 min». */
+export function duracion(minutos: number): string {
+  const h = Math.floor(minutos / 60);
+  const m = minutos % 60;
+  return m === 0 ? `${h} h` : h === 0 ? `${m} min` : `${h} h ${m} min`;
+}
+
+/** Convierte una fecha de calendario aaaa-mm-dd (sin zona) a dd/mm/aaaa. */
+export function fechaCalendario(iso: string): string {
+  return iso.split("-").reverse().join("/");
+}

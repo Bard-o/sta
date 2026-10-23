@@ -2,6 +2,7 @@
 
 import hashlib
 import logging
+import math
 import secrets
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
@@ -12,7 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.core.errors import AppError, DatosInvalidos, NoAutenticado
+from app.core.errors import AppError, DatosInvalidos, DemasiadosIntentos, NoAutenticado
 from app.core.mail import enviar_correo
 from app.core.security import (
     MENSAJE_POLITICA_CONTRASENA,
@@ -34,6 +35,10 @@ MINUTOS_RESTABLECIMIENTO = 30
 MENSAJE_RESTABLECIMIENTO = (
     "Si el correo está registrado, recibirás un enlace válido por 30 minutos."
 )
+
+# RNF-13: tras 5 intentos fallidos consecutivos la cuenta se bloquea 15 minutos.
+MAX_INTENTOS_FALLIDOS = 5
+MINUTOS_BLOQUEO = 15
 
 
 class CredencialesInvalidas(AppError):
@@ -95,9 +100,40 @@ _CAMPO_POR_RESTRICCION = {
 }
 
 
+def _ahora_utc() -> datetime:
+    """Reloj del módulo. Los tests lo sustituyen para controlar el bloqueo (RNF-13)."""
+    return datetime.now(UTC)
+
+
+def _bloqueo_vigente(usuario: Usuario, ahora: datetime) -> datetime | None:
+    if usuario.bloqueado_hasta is not None and usuario.bloqueado_hasta > ahora:
+        return usuario.bloqueado_hasta
+    return None
+
+
+def _reiniciar_intentos(usuario: Usuario) -> None:
+    usuario.intentos_fallidos = 0
+    usuario.bloqueado_hasta = None
+
+
+def _lanzar_demasiados_intentos(bloqueados: list[Usuario], ahora: datetime) -> None:
+    """RNF-13: 429 con los segundos que faltan para que la cuenta vuelva a estar disponible."""
+    espera = max(
+        usuario.bloqueado_hasta for usuario in bloqueados if usuario.bloqueado_hasta is not None
+    )
+    segundos = max(1, math.ceil((espera - ahora).total_seconds()))
+    minutos = max(1, math.ceil(segundos / 60))
+    unidad = "minuto" if minutos == 1 else "minutos"
+    raise DemasiadosIntentos(
+        mensaje=f"Cuenta bloqueada. Intenta de nuevo en {minutos} {unidad}.",
+        headers={"Retry-After": str(segundos)},
+    )
+
+
 def autenticar(db: Session, identificador: str, contrasena: str) -> Usuario:
-    """Valida nombre de usuario (o correo) y contraseña. Lanza CredencialesInvalidas o
-    CuentaInactiva."""
+    """Valida nombre de usuario (o correo) y contraseña. Lanza CredencialesInvalidas,
+    CuentaInactiva o DemasiadosIntentos."""
+    ahora = _ahora_utc()
     clave = identificador.strip().lower()
     candidatos = db.scalars(
         select(Usuario).where(
@@ -110,15 +146,41 @@ def autenticar(db: Session, identificador: str, contrasena: str) -> Usuario:
         verificar_contrasena(contrasena, None)  # mismo tiempo de respuesta que un fallo real
         raise CredencialesInvalidas()
 
+    # Un bloqueo vencido se limpia y el contador vuelve a cero.
+    for usuario in candidatos:
+        if usuario.bloqueado_hasta is not None and usuario.bloqueado_hasta <= ahora:
+            _reiniciar_intentos(usuario)
+
+    bloqueados = [u for u in candidatos if _bloqueo_vigente(u, ahora) is not None]
+    if len(bloqueados) == len(candidatos):
+        # El sexto intento se rechaza aunque la contraseña sea correcta (RNF-13).
+        _lanzar_demasiados_intentos(bloqueados, ahora)
+
     # Un mismo correo puede tener una cuenta de cliente y otra de administrador (SUP-18).
-    usuario = next(
-        (u for u in candidatos if verificar_contrasena(contrasena, u.password_hash)), None
-    )
-    if usuario is None:
-        raise CredencialesInvalidas()
-    if not usuario.activo:
-        raise CuentaInactiva()
-    return usuario
+    coincidencias = [u for u in candidatos if verificar_contrasena(contrasena, u.password_hash)]
+    if coincidencias:
+        desbloqueadas = [u for u in coincidencias if _bloqueo_vigente(u, ahora) is None]
+        activas = [u for u in desbloqueadas if u.activo]
+        if activas:
+            usuario = activas[0]
+            # Un login correcto reinicia el contador (RNF-13).
+            _reiniciar_intentos(usuario)
+            db.commit()
+            return usuario
+        db.commit()  # persiste la limpieza de bloqueos vencidos, si hubo
+        if desbloqueadas:
+            raise CuentaInactiva()
+        _lanzar_demasiados_intentos(coincidencias, ahora)
+
+    # Contraseña incorrecta: cuenta para todas las cuentas no bloqueadas que coinciden.
+    for usuario in candidatos:
+        if _bloqueo_vigente(usuario, ahora) is not None:
+            continue
+        usuario.intentos_fallidos += 1
+        if usuario.intentos_fallidos >= MAX_INTENTOS_FALLIDOS:
+            usuario.bloqueado_hasta = ahora + timedelta(minutes=MINUTOS_BLOQUEO)
+    db.commit()
+    raise CredencialesInvalidas()
 
 
 def obtener_usuario_para_sesion(db: Session, usuario_id: int) -> Usuario | None:

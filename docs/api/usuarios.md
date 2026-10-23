@@ -145,19 +145,23 @@ Entrada:
   "nombre_usuario": "lauragomez",
   "email": "laura@example.com",
   "rol": "cliente",
-  "email_verificado": true
+  "email_verificado": true,
+  "registro_completo": true,
+  "nombres": "Laura",
+  "apellidos": "Gómez Ríos"
 }
 ```
 
-`rol` es `root`, `admin` o `cliente`. El root no tiene correo (`email: null`, RF-01).
+`rol` es `root`, `admin` o `cliente`. El root no tiene correo (`email: null`, RF-01). `registro_completo` es `false` para un administrador que todavía no completó su registro (HU-12); `nombres` y `apellidos` son `null` para el root y para ese administrador.
+
+Tras 5 intentos fallidos consecutivos la cuenta se bloquea 15 minutos (RNF-13). Durante el bloqueo, cualquier intento, incluso con la contraseña correcta, responde `429`; el encabezado `Retry-After` lleva los segundos que faltan. Un login correcto reinicia el contador, y al vencer el bloqueo el contador vuelve a cero.
 
 | HTTP | `codigo` | `mensaje` | Cuándo |
 |---|---|---|---|
 | 401 | `credenciales_invalidas` | Usuario o contraseña incorrectos. | Usuario inexistente o contraseña errada: el mensaje no dice cuál (RF-06). |
 | 403 | `cuenta_inactiva` | Cuenta inactiva. | Credenciales correctas de una cuenta desactivada (RF-02, RF-10). |
 | 422 | `datos_invalidos` | Revisa los campos marcados. | Falta `usuario` o `contrasena`. |
-
-Pendiente para el issue de HU-03: bloqueo de 15 minutos tras 5 intentos fallidos (RNF-13, código `demasiados_intentos`).
+| 429 | `demasiados_intentos` | Cuenta bloqueada. Intenta de nuevo en 15 minutos. | 5 intentos fallidos consecutivos. `Retry-After` indica los segundos restantes (RNF-13). |
 
 ### `POST /api/v1/auth/logout`
 
