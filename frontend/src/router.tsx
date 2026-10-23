@@ -20,6 +20,7 @@ import { RestablecerContrasenaPage } from "@/pages/restablecer-contrasena";
 import { VerificarCorreoPage } from "@/pages/verificar-correo";
 import { VueloDetallePage } from "@/pages/vuelo-detalle";
 import { VuelosProgramadosPage } from "@/pages/vuelos-programados";
+import { VuelosRealizadosPage } from "@/pages/vuelos-realizados";
 
 export const router = createBrowserRouter([
   {
@@ -63,6 +64,7 @@ export const router = createBrowserRouter([
           { path: "/admin/vuelos/:vueloId/editar", element: <EditarVueloPage /> },
           { path: "/admin/vuelos/:vueloId/promocion", element: <NuevaPromocionPage /> },
           { path: "/admin/promociones", element: <PromocionesPage /> },
+          { path: "/admin/vuelos-realizados", element: <VuelosRealizadosPage /> },
         ],
       },
       {
