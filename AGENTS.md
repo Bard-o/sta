@@ -59,7 +59,7 @@ URLs locales: frontend http://localhost:5173, API http://localhost:8000/api/v1, 
 ```text
 backend/
   app/
-    core/                 # configuración, sesión de BD, seguridad, formato de error, correo, fixtures de tests
+    core/                 # configuración, sesión de BD, seguridad, formato de error, correo, planificador de tareas, fixtures de tests
     modules/
       <modulo>/
         router.py         # endpoints
@@ -143,6 +143,35 @@ El procedimiento completo está en la skill [`crear-migracion`](.agents/skills/c
 - Antes de pedir review: rebase sobre `main` y verifica que `alembic heads` muestre un solo head.
 - Nunca edites una migración que ya está en `main`. Si tiene un error, se corrige con una migración nueva.
 - No uses `alembic merge`. Si quedan dos heads, regenera tu migración sobre el head actual.
+
+## Procesos programados
+
+Lo que debe ocurrir sin que nadie lo pida (pasar vuelos a realizado, vencer promociones) se registra en el planificador de `app/core/planificador.py`. Cada módulo registra sus tareas al final de su `service.py`:
+
+```python
+from datetime import datetime, timedelta
+
+from sqlalchemy.orm import Session
+
+from app.core.planificador import registrar_tarea
+
+
+def marcar_vuelos_realizados(db: Session, ahora: datetime) -> None:
+    ...  # procesa todo lo vencido hasta `ahora`
+
+
+registrar_tarea("vuelos.marcar_realizados", marcar_vuelos_realizados, cada=timedelta(minutes=1))
+```
+
+- El nombre es `<modulo>.<accion>` y es único. Si se repite, el registro falla.
+- La función recibe `(db, ahora)`: la sesión y la hora actual en UTC. No hagas `commit`: el planificador confirma si termina bien y deshace si falla.
+- Al arrancar el servidor cada tarea corre una vez, para procesar lo que venció mientras estuvo apagado (HU-18).
+- El planificador revisa cada 10 segundos. Para cumplir RNF-18 (máximo 2 minutos de atraso) deja `cada=timedelta(minutes=1)`.
+- La función debe procesar todo lo vencido hasta `ahora` y ser idempotente: correrla dos veces seguidas no cambia nada la segunda vez.
+- Con varios procesos del backend, un lock de PostgreSQL impide que la misma tarea corra dos veces a la vez.
+- Si la tarea falla, el error queda en `docker compose logs backend` y se reintenta en la siguiente vuelta. No detiene a las demás.
+- Debe tardar segundos. Una tarea larga retrasa a las siguientes.
+- En los tests llama la función directamente, con el fixture `db` y un `ahora` fijo. El hilo del planificador nunca arranca en tests; `PLANIFICADOR_ACTIVO=false` lo apaga también fuera de ellos.
 
 ## Frontend
 

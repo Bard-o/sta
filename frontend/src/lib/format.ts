@@ -50,7 +50,8 @@ export function desfase(iso: string | Date, timeZone: string): string {
       .formatToParts(new Date(iso))
       .find((x) => x.type === "timeZoneName")?.value ?? "GMT";
   const m = /^GMT([+-])(\d{1,2})(?::(\d{2}))?$/.exec(nombre);
-  if (!m) return "UTC";
+  // Según la versión de ICU, el desfase cero llega como «GMT» o como «GMT+0».
+  if (!m || (Number(m[2]) === 0 && !m[3])) return "UTC";
   return `UTC${m[1]}${Number(m[2])}${m[3] ? `:${m[3]}` : ""}`;
 }
 

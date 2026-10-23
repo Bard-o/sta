@@ -58,6 +58,22 @@ class DatosDuplicados(AppError):
     mensaje = "Alguno de los datos ya pertenece a otra cuenta."
 
 
+class EnlaceInvalido(AppError):
+    """HU-02, HU-05, HU-08: el token no existe, venció o ya se usó."""
+
+    status_code = 400
+    codigo = "enlace_invalido"
+    mensaje = "El enlace no es válido o venció. Pide uno nuevo."
+
+
+class CorreoYaVerificado(AppError):
+    """HU-02: se pidió un enlace nuevo sin un correo pendiente de verificar."""
+
+    status_code = 409
+    codigo = "correo_ya_verificado"
+    mensaje = "Tu correo ya está verificado."
+
+
 MENSAJES_DUPLICADO = {
     "nombre_usuario": "Ese nombre de usuario ya está en uso.",
     "email": "Ese correo ya está registrado en otra cuenta de cliente.",
@@ -326,6 +342,75 @@ def enviar_verificacion(usuario: Usuario, email: str, token: str) -> None:
     except Exception:
         # Sin el correo en el log: es un dato personal (Ley 1581 de 2012).
         logger.exception("No se pudo enviar el correo de verificación al usuario %s", usuario.id)
+
+
+# ---------- Verificación de correo (HU-02) ----------
+
+
+def verificar_correo(db: Session, token: str) -> None:
+    """Marca como verificado el correo del enlace (HU-02, RF-05).
+
+    El token es de un solo uso y vence en 24 horas (SUP-19). Al usarlo se invalidan los
+    demás tokens vigentes de la cuenta. Lanza EnlaceInvalido si no existe, venció, ya se usó
+    o no corresponde al correo vigente.
+
+    El intercambio de un correo pendiente (HU-07) se implementa con esa historia.
+    """
+    ahora = datetime.now(UTC)
+    fila = db.scalar(
+        select(TokenVerificacion)
+        .where(TokenVerificacion.token_hash == hash_token(token))
+        .with_for_update()
+    )
+    if fila is None or fila.usado_en is not None or fila.expira_en <= ahora:
+        raise EnlaceInvalido()
+
+    usuario = db.get(Usuario, fila.usuario_id)
+    if usuario is None or usuario.email is None or usuario.email != fila.email:
+        raise EnlaceInvalido()
+
+    fila.usado_en = ahora
+    usuario.email_verificado = True
+    db.execute(
+        update(TokenVerificacion)
+        .where(
+            TokenVerificacion.usuario_id == usuario.id,
+            TokenVerificacion.id != fila.id,
+            TokenVerificacion.usado_en.is_(None),
+        )
+        .values(usado_en=ahora)
+    )
+    db.commit()
+
+
+def reenviar_verificacion(db: Session, usuario_id: int) -> None:
+    """Envía un enlace nuevo e invalida los anteriores (HU-02).
+
+    El destino es el correo vigente de la cuenta. Si ya está verificado no hay nada que
+    reenviar y responde CorreoYaVerificado. El correo de un cambio de perfil (HU-07) se
+    agregará con esa historia.
+    """
+    usuario = db.get(Usuario, usuario_id)
+    if usuario is None:
+        raise NoAutenticado()
+
+    email = usuario.email
+    if email is None or usuario.email_verificado:
+        raise CorreoYaVerificado()
+
+    ahora = datetime.now(UTC)
+    db.execute(
+        update(TokenVerificacion)
+        .where(
+            TokenVerificacion.usuario_id == usuario.id,
+            TokenVerificacion.usado_en.is_(None),
+        )
+        .values(usado_en=ahora)
+    )
+    token = _crear_token_verificacion(db, usuario.id, email)
+    db.commit()
+
+    enviar_verificacion(usuario, email, token)
 
 
 def asegurar_root(db: Session, nombre_usuario: str, contrasena: str) -> bool:
