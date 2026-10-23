@@ -2,20 +2,28 @@
 
 Las noticias son automáticas (RF-22, RF-25, RF-55): las publica el módulo vuelos. Noticias
 guarda una copia de los datos que muestra y no consulta a vuelos, así que vuelos le avisa de
-cada cambio. Ninguna función hace commit: van en la transacción de quien llama.
+cada cambio. Al publicar una noticia encola el correo de los suscritos en la misma transacción
+(RF-56, HU-08). Ninguna función hace commit: van en la transacción de quien llama.
 """
 
 import logging
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Literal, cast
+from html import escape
+from typing import TYPE_CHECKING, Literal, cast
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
+from app.core.mail import encolar_correo
 from app.modules.noticias import schemas
 from app.modules.noticias.models import Noticia
+
+if TYPE_CHECKING:
+    from app.modules.usuarios.service import SuscriptorNoticias
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +73,7 @@ def publicar_noticia_vuelo(db: Session, vuelo: VueloPublicado) -> None:
     """
     noticia = Noticia(tipo="vuelo", titulo=_titulo_vuelo(vuelo), **_datos_de_vuelo(vuelo))
     db.add(noticia)
-    # Deja la noticia con id para el enlace del correo de los suscritos (RF-56).
+    # Deja la noticia con id antes de encolar el correo de los suscritos (RF-56).
     db.flush()
     _encolar_correo_suscriptores(db, noticia)
 
@@ -304,10 +312,47 @@ def _precio_con_descuento(precio: int, porcentaje: int) -> int:
 
 
 def _encolar_correo_suscriptores(db: Session, noticia: Noticia) -> None:
-    """Punto de encolado del correo a los suscriptores (RF-56, issue #32).
+    """Encola un correo por suscriptor con el enlace al vuelo y el de baja (RF-56, HU-08).
 
-    Aún no envía nada: la cola de `core/` y `usuarios.suscriptores_noticias` llegan con ese
-    issue. Se llama dentro de la transacción de quien publica para que un rollback no deje
-    correos encolados.
+    Se ejecuta dentro de la transacción de quien publica: si el vuelo o la promoción se
+    revierte, las filas de `cola_correos` también se revierten y no sale ningún correo. El
+    envío lo hace la tarea `core.enviar_correos` en su siguiente vuelta (≤ 5 minutos).
     """
-    logger.debug("Correo a suscriptores pendiente para la noticia %s (RF-56)", noticia.id)
+    # Import diferido: usuarios importa reservas y así se evita un ciclo si ese módulo crece.
+    from app.modules.usuarios import service as usuarios_service
+
+    suscriptores = usuarios_service.suscriptores_noticias(db)
+    for suscriptor in suscriptores:
+        texto, html = _cuerpo_correo(noticia, suscriptor)
+        encolar_correo(db, suscriptor.email, noticia.titulo, texto, html)
+    logger.debug("Noticia %s: %s correos encolados", noticia.id, len(suscriptores))
+
+
+def _cuerpo_correo(noticia: Noticia, suscriptor: "SuscriptorNoticias") -> tuple[str, str]:
+    """Texto y HTML del correo: contenido de la noticia y sus dos enlaces (RF-56, HU-08)."""
+    base = get_settings().frontend_url.rstrip("/")
+    enlace_vuelo = f"{base}/vuelos/{noticia.vuelo_id}"
+    enlace_baja = f"{base}/noticias/baja?token={suscriptor.token_baja}"
+    # IU-05: la hora se muestra en la zona local del origen, no en UTC.
+    salida = noticia.salida.astimezone(ZoneInfo(noticia.origen_zona_horaria))
+    fecha = f"{salida:%d/%m/%Y}"
+    hora = f"{salida:%H:%M}"
+    ruta = f"{noticia.origen_nombre} → {noticia.destino_nombre}"
+
+    texto = (
+        f"Hola {suscriptor.nombres}:\n\n"
+        f"{noticia.titulo}\n\n"
+        f"Vuelo {noticia.vuelo_codigo}: {ruta}\n"
+        f"Sale el {fecha} a las {hora} (hora local de {noticia.origen_nombre}).\n\n"
+        f"Consulta el vuelo: {enlace_vuelo}\n"
+        f"Cancelar suscripción: {enlace_baja}\n"
+    )
+    html = (
+        f"<p>Hola {escape(suscriptor.nombres)}:</p>"
+        f"<p><strong>{escape(noticia.titulo)}</strong></p>"
+        f"<p>Vuelo {escape(noticia.vuelo_codigo)}: {escape(ruta)}<br>"
+        f"Sale el {fecha} a las {hora} (hora local de {escape(noticia.origen_nombre)}).</p>"
+        f'<p><a href="{escape(enlace_vuelo, quote=True)}">Consultar el vuelo</a></p>'
+        f'<p><a href="{escape(enlace_baja, quote=True)}">Cancelar suscripción</a></p>'
+    )
+    return texto, html
