@@ -27,7 +27,7 @@ def test_health(client: TestClient):
 
 
 def test_un_stub_del_contrato_responde_501_con_el_formato_unico(client: TestClient):
-    respuesta = client.get("/api/v1/noticias")
+    respuesta = client.get("/api/v1/vuelos/1")
     assert respuesta.status_code == 501
     assert respuesta.json() == {
         "error": {

@@ -21,6 +21,8 @@ from app.modules.vuelos.schemas import (
     CiudadResumen,
     EstadoPromocion,
     EstadoVuelo,
+    Ocupacion,
+    OcupacionClase,
     PaginaPromociones,
     PaginaVuelosAdmin,
     PasajerosVueloSalida,
@@ -82,7 +84,65 @@ def listar_vuelos(
 )
 def programar_vuelo(datos: VueloEntrada, usuario: Admin, db: DbSession) -> VueloAdmin:
     """Programa un vuelo, publica su noticia y lo audita (HU-13)."""
-    raise NoImplementado()
+    try:
+        programado = service.programar_vuelo(db, datos, usuario_id=usuario.id)
+        db.commit()
+    except Exception:
+        # RNF-17: si falla la noticia o la auditoría no queda nada del vuelo.
+        db.rollback()
+        raise
+    return _a_vuelo_admin(programado)
+
+
+def _a_vuelo_admin(programado: service.VueloProgramado) -> VueloAdmin:
+    """Vista del administrador de un vuelo que acaba de crearse: sin ventas ni bloqueos."""
+    vuelo = programado.vuelo
+    ocupacion = programado.ocupacion
+    return VueloAdmin(
+        id=vuelo.id,
+        codigo=vuelo.codigo,
+        tipo=vuelo.tipo,
+        origen=CiudadResumen.model_validate(programado.origen),
+        destino=CiudadResumen.model_validate(programado.destino),
+        salida=vuelo.salida,
+        llegada=vuelo.llegada,
+        duracion_minutos=vuelo.duracion_minutos,
+        precio_economica=vuelo.precio_economica,
+        precio_primera=vuelo.precio_primera,
+        capacidad=Capacidad(
+            primera=vuelo.capacidad_primera,
+            economica=vuelo.capacidad_economica,
+            total=vuelo.capacidad_primera + vuelo.capacidad_economica,
+        ),
+        estado=vuelo.estado,
+        ocupacion=Ocupacion(
+            primera=_ocupacion_clase(
+                vuelo.capacidad_primera,
+                ocupacion.vendidas_primera,
+                ocupacion.reservadas_primera,
+            ),
+            economica=_ocupacion_clase(
+                vuelo.capacidad_economica,
+                ocupacion.vendidas_economica,
+                ocupacion.reservadas_economica,
+            ),
+        ),
+        reservas_activas=ocupacion.reservas_activas,
+        tiquetes_vendidos=ocupacion.tiquetes_vendidos,
+        editable=True,
+        motivo_no_editable=None,
+        cancelable=True,
+        promociones=[],
+    )
+
+
+def _ocupacion_clase(capacidad: int, vendidas: int, reservadas: int) -> OcupacionClase:
+    return OcupacionClase(
+        capacidad=capacidad,
+        vendidas=vendidas,
+        reservadas=reservadas,
+        disponibles=capacidad - vendidas - reservadas,
+    )
 
 
 @vuelos.post("/vista-previa", response_model=VueloVistaPrevia, responses=respuestas_error(409))
