@@ -1,6 +1,6 @@
 # Módulo usuarios
 
-Dueño: Backend A. Requisitos: RF-01 a RF-11. Este archivo cubre el registro de clientes (RF-03, RF-04, HU-01), la verificación de correo (RF-05, HU-02), la sesión (RF-06, HU-03, HU-04), el restablecimiento de contraseña (RF-07, HU-05), el cambio de contraseña (HU-06), el perfil (HU-07) y la desactivación de la cuenta (RF-10, HU-09); el resto de endpoints del módulo se agregan aquí con sus issues. El contrato acordado de todo el módulo está en [iteracion-1.md](iteracion-1.md).
+Dueño: Backend A. Requisitos: RF-01 a RF-11 y RF-56. Este archivo cubre el registro de clientes (RF-03, RF-04, HU-01), la verificación de correo (RF-05, HU-02), la sesión (RF-06, HU-03, HU-04), el restablecimiento de contraseña (RF-07, HU-05), el cambio de contraseña (HU-06), el perfil (HU-07), la suscripción a noticias (RF-09, HU-08), la desactivación de la cuenta (RF-10, HU-09) y los destinatarios del correo de noticias (RF-56); el resto de endpoints del módulo se agregan aquí con sus issues. El contrato acordado de todo el módulo está en [iteracion-1.md](iteracion-1.md).
 
 ## Registro de clientes
 
@@ -370,6 +370,50 @@ cookie de sesión.
 | 409 | `tiquetes_activos` | Tiene compras o reservas activas en vuelos futuros: debe cancelarlas o esperar. |
 | 401 | `no_autenticado` | Sin sesión o sesión vencida. |
 | 403 | `sin_permiso` | El rol no es cliente. |
+
+## Suscripción a noticias
+
+### `PUT /api/v1/usuarios/me/suscripcion`
+
+Con sesión de cliente. Activa o desactiva la suscripción al correo de noticias (HU-08, RF-09). Responde `200` con el estado que quedó guardado.
+
+```json
+{ "noticias": true }
+```
+
+- Suscribirse exige el correo verificado; si no lo está, responde `403 correo_no_verificado` y el frontend ofrece reenviar la verificación (HU-02).
+- Darse de baja (`false`) siempre se permite, aunque el correo no esté verificado.
+- El cambio es inmediato y aplica desde el siguiente envío (RF-09). Repetir la operación deja el mismo estado; el token de baja no se rota.
+- El administrador y el root no se suscriben: su rol no está permitido en este endpoint.
+
+| HTTP | `codigo` | Cuándo |
+|---|---|---|
+| 403 | `correo_no_verificado` | Intenta suscribirse con el correo sin verificar. |
+| 422 | `datos_invalidos` | Falta `noticias` o no es un booleano; el error va en `campos.noticias`. |
+| 401 | `no_autenticado` | Sin sesión o sesión vencida. |
+| 403 | `sin_permiso` | El rol no es cliente. |
+
+### `POST /api/v1/usuarios/suscripcion/baja`
+
+Sin sesión (público). Da de baja al cliente con el token del enlace «cancelar suscripción» del correo (HU-08, RF-56). Responde `204` sin cuerpo.
+
+```json
+{ "token": "…" }
+```
+
+- El enlace del frontend es `/noticias/baja?token=…`; se puede abrir en otro dispositivo.
+- El token identifica la suscripción, no vence y no es de un solo uso: abrir el enlace otra vez también responde `204`.
+- El token se guarda en claro porque `suscriptores_noticias` lo incluye en cada correo; solo permite cancelar la suscripción.
+- Un token que no corresponde a ninguna suscripción responde `400 enlace_invalido` sin decir a quién pertenecía.
+
+| HTTP | `codigo` | Cuándo |
+|---|---|---|
+| 400 | `enlace_invalido` | Token inexistente. |
+| 422 | `datos_invalidos` | Falta `token` o está vacío; el error va en `campos.token`. |
+
+### `suscriptores_noticias(db)`
+
+Función pública que llama `noticias` para enviar el correo de cada noticia nueva (RF-56). Devuelve los clientes activos, con el correo verificado y suscritos, cada uno con `usuario_id`, `email`, `nombres` y `token_baja` para el enlace de baja. No hace commit: se ejecuta dentro de la transacción de quien llama. Los administradores, el root, las cuentas inactivas y los clientes sin verificar o no suscritos quedan fuera.
 
 ## Usuario root
 
