@@ -1,8 +1,4 @@
-"""Endpoints del módulo usuarios. Contrato: docs/api/iteracion-1.md (HU-01 a HU-12).
-
-Los endpoints que responden NoImplementado (501) son stubs del contrato: ya validan el rol y
-el cuerpo, y su implementación llega con el issue de cada HU.
-"""
+"""Endpoints del módulo usuarios. Contrato: docs/api/iteracion-1.md (HU-01 a HU-12)."""
 
 from typing import Annotated
 
@@ -17,7 +13,7 @@ from app.core.auth import (
     require_role,
 )
 from app.core.db import DbSession
-from app.core.errors import NoImplementado, SinPermiso, respuestas_error
+from app.core.errors import SinPermiso, respuestas_error
 from app.core.security import Rol
 from app.modules.usuarios import service
 from app.modules.usuarios.schemas import (
