@@ -128,9 +128,17 @@ def registrar_cliente(
     return UsuarioSalida.model_validate(nuevo)
 
 
-@cuenta.post("/verificacion", status_code=status.HTTP_204_NO_CONTENT)
+@cuenta.post(
+    "/verificacion",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses=respuestas_error(409),
+)
 def verificar_correo(datos: TokenEntrada, db: DbSession) -> None:
-    """Marca el correo como verificado con el token del enlace (HU-02)."""
+    """Marca el correo como verificado con el token del enlace (HU-02).
+
+    Si el enlace es de un cambio de perfil, el correo pendiente pasa a ser el de la cuenta
+    (HU-07).
+    """
     service.verificar_correo(db, datos.token)
 
 
@@ -161,13 +169,13 @@ def cambiar_contrasena(
 @cuenta.get("/me/perfil", response_model=PerfilSalida)
 def obtener_perfil(usuario: ClienteOAdmin, db: DbSession) -> PerfilSalida:
     """Perfil del cliente o administrador de la sesión (HU-07)."""
-    raise NoImplementado()
+    return service.obtener_perfil(db, usuario.id)
 
 
 @cuenta.put("/me/perfil", response_model=PerfilSalida, responses=respuestas_error(409))
 def actualizar_perfil(datos: PerfilEntrada, usuario: ClienteOAdmin, db: DbSession) -> PerfilSalida:
     """Actualiza el perfil. Un correo nuevo queda pendiente hasta verificarse (HU-07)."""
-    raise NoImplementado()
+    return service.actualizar_perfil(db, usuario.id, datos)
 
 
 @cuenta.put("/me/imagen", response_model=PerfilSalida)
