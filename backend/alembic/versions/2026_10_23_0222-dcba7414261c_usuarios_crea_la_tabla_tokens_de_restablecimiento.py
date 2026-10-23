@@ -1,8 +1,8 @@
 """usuarios: crea la tabla tokens de restablecimiento
 
-Revision ID: 4e19781c1612
-Revises: 8769cb0e0baf
-Create Date: 2026-10-23 01:06:52.542086
+Revision ID: dcba7414261c
+Revises: d772f4e14cd0
+Create Date: 2026-10-23 02:22:32.366179
 
 """
 
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 
 from alembic import op
 
-revision: str = "4e19781c1612"
-down_revision: str | None = "8769cb0e0baf"
+revision: str = "dcba7414261c"
+down_revision: str | None = "d772f4e14cd0"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
