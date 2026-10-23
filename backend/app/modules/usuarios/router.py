@@ -1,8 +1,4 @@
-"""Endpoints del módulo usuarios. Contrato: docs/api/iteracion-1.md (HU-01 a HU-12).
-
-Los endpoints que responden NoImplementado (501) son stubs del contrato: ya validan el rol y
-el cuerpo, y su implementación llega con el issue de cada HU.
-"""
+"""Endpoints del módulo usuarios. Contrato: docs/api/iteracion-1.md (HU-01 a HU-12)."""
 
 from typing import Annotated
 
@@ -17,7 +13,7 @@ from app.core.auth import (
     require_role,
 )
 from app.core.db import DbSession
-from app.core.errors import NoImplementado, SinPermiso, respuestas_error
+from app.core.errors import SinPermiso, respuestas_error
 from app.core.security import Rol
 from app.modules.usuarios import service
 from app.modules.usuarios.schemas import (
@@ -273,7 +269,7 @@ def crear_administrador(
 )
 def desactivar_administrador(admin_id: int, usuario: Root, db: DbSession) -> AdministradorSalida:
     """Desactiva un administrador y cierra sus sesiones (HU-11)."""
-    raise NoImplementado()
+    return service.desactivar_administrador(db, admin_id, usuario_id=usuario.id)
 
 
 @administradores.post(
@@ -283,15 +279,17 @@ def desactivar_administrador(admin_id: int, usuario: Root, db: DbSession) -> Adm
 )
 def reactivar_administrador(admin_id: int, usuario: Root, db: DbSession) -> AdministradorSalida:
     """Reactiva un administrador desactivado (HU-11)."""
-    raise NoImplementado()
+    return service.reactivar_administrador(db, admin_id, usuario_id=usuario.id)
 
 
 @administradores.post("/me/registro", response_model=UsuarioSalida, responses=respuestas_error(409))
 def completar_registro_administrador(
-    datos: RegistroAdministradorEntrada, usuario: Admin, response: Response, db: DbSession
+    datos: RegistroAdministradorEntrada, usuario: Admin, db: DbSession
 ) -> UsuarioSalida:
     """Completa los datos del administrador y cambia la contraseña temporal (HU-12)."""
-    raise NoImplementado()
+    return UsuarioSalida.model_validate(
+        service.completar_registro_administrador(db, datos, usuario_id=usuario.id)
+    )
 
 
 router = APIRouter()
