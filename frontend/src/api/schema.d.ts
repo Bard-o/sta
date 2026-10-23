@@ -154,7 +154,7 @@ export interface paths {
     put?: never;
     /**
      * Verificar Correo
-     * @description Marca el correo como verificado con el token del enlace (HU-02, HU-07).
+     * @description Marca el correo como verificado con el token del enlace (HU-02).
      */
     post: operations["verificar_correo"];
     delete?: never;
