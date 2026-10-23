@@ -1,6 +1,6 @@
 # Módulo usuarios
 
-Dueño: Backend A. Requisitos: RF-01 a RF-11. Este archivo cubre el registro de clientes (RF-03, RF-04, HU-01), la verificación de correo (RF-05, HU-02), la sesión (RF-06, HU-03, HU-04), el cambio de contraseña (HU-06) y la desactivación de la cuenta (RF-10, HU-09); el resto de endpoints del módulo se agregan aquí con sus issues. El contrato acordado de todo el módulo está en [iteracion-1.md](iteracion-1.md).
+Dueño: Backend A. Requisitos: RF-01 a RF-11. Este archivo cubre el registro de clientes (RF-03, RF-04, HU-01), la verificación de correo (RF-05, HU-02), la sesión (RF-06, HU-03, HU-04), el restablecimiento de contraseña (RF-07, HU-05), el cambio de contraseña (HU-06) y la desactivación de la cuenta (RF-10, HU-09); el resto de endpoints del módulo se agregan aquí con sus issues. El contrato acordado de todo el módulo está en [iteracion-1.md](iteracion-1.md).
 
 ## Registro de clientes
 
@@ -145,19 +145,23 @@ Entrada:
   "nombre_usuario": "lauragomez",
   "email": "laura@example.com",
   "rol": "cliente",
-  "email_verificado": true
+  "email_verificado": true,
+  "registro_completo": true,
+  "nombres": "Laura",
+  "apellidos": "Gómez Ríos"
 }
 ```
 
-`rol` es `root`, `admin` o `cliente`. El root no tiene correo (`email: null`, RF-01).
+`rol` es `root`, `admin` o `cliente`. El root no tiene correo (`email: null`, RF-01). `registro_completo` es `false` para un administrador que todavía no completó su registro (HU-12); `nombres` y `apellidos` son `null` para el root y para ese administrador.
+
+Tras 5 intentos fallidos consecutivos la cuenta se bloquea 15 minutos (RNF-13). Durante el bloqueo, cualquier intento, incluso con la contraseña correcta, responde `429`; el encabezado `Retry-After` lleva los segundos que faltan. Un login correcto reinicia el contador, y al vencer el bloqueo el contador vuelve a cero.
 
 | HTTP | `codigo` | `mensaje` | Cuándo |
 |---|---|---|---|
 | 401 | `credenciales_invalidas` | Usuario o contraseña incorrectos. | Usuario inexistente o contraseña errada: el mensaje no dice cuál (RF-06). |
 | 403 | `cuenta_inactiva` | Cuenta inactiva. | Credenciales correctas de una cuenta desactivada (RF-02, RF-10). |
 | 422 | `datos_invalidos` | Revisa los campos marcados. | Falta `usuario` o `contrasena`. |
-
-Pendiente para el issue de HU-03: bloqueo de 15 minutos tras 5 intentos fallidos (RNF-13, código `demasiados_intentos`).
+| 429 | `demasiados_intentos` | Cuenta bloqueada. Intenta de nuevo en 15 minutos. | 5 intentos fallidos consecutivos. `Retry-After` indica los segundos restantes (RNF-13). |
 
 ### `POST /api/v1/auth/logout`
 
@@ -172,6 +176,52 @@ Con sesión de cualquier rol. Devuelve el usuario de la sesión, con el mismo cu
 | 401 | `no_autenticado` | Sin cookie, token alterado, sesión vencida o cerrada, o cuenta desactivada. |
 
 ## Contraseña
+
+### `POST /api/v1/auth/restablecimiento`
+
+Sin sesión. Envía al correo un enlace de un solo uso, válido 30 minutos, para definir una contraseña nueva (HU-05, RF-07). Sirve para clientes y administradores; el root nunca recibe enlace porque cambia su contraseña desde su sesión (HU-06).
+
+Entrada:
+
+```json
+{ "email": "laura.gomez@correo.co" }
+```
+
+`202`: siempre responde lo mismo, exista o no el correo, para no revelar qué correos están registrados.
+
+```json
+{ "mensaje": "Si el correo está registrado, recibirás un enlace válido por 30 minutos." }
+```
+
+- El enlace lleva al frontend (`/restablecer-contrasena?token=…`) y no exige sesión: se puede abrir en otro dispositivo.
+- Si el correo pertenece a una cuenta de cliente y a una de administrador (SUP-18), se envía un enlace por cada cuenta. El correo identifica el nombre de usuario y el tipo de cuenta para que el titular los distinga.
+- Solo se envían enlaces a cuentas activas. Al pedir uno nuevo, los enlaces anteriores sin usar dejan de servir.
+- Si el correo no se puede enviar, la solicitud responde igual y el fallo queda en el log sin exponer el correo.
+
+| HTTP | `codigo` | `campos` | Cuándo |
+|---|---|---|---|
+| 422 | `datos_invalidos` | `email` | Falta el correo o no tiene un formato válido. |
+
+### `POST /api/v1/auth/restablecimiento/confirmar`
+
+Sin sesión. Define la contraseña nueva con el token del enlace (HU-05, RF-07). Responde `204` sin cuerpo.
+
+Entrada:
+
+```json
+{ "token": "…", "contrasena_nueva": "OtraClave99", "confirmacion": "OtraClave99" }
+```
+
+- El token es de un solo uso y vence en 30 minutos (SUP-19). Un enlace vencido, ya usado o de una cuenta desactivada responde `400 enlace_invalido`.
+- El token se valida antes que la contraseña: un enlace inválido siempre responde `enlace_invalido`.
+- La contraseña nueva cumple RNF-08: mínimo 8 caracteres, al menos una letra y un número. Se guarda como hash Argon2id, nunca en texto plano.
+- Al confirmar, la contraseña anterior deja de funcionar y se cierran todas las sesiones abiertas de esa cuenta. La cookie no se borra del navegador, pero el servidor la rechaza en la siguiente petición. En ningún caso se muestra ni se envía la contraseña actual.
+
+| HTTP | `codigo` | `campos` | Cuándo |
+|---|---|---|---|
+| 400 | `enlace_invalido` | | Token inexistente, vencido, ya usado o de una cuenta desactivada. |
+| 422 | `datos_invalidos` | `contrasena_nueva` | No cumple la política de RNF-08. |
+| 422 | `datos_invalidos` | `confirmacion` | No coincide con la contraseña nueva. |
 
 ### `PUT /api/v1/usuarios/me/contrasena`
 

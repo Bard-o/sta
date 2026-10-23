@@ -7,7 +7,7 @@ import { renderRutas } from "@/test/render";
 
 const rutas = [
   { path: "/admin/vuelos/nuevo", element: <ProgramarVueloPage /> },
-  { path: "/admin", element: <p>Inicio del administrador</p> },
+  { path: "/admin/vuelos", element: <p>Vuelos programados</p> },
 ];
 
 const ciudad = (
@@ -310,11 +310,11 @@ describe("S08 · Programar vuelo (HU-13)", () => {
     expect(campo).toHaveValue("$ 2.450.000");
   });
 
-  it("«Cancelar» vuelve al inicio del administrador", async () => {
+  it("«Cancelar» vuelve a los vuelos programados", async () => {
     servidor();
     renderRutas(rutas, "/admin/vuelos/nuevo");
 
     await userEvent.setup().click(await screen.findByRole("link", { name: "Cancelar" }));
-    expect(await screen.findByText("Inicio del administrador")).toBeVisible();
+    expect(await screen.findByText("Vuelos programados")).toBeVisible();
   });
 });

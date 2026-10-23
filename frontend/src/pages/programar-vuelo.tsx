@@ -5,15 +5,13 @@ import { toast } from "sonner";
 import { ApiError } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { CampoDinero, CampoFichas, CampoLista, CampoTexto } from "@/components/ui/campos";
+import { CampoFichas, CampoTexto } from "@/components/ui/campos";
 import { Form } from "@/components/ui/form";
 import { Notice } from "@/components/ui/notice";
 import { Switch } from "@/components/ui/switch";
-import { desfase } from "@/lib/format";
 import { hoy } from "@/lib/persona";
 import { useDebounced } from "@/lib/use-debounced";
 import {
-  useCiudades,
   usePublicarSerie,
   usePublicarVuelo,
   type SerieEntrada,
@@ -31,6 +29,7 @@ import {
   type Datos,
   type Entrada,
 } from "./programar-vuelo/esquema";
+import { CamposVuelo } from "./programar-vuelo/campos-vuelo";
 import { ResumenSerie } from "./programar-vuelo/resumen-serie";
 import { VistaPrevia } from "./programar-vuelo/vista-previa";
 
@@ -39,7 +38,6 @@ type Vista = { vuelo: VueloEntrada } | { serie: SerieEntrada } | null;
 /** S08 · Programar vuelo (HU-13) y programar vuelos recurrentes (HU-14). La vista previa se pide
  *  sola cuando el formulario es válido. */
 export function ProgramarVueloPage() {
-  const ciudades = useCiudades();
   const publicar = usePublicarVuelo();
   const publicarSerie = usePublicarSerie();
   const [publicado, setPublicado] = useState<string>();
@@ -63,24 +61,6 @@ export function ProgramarVueloPage() {
     () => (claveVista ? (JSON.parse(claveVista) as NonNullable<Vista>) : null),
     [claveVista],
   );
-
-  const opciones = useMemo(
-    () =>
-      [...(ciudades.data ?? [])]
-        .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"))
-        .map((c) => ({ value: c.codigo, label: `${c.nombre} (${c.codigo})` })),
-    [ciudades.data],
-  );
-  const origen = ciudades.data?.find((c) => c.codigo === valores.origen);
-  const diaReferencia = repite ? valores.desde : valores.fecha_salida;
-  const etiquetaHora = origen
-    ? `Hora de salida (hora de ${origen.nombre}, ${desfase(
-        /^\d{4}-\d{2}-\d{2}$/.test(diaReferencia)
-          ? new Date(`${diaReferencia}T12:00:00Z`)
-          : new Date(),
-        origen.zona_horaria,
-      )})`
-    : "Hora de salida (hora local del origen)";
 
   function alCambiarRepite(activado: boolean) {
     form.setValue("repite", activado);
@@ -153,40 +133,8 @@ export function ProgramarVueloPage() {
             {publicado && <Notice tone="info">{publicado}</Notice>}
             {resumen && <ResumenSerie serie={resumen.serie} dias={resumen.dias} />}
             {errorGeneral && <Notice tone="danger">{errorGeneral}</Notice>}
-            {ciudades.isError && <Notice tone="danger">{ciudades.error.message}</Notice>}
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <CampoLista<Entrada>
-                name="origen"
-                label="Origen"
-                opciones={opciones}
-                placeholder="Selecciona una ciudad"
-              />
-              <CampoLista<Entrada>
-                name="destino"
-                label="Destino"
-                opciones={opciones}
-                placeholder="Selecciona una ciudad"
-              />
-              {!repite && (
-                <CampoTexto<Entrada>
-                  name="fecha_salida"
-                  label="Fecha de salida"
-                  type="date"
-                  min={hoy()}
-                />
-              )}
-              <CampoTexto<Entrada> name="hora_salida" label={etiquetaHora} type="time" />
-              <fieldset className="m-0 flex min-w-0 flex-col gap-1 border-0 p-0 sm:col-span-2">
-                <legend className="sta-field__label mb-1">Duración</legend>
-                <div className="grid grid-cols-2 gap-3">
-                  <CampoTexto<Entrada> name="horas" label="Horas" inputMode="numeric" />
-                  <CampoTexto<Entrada> name="minutos" label="Minutos" inputMode="numeric" />
-                </div>
-              </fieldset>
-              <CampoDinero<Entrada> name="precio_economica" label="Precio por persona, económica" />
-              <CampoDinero<Entrada> name="precio_primera" label="Precio por persona, primera" />
-            </div>
+            <CamposVuelo repite={repite} />
 
             <Card aria-labelledby="titulo-repite" className="flex flex-col gap-3">
               <div className="flex items-center justify-between gap-3">
@@ -227,7 +175,7 @@ export function ProgramarVueloPage() {
               <Button type="submit" variant="primary" disabled={enCurso}>
                 {enCurso ? "Publicando…" : repite ? "Publicar vuelos" : "Publicar vuelo"}
               </Button>
-              <Button variant="secondary" href="/admin">
+              <Button variant="secondary" href="/admin/vuelos">
                 Cancelar
               </Button>
             </div>
