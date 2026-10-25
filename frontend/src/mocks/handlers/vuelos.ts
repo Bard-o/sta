@@ -84,11 +84,7 @@ function duplicado(origen: string, destino: string, salida: string, excepto?: nu
   );
 }
 
-function vistaPrevia(
-  o: Ciudad,
-  d: Ciudad,
-  salida: string,
-): Schemas["VueloVistaPrevia"] {
+function vistaPrevia(o: Ciudad, d: Ciudad, salida: string): Schemas["VueloVistaPrevia"] {
   const tipo = tipoDeRuta(o, d);
   const duracion = duracionMinutos(o, d);
   return {
