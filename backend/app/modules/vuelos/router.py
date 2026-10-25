@@ -219,6 +219,7 @@ def previsualizar_vuelos_recurrentes(
             economica=capacidad_economica,
             total=capacidad_primera + capacidad_economica,
         ),
+        duracion_minutos=serie.duracion_minutos,
         fechas=serie.fechas,
         omitidas=_a_omitidas(serie.omitidas),
     )

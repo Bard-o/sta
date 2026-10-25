@@ -150,7 +150,6 @@ def test_editar_vuelo_devuelve_200_y_conserva_el_codigo(
         json=cuerpo_vuelo(
             origen="PEI",
             destino="MAD",
-            duracion_minutos=600,
             precio_economica=2_500_000,
         ),
     )
@@ -160,6 +159,7 @@ def test_editar_vuelo_devuelve_200_y_conserva_el_codigo(
     assert cuerpo["id"] == vuelo.id
     assert cuerpo["codigo"] == vuelo.codigo
     assert cuerpo["tipo"] == "internacional"
+    assert cuerpo["duracion_minutos"] == 645
     assert cuerpo["capacidad"] == {"primera": 50, "economica": 200, "total": 250}
     assert cuerpo["destino"]["codigo"] == "MAD"
     assert cuerpo["precio_economica"] == 2_500_000
