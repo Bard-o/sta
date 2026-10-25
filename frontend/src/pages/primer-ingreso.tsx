@@ -51,8 +51,18 @@ const esquema = z
         /^[A-Za-z0-9]{3,20}$/,
         "Debe tener entre 3 y 20 letras o números, sin espacios ni puntos.",
       ),
-    nombres: z.string().trim().min(1, "Escribe tus nombres.").max(100),
-    apellidos: z.string().trim().min(1, "Escribe tus apellidos.").max(100),
+    nombres: z
+      .string()
+      .trim()
+      .min(1, "Escribe tus nombres.")
+      .max(100)
+      .regex(/^($|\p{L}[\p{L} '.-]*$)/u, "Usa solo letras, espacios, apóstrofo o guion."),
+    apellidos: z
+      .string()
+      .trim()
+      .min(1, "Escribe tus apellidos.")
+      .max(100)
+      .regex(/^($|\p{L}[\p{L} '.-]*$)/u, "Usa solo letras, espacios, apóstrofo o guion."),
     fecha_nacimiento: z
       .string()
       .min(1, "Elige tu fecha de nacimiento.")
@@ -70,8 +80,13 @@ const esquema = z
       .string()
       .trim()
       .regex(/^[^@\s]+@[^@\s]+\.[^@\s]+$/, "Escribe un correo válido."),
-    contrasena_temporal: z.string().min(1, "Escribe la contraseña temporal."),
-    contrasena_nueva: z.string().regex(POLITICA, MENSAJE_POLITICA),
+    contrasena_temporal: z
+      .string()
+      .refine((v) => v.trim() !== "", "Escribe la contraseña temporal."),
+    contrasena_nueva: z
+      .string()
+      .regex(POLITICA, MENSAJE_POLITICA)
+      .regex(/^\S*$/, "La contraseña no puede tener espacios."),
     confirmacion: z.string().min(1, "Repite la contraseña nueva."),
   })
   .refine((datos) => datos.contrasena_nueva === datos.confirmacion, {

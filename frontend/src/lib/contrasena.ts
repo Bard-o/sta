@@ -6,6 +6,8 @@ export const esquemaContrasena = z
   .string()
   .min(8, "La contraseña debe tener al menos 8 caracteres.")
   .regex(/[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/, "La contraseña debe tener al menos una letra.")
-  .regex(/\d/, "La contraseña debe tener al menos un número.");
+  .regex(/\d/, "La contraseña debe tener al menos un número.")
+  .regex(/^\S*$/, "La contraseña no puede tener espacios.");
 
-export const AYUDA_CONTRASENA = "Mínimo 8 caracteres, con al menos una letra y un número.";
+export const AYUDA_CONTRASENA =
+  "Mínimo 8 caracteres, con al menos una letra y un número, sin espacios.";

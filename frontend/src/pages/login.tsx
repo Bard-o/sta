@@ -19,7 +19,7 @@ import { Notice } from "@/components/ui/notice";
 
 const esquema = z.object({
   usuario: z.string().trim().min(1, "Escribe tu nombre de usuario o tu correo."),
-  contrasena: z.string().min(1, "Escribe tu contraseña."),
+  contrasena: z.string().refine((v) => v.trim() !== "", "Escribe tu contraseña."),
 });
 
 type Datos = z.infer<typeof esquema>;

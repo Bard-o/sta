@@ -40,6 +40,7 @@ async function llenar({ sinPolitica, sobrescribe = {} }: Opciones = {}) {
     "Correo electrónico": "laura.gomez@correo.co",
     "Nombre de usuario": "lauragomez",
     Contraseña: "Clave1234",
+    "Confirmar contraseña": "Clave1234",
     ...sobrescribe,
   };
   await user.selectOptions(await screen.findByLabelText("Género"), "femenino");

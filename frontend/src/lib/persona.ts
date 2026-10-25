@@ -24,19 +24,39 @@ export const nombreTipoDocumento = (tipo: TipoDocumento) =>
 /** Hoy como aaaa-mm-dd en la hora local de quien usa la pantalla. */
 export const hoy = () => new Date().toLocaleDateString("sv-SE");
 
-export const requerido = (mensaje: string) => z.string().trim().min(1, mensaje);
+export const requerido = (mensaje: string, max = 200) =>
+  z.string().trim().min(1, mensaje).max(max, `Usa como máximo ${max} caracteres.`);
+
+/** Nombres y apellidos: deben tener letras; no se aceptan solo números o símbolos. */
+const nombrePropio = (mensaje: string) =>
+  requerido(mensaje, 100).regex(
+    /^($|\p{L}[\p{L} '.-]*$)/u,
+    "Usa solo letras, espacios, apóstrofo o guion.",
+  );
+
+/** Teléfono opcional: 7 a 20 dígitos, espacios, +, paréntesis o guiones, con al menos 7 dígitos. */
+export const telefono = z
+  .string()
+  .trim()
+  .refine((v) => v === "" || (/^[0-9 +()-]{7,20}$/.test(v) && (v.match(/\d/g) ?? []).length >= 7), {
+    message: "Escribe un teléfono válido, con al menos 7 números.",
+  });
 
 /** Campos que comparten el registro (HU-01) y el perfil (HU-07), con sus mensajes (IU-07). */
 export const camposPersona = {
   genero: z.string().refine((v): v is Genero => GENEROS.some((g) => g.value === v), {
     message: "Elige tu género.",
   }),
-  nombres: requerido("Escribe tus nombres."),
-  apellidos: requerido("Escribe tus apellidos."),
+  nombres: nombrePropio("Escribe tus nombres."),
+  apellidos: nombrePropio("Escribe tus apellidos."),
   fecha_nacimiento: requerido("Escribe tu fecha de nacimiento.").refine((v) => v <= hoy(), {
     message: "La fecha de nacimiento no puede ser futura.",
   }),
-  lugar_nacimiento: requerido("Escribe tu lugar de nacimiento."),
+  lugar_nacimiento: requerido("Escribe tu lugar de nacimiento.", 120),
   direccion_facturacion: requerido("Escribe tu dirección de facturación."),
-  email: z.string().trim().pipe(z.email("Escribe un correo válido, por ejemplo nombre@correo.co.")),
+  email: z
+    .string()
+    .trim()
+    .max(254)
+    .pipe(z.email("Escribe un correo válido, por ejemplo nombre@correo.co.")),
 };

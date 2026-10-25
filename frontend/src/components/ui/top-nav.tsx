@@ -1,4 +1,4 @@
-import type { MouseEventHandler, ReactNode } from "react";
+import { useState, type MouseEventHandler, type ReactNode } from "react";
 import { Link, NavLink } from "react-router";
 import { Icon } from "./icon";
 import type { IconName } from "./icon-paths";
@@ -15,7 +15,7 @@ export interface NavItem {
 export interface TopNavProps {
   items?: NavItem[];
   right?: ReactNode;
-  user?: { name: string; role?: string; href?: string };
+  user?: { name: string; role?: string; href?: string; imageUrl?: string | null };
   homeHref?: string;
   brand?: string;
 }
@@ -32,10 +32,22 @@ function initials(name: string) {
 
 /** Avatar + nombre. Con `href` es un enlace (a «Mi perfil»). */
 function UserChip({ user }: { user: NonNullable<TopNavProps["user"]> }) {
+  // Si la imagen no carga, vuelven las iniciales.
+  const [fallida, setFallida] = useState<string | null>(null);
+  const imagen = user.imageUrl && user.imageUrl !== fallida ? user.imageUrl : null;
   const contenido = (
     <>
-      <span className="sta-avatar" aria-hidden="true">
-        {initials(user.name)}
+      <span className="sta-avatar overflow-hidden" aria-hidden="true">
+        {imagen ? (
+          <img
+            src={imagen}
+            alt=""
+            className="size-full object-cover"
+            onError={() => setFallida(imagen)}
+          />
+        ) : (
+          initials(user.name)
+        )}
       </span>
       <span>
         <span className="sta-user__name">{user.name}</span>

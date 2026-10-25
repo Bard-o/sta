@@ -13,7 +13,7 @@ import { AYUDA_CONTRASENA, esquemaContrasena } from "@/lib/contrasena";
 
 const esquema = z
   .object({
-    contrasena_actual: z.string().min(1, "Escribe tu contraseña actual."),
+    contrasena_actual: z.string().refine((v) => v.trim() !== "", "Escribe tu contraseña actual."),
     contrasena_nueva: esquemaContrasena,
     confirmacion: z.string().min(1, "Repite la contraseña nueva."),
   })
