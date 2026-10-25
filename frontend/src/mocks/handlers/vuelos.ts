@@ -6,6 +6,7 @@ import {
   capacidad,
   CIUDADES,
   ciudad,
+  duracionMinutos,
   PASAJEROS,
   resumenCiudad,
   tipoDeRuta,
@@ -87,9 +88,9 @@ function vistaPrevia(
   o: Ciudad,
   d: Ciudad,
   salida: string,
-  duracion: number,
 ): Schemas["VueloVistaPrevia"] {
   const tipo = tipoDeRuta(o, d);
+  const duracion = duracionMinutos(o, d);
   return {
     tipo,
     origen: resumenCiudad(o),
@@ -140,7 +141,7 @@ function serie(datos: Schemas["SerieVuelosEntrada"]) {
 
 function crear(o: Ciudad, d: Ciudad, salida: string, datos: Omit<VueloEntrada, "fecha_salida">) {
   const id = Math.max(...db.vuelos.map((v) => v.id)) + 1;
-  const vuelo = armarVuelo(id, o.codigo, d.codigo, salida, datos.duracion_minutos, [
+  const vuelo = armarVuelo(id, o.codigo, d.codigo, salida, duracionMinutos(o, d), [
     datos.precio_economica,
     datos.precio_primera,
   ]);
@@ -192,7 +193,7 @@ export const vuelosHandlers = [
     const datos = await request.json();
     const validado = validarVuelo(datos);
     if (validado instanceof Response) return response.untyped(validado);
-    return response(200).json(vistaPrevia(...validado, datos.duracion_minutos));
+    return response(200).json(vistaPrevia(...validado));
   }),
 
   http.post("/api/v1/vuelos/recurrentes", async ({ request, response }) => {
@@ -218,6 +219,7 @@ export const vuelosHandlers = [
     return response(200).json({
       tipo,
       capacidad: capacidad(tipo),
+      duracion_minutos: duracionMinutos(...resultado.ruta),
       fechas: resultado.fechas,
       omitidas: resultado.omitidas,
     });
@@ -259,7 +261,7 @@ export const vuelosHandlers = [
     const validado = validarVuelo(datos, actual.id);
     if (validado instanceof Response) return response.untyped(validado);
     const [o, d, salida] = validado;
-    const editado = armarVuelo(actual.id, o.codigo, d.codigo, salida, datos.duracion_minutos, [
+    const editado = armarVuelo(actual.id, o.codigo, d.codigo, salida, duracionMinutos(o, d), [
       datos.precio_economica,
       datos.precio_primera,
     ]);

@@ -27,8 +27,8 @@ import { useEditarVuelo, useVueloGestion, type VueloAdmin } from "./vuelos-progr
 const diaLocal = (iso: string, zona: string) =>
   new Date(iso).toLocaleDateString("sv-SE", { timeZone: zona });
 
-/** El vuelo como lo escribió quien lo programó: fecha y hora locales del origen, duración en
- *  horas y minutos, precios con formato de pesos. */
+/** El vuelo como lo escribió quien lo programó: fecha y hora locales del origen y precios con
+ *  formato de pesos. La duración la calcula el sistema y no se edita. */
 function datosIniciales(v: VueloAdmin): Entrada {
   const zona = v.origen.zona_horaria;
   return {
@@ -37,8 +37,6 @@ function datosIniciales(v: VueloAdmin): Entrada {
     destino: v.destino.codigo,
     fecha_salida: diaLocal(v.salida, zona),
     hora_salida: hora(v.salida, zona),
-    horas: String(Math.floor(v.duracion_minutos / 60)),
-    minutos: String(v.duracion_minutos % 60),
     precio_economica: cop(v.precio_economica),
     precio_primera: cop(v.precio_primera),
   };
@@ -73,15 +71,15 @@ function Formulario({ vuelo }: { vuelo: VueloAdmin }) {
     [claveVista],
   );
 
-  // Si solo cambian los precios, la salida y la llegada son las que ya tiene el vuelo.
+  // Si solo cambian los precios, la salida y la llegada son las que ya tiene el vuelo. La
+  // duración depende de la ruta, así que con la misma ruta tampoco cambia.
   const original = datosIniciales(vuelo);
   const mismaSalida =
     entradaVista !== null &&
     entradaVista.origen === original.origen &&
     entradaVista.destino === original.destino &&
     entradaVista.fecha_salida === original.fecha_salida &&
-    entradaVista.hora_salida === original.hora_salida &&
-    entradaVista.duracion_minutos === vuelo.duracion_minutos;
+    entradaVista.hora_salida === original.hora_salida;
 
   const guardar = form.handleSubmit((datos) =>
     editar.mutate(aEntradaApi(datos), {

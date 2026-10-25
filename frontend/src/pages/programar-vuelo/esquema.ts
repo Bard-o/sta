@@ -22,15 +22,6 @@ export function maximoHasta(): string {
   return limite.toLocaleDateString("sv-SE");
 }
 
-const entero = (min: number, max: number, mensaje: string) =>
-  z
-    .string()
-    .trim()
-    .transform((s) => (s === "" ? "0" : s))
-    .pipe(z.string().regex(/^\d+$/, mensaje))
-    .transform(Number)
-    .pipe(z.number().min(min, mensaje).max(max, mensaje));
-
 const precio = (mensaje: string) =>
   z
     .string()
@@ -45,8 +36,6 @@ export const esquema = z
     destino: z.string().min(1, "Elige la ciudad de destino."),
     fecha_salida: z.string(),
     hora_salida: z.string().regex(/^\d{2}:\d{2}$/, "Escribe la hora de salida, por ejemplo 06:00."),
-    horas: entero(0, 23, "Las horas van de 0 a 23."),
-    minutos: entero(0, 59, "Los minutos van de 0 a 59."),
     precio_economica: precio("Escribe el precio de económica, en pesos."),
     precio_primera: precio("Escribe el precio de primera, en pesos."),
     repite: z.boolean(),
@@ -60,10 +49,6 @@ export const esquema = z
 
     if (d.origen && d.origen === d.destino)
       error("destino", "El destino debe ser distinto del origen.");
-    const total = d.horas * 60 + d.minutos;
-    if (total < 1 || total > 1439) {
-      error("horas", "La duración debe ser de más de 0 minutos y menos de 24 horas.");
-    }
 
     if (!d.repite) {
       if (!d.fecha_salida) error("fecha_salida", "Escribe la fecha de salida.");
@@ -89,8 +74,6 @@ export const VACIO: Entrada = {
   destino: "",
   fecha_salida: "",
   hora_salida: "",
-  horas: "",
-  minutos: "0",
   precio_economica: "",
   precio_primera: "",
   repite: false,
@@ -99,13 +82,12 @@ export const VACIO: Entrada = {
   hasta: "",
 };
 
-/** Campo del servidor → campo del formulario (la duración se escribe en horas y minutos). */
+/** Campo del servidor → campo del formulario. */
 export const CAMPOS_API: Record<string, FieldPath<Entrada>> = {
   origen: "origen",
   destino: "destino",
   fecha_salida: "fecha_salida",
   hora_salida: "hora_salida",
-  duracion_minutos: "horas",
   precio_economica: "precio_economica",
   precio_primera: "precio_primera",
   dias_semana: "dias",
@@ -119,7 +101,6 @@ const base = (d: Datos): Base => ({
   origen: d.origen,
   destino: d.destino,
   hora_salida: d.hora_salida,
-  duracion_minutos: d.horas * 60 + d.minutos,
   precio_economica: d.precio_economica,
   precio_primera: d.precio_primera,
 });
