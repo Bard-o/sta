@@ -21,7 +21,7 @@ Conforme a la plantilla basada en el estándar IEEE Std 830-1998
 | 11/09/2026 | 1.0 | Versión inicial construida a partir del enunciado, la reunión 1 (09/09/2026), la reunión 2 (11/09/2026) y los supuestos documentados del equipo. | Equipo de desarrollo |
 | 16/09/2026 | 1.1 | Se completan los integrantes del equipo y la tabla de personal involucrado. Se define Resend como candidato para el servicio de correo SMTP. | Equipo de desarrollo |
 | 07/10/2026 | 1.2 | Se asignan los roles del equipo (backend A, backend B y frontend) y se corrige el nombre de Juan Camilo Murillo Ruiz. Se agregan los supuestos SUP-39 a SUP-42, definidos en la especificación de casos de uso. | Equipo de desarrollo |
-| 03/11/2026 | 1.3 | Se ajustan los requisitos a las observaciones del cliente en la sustentación de la iteración 1: el root invita a los administradores por correo en lugar de darles una contraseña temporal (RF-02, RF-04, SUP-17); la fecha de nacimiento tiene una edad máxima de 120 años y el lugar de nacimiento se elige de listas (RF-03, SUP-43, SUP-44); el sistema calcula la duración del vuelo según la distancia entre aeropuertos (RF-12, RF-13, RF-15, SUP-31). | Equipo de desarrollo |
+| 03/11/2026 | 1.3 | Se ajustan los requisitos a las observaciones del cliente en la sustentación de la iteración 1: el root invita a los administradores por correo en lugar de darles una contraseña temporal (RF-02, RF-04, SUP-17); la fecha de nacimiento tiene una edad máxima de 120 años y el lugar de nacimiento se elige de listas (RF-03, SUP-43, SUP-44); el sistema calcula la duración del vuelo según la distancia entre aeropuertos (RF-12, RF-13, RF-15, SUP-31); la contraseña no admite espacios (RNF-08). | Equipo de desarrollo |
 
 ## 1 Introducción
 
@@ -1808,9 +1808,9 @@ Entorno de referencia para las mediciones: servidor con 2 vCPU, 4 GB de RAM y di
 | Número de requisito | RNF-08 |
 | Nombre de requisito | Almacenamiento seguro de contraseñas |
 | Tipo | Requisito |
-| Fuente del requisito | R1-P55 |
+| Fuente del requisito | R1-P55; SUST |
 | Prioridad del requisito | Alta/Esencial |
-| Descripción | Las contraseñas se guardan con un hash adaptativo y con sal, nunca en texto plano ni cifradas de forma reversible. Política mínima: 8 caracteres, al menos una letra y un número. |
+| Descripción | Las contraseñas se guardan con un hash adaptativo y con sal, nunca en texto plano ni cifradas de forma reversible. Política mínima: 8 caracteres, al menos una letra y un número, sin espacios. |
 | Cómo aplica al sistema | Aplica a RF-01, RF-02, RF-03, RF-07 y RF-08. |
 | Métrica de aceptación | 0 contraseñas legibles en la base de datos. Algoritmo bcrypt (costo ≥ 10) o Argon2id. El 100 % de las contraseñas que no cumplen la política son rechazadas. |
 | Método de validación | Inspección directa de la tabla de usuarios; prueba unitaria que verifica el formato del hash; pruebas de registro con contraseñas débiles. |
