@@ -24,7 +24,7 @@ _hasher = PasswordHasher()
 # Hash de relleno para que una cuenta inexistente tarde lo mismo que una contraseña errada.
 _HASH_RELLENO = _hasher.hash("relleno-para-tiempo-constante")
 
-_POLITICA = re.compile(r"^(?=.*[A-Za-zÁÉÍÓÚÜÑáéíóúüñ])(?=.*\d).{8,}$")
+_POLITICA = re.compile(r"(?=.*[A-Za-zÁÉÍÓÚÜÑáéíóúüñ])(?=.*\d)\S{8,}")
 
 
 def hash_contrasena(contrasena: str) -> str:
@@ -40,11 +40,13 @@ def verificar_contrasena(contrasena: str, hash_guardado: str | None) -> bool:
 
 
 def cumple_politica_contrasena(contrasena: str) -> bool:
-    """RNF-08: al menos 8 caracteres, una letra y un número."""
-    return bool(_POLITICA.match(contrasena))
+    """RNF-08: al menos 8 caracteres, una letra y un número, sin espacios."""
+    return bool(_POLITICA.fullmatch(contrasena))
 
 
-MENSAJE_POLITICA_CONTRASENA = "Debe tener al menos 8 caracteres, con letras y números."
+MENSAJE_POLITICA_CONTRASENA = (
+    "Mínimo 8 caracteres, con al menos una letra y un número, sin espacios."
+)
 
 
 @dataclass(frozen=True)

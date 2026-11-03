@@ -35,10 +35,15 @@ def test_verificar_contrasena():
         ("corta1", False),
         ("sinnumeros", False),
         ("12345678", False),
+        ("Clave 1234", False),
+        (" Clave1234", False),
+        ("Clave1234 ", False),
+        ("Clave\t1234", False),
+        ("Clave1234\n", False),
     ],
 )
 def test_politica_de_contrasena(contrasena: str, cumple: bool):
-    # RNF-08: mínimo 8 caracteres, al menos una letra y un número.
+    # RNF-08: mínimo 8 caracteres, al menos una letra y un número, sin espacios.
     assert cumple_politica_contrasena(contrasena) is cumple
 
 

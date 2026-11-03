@@ -81,12 +81,15 @@ def test_la_contrasena_temporal_se_guarda_con_hash(
 
 
 @pytest.mark.parametrize(
-    "contrasena", ["corta1", "sinnumeros", "12345678"], ids=["corta", "sin-numeros", "sin-letras"]
+    "contrasena",
+    ["corta1", "sinnumeros", "12345678", "Temporal 123"],
+    ids=["corta", "sin-numeros", "sin-letras", "con-espacios"],
 )
 def test_contrasena_temporal_que_no_cumple_la_politica_responde_422(
     contrasena: str, client_como: Callable[[Rol], TestClient]
 ) -> None:
-    """HU-10 · RNF-08: una contraseña fuera de la política es rechazada campo por campo."""
+    """HU-10 · RNF-08: una contraseña fuera de la política (incluida una con espacios) es
+    rechazada campo por campo."""
     root = client_como(Rol.ROOT)
 
     respuesta = root.post(RUTA, json=_datos(contrasena_temporal=contrasena))
