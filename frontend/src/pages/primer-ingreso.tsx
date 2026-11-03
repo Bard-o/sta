@@ -18,6 +18,7 @@ import { Glass } from "@/components/ui/glass";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { Notice } from "@/components/ui/notice";
+import { esquemaContrasena } from "@/lib/contrasena";
 
 const TIPOS_DOCUMENTO = [
   { value: "CC", label: "Cédula de ciudadanía" },
@@ -32,9 +33,6 @@ const GENEROS = [
   { value: "masculino", label: "Masculino" },
   { value: "otro", label: "Otro" },
 ] as const;
-
-const POLITICA = /^(?=.*[A-Za-zÁÉÍÓÚÜÑáéíóúüñ])(?=.*\d).{8,}$/;
-const MENSAJE_POLITICA = "Debe tener al menos 8 caracteres, con letras y números.";
 
 /** Hoy en la zona del navegador, como aaaa-mm-dd (el mismo formato del control de fecha). */
 function hoy(): string {
@@ -83,10 +81,7 @@ const esquema = z
     contrasena_temporal: z
       .string()
       .refine((v) => v.trim() !== "", "Escribe la contraseña temporal."),
-    contrasena_nueva: z
-      .string()
-      .regex(POLITICA, MENSAJE_POLITICA)
-      .regex(/^\S*$/, "La contraseña no puede tener espacios."),
+    contrasena_nueva: esquemaContrasena,
     confirmacion: z.string().min(1, "Repite la contraseña nueva."),
   })
   .refine((datos) => datos.contrasena_nueva === datos.confirmacion, {
