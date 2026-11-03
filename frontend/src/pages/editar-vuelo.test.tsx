@@ -23,8 +23,8 @@ const NUEVA_VISTA = {
     origen: resumenCiudad(PEI),
     destino: resumenCiudad(BOG),
     salida: "2026-12-10T12:00:00Z",
-    llegada: "2026-12-10T12:50:00Z",
-    duracion_minutos: 50,
+    llegada: "2026-12-10T12:45:00Z",
+    duracion_minutos: 45,
     capacidad: { primera: 25, economica: 125, total: 150 },
   },
 };
@@ -62,8 +62,8 @@ describe("S09 · Editar vuelo (HU-15)", () => {
     expect(screen.getByLabelText("Destino", { exact: true })).toHaveValue("BOG");
     expect(screen.getByLabelText("Fecha de salida")).toHaveValue("2026-12-10");
     expect(screen.getByLabelText(/^Hora de salida/)).toHaveValue("06:00");
-    expect(screen.getByLabelText("Horas")).toHaveValue("0");
-    expect(screen.getByLabelText("Minutos")).toHaveValue("50");
+    expect(screen.queryByLabelText("Horas")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Minutos")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Precio por persona, económica")).toHaveValue("$ 280.000");
     expect(screen.getByLabelText("Precio por persona, primera")).toHaveValue("$ 750.000");
   });
@@ -95,7 +95,6 @@ describe("S09 · Editar vuelo (HU-15)", () => {
       destino: "BOG",
       fecha_salida: "2026-12-10",
       hora_salida: "06:00",
-      duracion_minutos: 50,
       precio_economica: 300000,
       precio_primera: 750000,
     });
@@ -113,6 +112,9 @@ describe("S09 · Editar vuelo (HU-15)", () => {
     await waitFor(() => expect(peticiones(VISTA)).toHaveLength(1), { timeout: 3000 });
     expect((await peticiones(VISTA)[0].json()).hora_salida).toBe("07:00");
     expect(await screen.findByText(/Llegada calculada:/)).toBeVisible();
+    expect(screen.getByText(/Duración estimada:/).parentElement).toHaveTextContent(
+      "45 min · calculada por distancia.",
+    );
   });
 
   it("vuelve a aplicar las validaciones de HU-13 (destino igual al origen)", async () => {

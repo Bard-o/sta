@@ -44,7 +44,8 @@ const resumen = (c: Schemas["Ciudad"]) => ({
   zona_horaria: c.zona_horaria,
 });
 
-/** Bogotá → Madrid, salida 10/12/2026 22:00 (03:00Z del 11), 10 h: llega 13:00Z = 14:00 en Madrid. */
+/** Bogotá → Madrid, salida 10/12/2026 22:00 (03:00Z del 11), 10 h 35 min: llega 13:35Z =
+ *  14:35 en Madrid. La duración la calcula el sistema (RF-13). */
 const VISTA_BOG_MAD = {
   status: 200,
   body: {
@@ -52,8 +53,8 @@ const VISTA_BOG_MAD = {
     origen: resumen(CIUDADES[0]),
     destino: resumen(CIUDADES[3]),
     salida: "2026-12-11T03:00:00Z",
-    llegada: "2026-12-11T13:00:00Z",
-    duracion_minutos: 600,
+    llegada: "2026-12-11T13:35:00Z",
+    duracion_minutos: 635,
     capacidad: { primera: 50, economica: 200, total: 250 },
   },
 };
@@ -99,8 +100,6 @@ async function llenar(
     destino: string;
     fecha: string;
     hora: string;
-    horas: string;
-    minutos: string;
     economica: string;
     primera: string;
   }> = {},
@@ -110,8 +109,6 @@ async function llenar(
     destino: "MAD",
     fecha: "2026-12-10",
     hora: "22:00",
-    horas: "10",
-    minutos: "0",
     economica: "2450000",
     primera: "6900000",
     ...datos,
@@ -122,10 +119,6 @@ async function llenar(
   await user.selectOptions(screen.getByLabelText("Destino", { exact: true }), d.destino);
   await user.type(screen.getByLabelText("Fecha de salida"), d.fecha);
   await user.type(screen.getByLabelText(/^Hora de salida/), d.hora);
-  await user.clear(screen.getByLabelText("Horas"));
-  await user.type(screen.getByLabelText("Horas"), d.horas);
-  await user.clear(screen.getByLabelText("Minutos"));
-  await user.type(screen.getByLabelText("Minutos"), d.minutos);
   await user.type(screen.getByLabelText("Precio por persona, económica"), d.economica);
   await user.type(screen.getByLabelText("Precio por persona, primera"), d.primera);
   return user;
@@ -161,10 +154,15 @@ describe("S08 · Programar vuelo (HU-13)", () => {
 
     expect(
       (await screen.findByText(/Llegada calculada:/, {}, { timeout: 3000 })).parentElement,
-    ).toHaveTextContent("11/12/2026 14:00 en Madrid (UTC+1)");
+    ).toHaveTextContent("11/12/2026 14:35 en Madrid (UTC+1)");
     expect(screen.getByText(/Tipo:/).parentElement).toHaveTextContent(
       "internacional, 250 sillas (50 en primera, 200 en económica)",
     );
+    expect(screen.getByText(/Duración estimada:/).parentElement).toHaveTextContent(
+      "10 h 35 min · calculada por distancia.",
+    );
+    expect(screen.queryByLabelText("Horas")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Minutos")).not.toBeInTheDocument();
     expect(screen.getByText("STA-?????")).toBeVisible();
     expect(screen.getByText("$ 2.450.000")).toBeVisible();
     expect(await peticiones(VISTA)[0].json()).toEqual({
@@ -172,20 +170,19 @@ describe("S08 · Programar vuelo (HU-13)", () => {
       destino: "MAD",
       fecha_salida: "2026-12-10",
       hora_salida: "22:00",
-      duracion_minutos: 600,
       precio_economica: 2450000,
       precio_primera: 6900000,
     });
   });
 
-  it("en verano la llegada cae en UTC+2 (10/07/2026 22:00 → 11/07/2026 15:00)", async () => {
+  it("en verano la llegada cae en UTC+2 (10/07/2026 22:00 → 11/07/2026 15:35)", async () => {
     servidor({
       [VISTA]: {
         ...VISTA_BOG_MAD,
         body: {
           ...VISTA_BOG_MAD.body,
           salida: "2026-07-11T03:00:00Z",
-          llegada: "2026-07-11T13:00:00Z",
+          llegada: "2026-07-11T13:35:00Z",
         },
       },
     });
@@ -194,7 +191,7 @@ describe("S08 · Programar vuelo (HU-13)", () => {
 
     expect(
       (await screen.findByText(/Llegada calculada:/, {}, { timeout: 3000 })).parentElement,
-    ).toHaveTextContent("11/07/2026 15:00 en Madrid (UTC+2)");
+    ).toHaveTextContent("11/07/2026 15:35 en Madrid (UTC+2)");
   });
 
   it("no pide la vista previa mientras el formulario es inválido", async () => {
@@ -235,7 +232,6 @@ describe("S08 · Programar vuelo (HU-13)", () => {
       destino: "MAD",
       fecha_salida: "2026-12-10",
       hora_salida: "22:00",
-      duracion_minutos: 600,
       precio_economica: 2450000,
       precio_primera: 6900000,
     });
@@ -244,12 +240,6 @@ describe("S08 · Programar vuelo (HU-13)", () => {
 
   it.each([
     ["una salida en el pasado", { fecha: "2026-05-01" }, "La fecha de salida no puede ser pasada."],
-    [
-      "una duración de 0",
-      { horas: "0", minutos: "0" },
-      "La duración debe ser de más de 0 minutos y menos de 24 horas.",
-    ],
-    ["una duración de 24 horas", { horas: "24" }, "Las horas van de 0 a 23."],
     ["un precio de 0", { economica: "0" }, "El precio debe ser mayor que 0."],
     ["un origen igual al destino", { destino: "BOG" }, "El destino debe ser distinto del origen."],
   ])("rechaza %s junto al campo y no guarda", async (_caso, cambios, mensaje) => {
