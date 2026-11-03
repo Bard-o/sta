@@ -2,7 +2,7 @@
 
 Universidad Tecnológica de Pereira · Laboratorio de Software · 2026-2
 
-Iteraciones 1 a 4, con wireframes · Versión 2.2 · 07/10/2026
+Iteraciones 1 a 4, con wireframes · Versión 2.3 · 03/11/2026
 
 **Autores:** Simón Londoño Escobar, Juan Camilo Murillo Ruiz, Jesus David Villamil Angarita, Alejandro Osorio Osorio
 
@@ -13,7 +13,7 @@ Iteraciones 1 a 4, con wireframes · Versión 2.2 · 07/10/2026
 - Formato de la descripción: «Como [rol] quiero [acción] para [beneficio]». Cada historia dice quién la necesita, qué quiere y para qué.
 - Prioridad en negocio: Alta = exigida por el enunciado o por el cliente (Alta/Esencial en el SRS). Media = deseable o derivada de un supuesto del equipo.
 - Iteraciones: el trabajo se divide en 4 iteraciones ordenadas por dependencias. 1: usuarios, administración de vuelos y noticias. 2: búsqueda, carrito, reserva, compra y monedero. 3: cancelaciones, check-in, sillas y muro. 4: recomendación, chatbot y auditoría.
-- Trazabilidad: la última observación de cada historia indica los casos de uso (CU) y los requisitos (RF/RNF) del SRS v1.1 que cubre.
+- Trazabilidad: la última observación de cada historia indica los casos de uso (CU) y los requisitos (RF/RNF) del SRS v1.3 que cubre.
 - Procesos automáticos: las tareas que ejecuta el reloj del sistema (vencer reservas, archivar vuelos realizados) no son historias propias; se verifican en los criterios de la historia del usuario que se beneficia.
 - Responsable: cada historia tiene un integrante a cargo, según su rol en el equipo: Simón Londoño Escobar (coordinador), Juan Camilo Murillo Ruiz (backend A), Jesus David Villamil Angarita (backend B) y Alejandro Osorio Osorio (frontend).
 - Mockups: cada historia incluye el wireframe de su pantalla. Son de baja fidelidad: muestran estructura, contenido, reglas y estados (errores, bloqueos, avisos), no el diseño gráfico final. Varias historias comparten pantalla; el índice de pantallas lo resume.
@@ -175,7 +175,7 @@ Total: 50 historias (iteración 1: 19 · iteración 2: 12 · iteración 3: 12 ·
 | S04 | Restablecer contraseña | HU-05 |
 | S05 | Perfil y cuenta | HU-04, HU-06, HU-07, HU-08, HU-09, HU-45 |
 | S06 | Gestión de administradores (root) | HU-10, HU-11 |
-| S07 | Primer ingreso del administrador | HU-12 |
+| S07 | Completar registro del administrador | HU-12 |
 | S08 | Programar vuelo | HU-13, HU-14 |
 | S09 | Vuelos programados (administrador) | HU-15, HU-16 |
 | S10 | Cancelación por fuerza mayor | HU-32 |
@@ -220,6 +220,8 @@ Total: 50 historias (iteración 1: 19 · iteración 2: 12 · iteración 3: 12 ·
 **Observaciones:**
 
 - Datos: tipo de documento (CC, TI, RC, CE o pasaporte), número de documento, nombres, apellidos, fecha y lugar de nacimiento, dirección de facturación, género, correo, nombre de usuario y contraseña. Imagen de perfil opcional (JPG o PNG, máximo 2 MB).
+- La fecha de nacimiento no puede ser futura ni de hace más de 120 años (SUP-43).
+- El lugar de nacimiento se elige de listas: país (Colombia por defecto) y, si es Colombia, departamento y municipio según la DIVIPOLA del DANE, en una lista con búsqueda filtrada por departamento. Para otro país se escribe la ciudad. Al cambiar el país o el departamento se limpia lo que depende de él (SUP-44).
 - Es obligatorio aceptar la política de tratamiento de datos personales (Ley 1581 de 2012). No hay edad mínima de registro.
 - El nombre de usuario es único en todo el sistema; el documento y el correo son únicos entre las cuentas de cliente.
 - La cuenta se crea con el correo sin verificar y el monedero en saldo $ 0.
@@ -230,12 +232,17 @@ Total: 50 historias (iteración 1: 19 · iteración 2: 12 · iteración 3: 12 ·
 - Un registro con todos los datos válidos crea la cuenta y envía el enlace de verificación al correo.
 - Un registro sin aceptar la política de datos es rechazado.
 - Una fecha de nacimiento futura, un correo mal formado o una contraseña de menos de 8 caracteres, o sin al menos una letra y un número, son rechazados indicando el campo con error.
+- Quien cumple hoy 120 años puede registrarse; con un día más (121 años) el registro es rechazado con el mensaje «Revisa la fecha: la edad máxima es 120 años.» junto al campo.
+- Un cliente nacido en Santa Rosa de Cabal lo elige escribiendo «Santa» en la lista de municipios de Risaralda, y su perfil muestra «Santa Rosa de Cabal, Risaralda, Colombia». Uno nacido en Madrid elige España y escribe «Madrid».
+- Un municipio que no existe, o un municipio con un país distinto de Colombia, es rechazado indicando el campo.
 - Un documento, correo o nombre de usuario que ya pertenece a otra cuenta de cliente es rechazado indicando el campo duplicado.
 - Un menor de edad puede registrarse (la restricción de edad aplica al volar).
 
 **Mockup:** wireframe S01, Registro de cliente.
 
 ![Wireframe de HU-01](wireframes/HU-01.png)
+
+> **Cambio desde la sustentación ([#99](https://github.com/Bard-o/sta/issues/99), [#101](https://github.com/Bard-o/sta/issues/101)).** El wireframe no se regeneró. «Lugar de nacimiento» deja de ser texto libre: se elige país → departamento → municipio, o país → ciudad. La fecha de nacimiento acepta como máximo 120 años. Maqueta del formulario: [tablero «S01 Crear cuenta»](https://claude.ai/artifact/SRPnLTqd7zm4dq9WXef8Ea).
 
 ### HU-02 Verificar correo electrónico
 
@@ -411,6 +418,7 @@ Total: 50 historias (iteración 1: 19 · iteración 2: 12 · iteración 3: 12 ·
 - Cambiar el correo exige verificar el nuevo (HU-02); mientras tanto sigue vigente el anterior.
 - Los datos nuevos se usan en el autocompletado de viajeros de compras futuras; los tiquetes ya emitidos no cambian.
 - El root no tiene perfil: solo cambia su contraseña.
+- La fecha y el lugar de nacimiento siguen las reglas de HU-01: edad máxima de 120 años; país y, si es Colombia, departamento y municipio, o la ciudad si es otro país. A una cuenta creada antes de este cambio, que solo tiene el lugar como texto, se le pide completarlo al editar el perfil.
 - Trazabilidad: CU-06 · RF-08.
 
 **Criterio de Aceptación:**
@@ -419,10 +427,14 @@ Total: 50 historias (iteración 1: 19 · iteración 2: 12 · iteración 3: 12 ·
 - El documento y el nombre de usuario aparecen como solo lectura.
 - Al cambiar el correo llega un enlace de verificación al correo nuevo, y el anterior sigue siendo el de la cuenta hasta que se verifique.
 - Un correo que ya usa otra cuenta del mismo tipo es rechazado.
+- Una fecha de nacimiento de hace más de 120 años es rechazada con el mismo mensaje de HU-01.
+- Al cambiar el país de nacimiento se limpian el departamento y el municipio.
 
 **Mockup:** wireframe S05, Perfil y cuenta. Pantalla compartida con HU-04, HU-06, HU-08, HU-09, HU-45.
 
 ![Wireframe de HU-07](wireframes/HU-07.png)
+
+> **Cambio desde la sustentación ([#99](https://github.com/Bard-o/sta/issues/99), [#101](https://github.com/Bard-o/sta/issues/101)).** El wireframe no se regeneró. El campo «Lugar de nacimiento» del perfil es el mismo de S01: país → departamento → municipio, o país → ciudad.
 
 ### HU-08 Suscribirse a noticias
 
@@ -496,25 +508,33 @@ Total: 50 historias (iteración 1: 19 · iteración 2: 12 · iteración 3: 12 ·
 | Rol | Root |
 | Iteración Asignada | 1 |
 
-**Descripción:** Como root quiero crear cuentas de administrador con un nombre de usuario y una contraseña temporal para que el personal de la aerolínea pueda gestionar los vuelos.
+**Descripción:** Como root quiero invitar por correo a un administrador nuevo, con su nombre de usuario y su correo, para que el personal de la aerolínea gestione los vuelos sin que yo conozca su contraseña.
 
 **Observaciones:**
 
 - Solo el root puede crear administradores.
-- El administrador queda en estado «registro incompleto» hasta su primer ingreso (HU-12).
-- La creación queda registrada en la auditoría.
-- Trazabilidad: CU-09 · RF-01, RF-02, RF-26.
+- El root escribe el nombre de usuario y el correo; nadie escribe ni ve una contraseña. El sistema envía al correo un enlace de invitación de un solo uso, válido por 72 horas, para completar el registro (HU-12).
+- El administrador queda en estado «invitación pendiente», con su vencimiento, hasta que completa el registro. Si el enlace vence, pasa a «invitación vencida».
+- El root puede reenviar la invitación de un administrador que no ha completado el registro: el enlace anterior deja de servir y corren otras 72 horas.
+- El correo es único entre los administradores, contando las invitaciones pendientes; puede coincidir con el de una cuenta de cliente.
+- Si el correo no se puede enviar, el administrador queda creado y el root reenvía la invitación.
+- La creación y cada reenvío quedan registrados en la auditoría.
+- Trazabilidad: CU-09 · RF-01, RF-02, RF-04, RF-26.
 
 **Criterio de Aceptación:**
 
-- El root crea un administrador con un nombre de usuario único y una contraseña que cumple la política.
+- El root crea `jtorres` con el correo `jorge.torres@avianco.test` y al correo llega el enlace de invitación. En ningún paso aparece una contraseña.
 - Un nombre de usuario que ya existe en el sistema es rechazado.
-- Un usuario que no es root recibe un rechazo de autorización al intentar crear un administrador, incluso llamando directamente a la API.
+- Un correo que ya tiene otra cuenta de administrador o una invitación pendiente es rechazado; uno que pertenece a una cuenta de cliente se acepta.
+- El root reenvía una invitación vencida: el enlace anterior deja de servir, el nuevo funciona y el estado vuelve a «invitación pendiente» con el nuevo vencimiento.
+- Un usuario que no es root recibe un rechazo de autorización al intentar crear un administrador o reenviar una invitación, incluso llamando directamente a la API.
 - Ninguna interfaz permite crear un segundo root.
 
 **Mockup:** wireframe S06, Gestión de administradores (root). Pantalla compartida con HU-11.
 
 ![Wireframe de HU-10](wireframes/HU-10.png)
+
+> **Cambio desde la sustentación ([#100](https://github.com/Bard-o/sta/issues/100)).** El wireframe no se regeneró. El formulario «Crear administrador» pide nombre de usuario y correo; desaparece la contraseña temporal. El listado muestra el correo y los estados «Activo», «Inactivo», «Invitación pendiente · vence dd/mm/aaaa hh:mm» e «Invitación vencida», en lugar de «Registro incompleto», con el botón «Reenviar invitación» en las filas con invitación.
 
 ### HU-11 Desactivar o reactivar administrador
 
@@ -534,17 +554,21 @@ Total: 50 historias (iteración 1: 19 · iteración 2: 12 · iteración 3: 12 ·
 - Es un borrado lógico: las acciones pasadas del administrador se conservan en la auditoría.
 - El sistema pide confirmación antes de desactivar.
 - Cada desactivación o reactivación queda registrada en la auditoría.
+- Desactivar a un administrador con la invitación pendiente invalida el enlace. Al reactivarlo queda con «invitación vencida» y el root debe reenviarla (HU-10).
 - Trazabilidad: CU-10 · RF-02, RF-26.
 
 **Criterio de Aceptación:**
 
 - Un administrador desactivado que intenta iniciar sesión recibe «cuenta inactiva».
 - Al reactivarlo, puede volver a iniciar sesión.
-- La lista de administradores muestra el estado de cada uno: activo, inactivo o registro incompleto.
+- La lista de administradores muestra el correo y el estado de cada uno: activo, inactivo, invitación pendiente (con su vencimiento) o invitación vencida.
+- Un administrador desactivado con la invitación pendiente no puede usar el enlace; al reactivarlo aparece con «invitación vencida».
 
 **Mockup:** wireframe S06, Gestión de administradores (root). Pantalla compartida con HU-10.
 
 ![Wireframe de HU-11](wireframes/HU-11.png)
+
+> **Cambio desde la sustentación ([#100](https://github.com/Bard-o/sta/issues/100)).** El wireframe no se regeneró. El formulario «Crear administrador» pide nombre de usuario y correo; desaparece la contraseña temporal. El listado muestra el correo y los estados «Activo», «Inactivo», «Invitación pendiente · vence dd/mm/aaaa hh:mm» e «Invitación vencida», en lugar de «Registro incompleto», con el botón «Reenviar invitación» en las filas con invitación.
 
 ### HU-12 Completar registro de administrador
 
@@ -557,23 +581,29 @@ Total: 50 historias (iteración 1: 19 · iteración 2: 12 · iteración 3: 12 ·
 | Rol | Administrador |
 | Iteración Asignada | 1 |
 
-**Descripción:** Como administrador nuevo quiero completar mis datos y cambiar la contraseña temporal en mi primer ingreso para poder usar el sistema.
+**Descripción:** Como administrador invitado quiero completar mis datos y definir mi contraseña desde el enlace de la invitación para poder usar el sistema.
 
 **Observaciones:**
 
-- Se piden los mismos datos del registro de cliente (HU-01).
+- Se llega con el enlace de la invitación (HU-10), de un solo uso y válido por 72 horas. No hace falta iniciar sesión: antes de completar el registro la cuenta no tiene contraseña.
+- El nombre de usuario y el correo vienen de la invitación y se muestran como solo lectura. Abrir el enlace prueba que el correo es del administrador: al completar, el correo queda verificado sin otro paso.
+- Se piden los mismos datos del registro de cliente (HU-01), salvo el correo, con las mismas reglas de fecha y lugar de nacimiento, más la contraseña y su confirmación.
 - El documento y el correo son únicos entre las cuentas de administrador; una misma persona puede tener además una cuenta de cliente.
-- Trazabilidad: CU-11 · RF-02, RF-03, RF-04.
+- Trazabilidad: CU-11 · RF-02, RF-03, RF-04, RF-05.
 
 **Criterio de Aceptación:**
 
-- Mientras el registro esté incompleto, el administrador solo ve el formulario de registro, aunque intente ir a otra función.
-- Al completarlo, la contraseña temporal deja de funcionar y se muestra el menú de administrador.
+- Con un enlace vigente, el administrador completa sus datos, define su contraseña y entra al menú de administrador. El enlace no sirve una segunda vez.
+- Antes de completar el registro, el administrador no puede iniciar sesión con ninguna contraseña.
+- Un enlace vencido, ya usado o reemplazado por un reenvío muestra «El enlace no es válido o venció. Pide al root una invitación nueva.»
+- Una fecha de nacimiento de hace más de 120 años es rechazada con el mismo mensaje de HU-01, y el lugar de nacimiento se valida como en HU-01.
 - Un administrador puede registrarse luego como cliente con su mismo documento y otro nombre de usuario.
 
-**Mockup:** wireframe S07, Primer ingreso del administrador.
+**Mockup:** wireframe S07, Completar registro del administrador.
 
 ![Wireframe de HU-12](wireframes/HU-12.png)
+
+> **Cambio desde la sustentación ([#100](https://github.com/Bard-o/sta/issues/100), [#99](https://github.com/Bard-o/sta/issues/99), [#101](https://github.com/Bard-o/sta/issues/101)).** El wireframe no se regeneró. La pantalla ya no es un primer ingreso con sesión: es la página pública `/completar-registro`, a la que se llega con el enlace de la invitación. Muestra el nombre de usuario y el correo como solo lectura, los datos personales (con el lugar de nacimiento de S01 y la edad máxima de 120 años), la contraseña y su confirmación. Desaparecen el aviso «Completa tu registro para continuar», el menú deshabilitado, el campo «Correo» editable y la sección «Cambia tu contraseña temporal». Si el enlace no sirve, la página muestra «El enlace no es válido o venció. Pide al root una invitación nueva.»
 
 ### HU-13 Programar vuelo
 
@@ -590,7 +620,8 @@ Total: 50 historias (iteración 1: 19 · iteración 2: 12 · iteración 3: 12 ·
 
 **Observaciones:**
 
-- Campos: fecha y hora de salida (hora local del origen), ciudad origen, ciudad destino, duración, precio en económica y precio en primera clase (COP). El código STA-nnnnn es autogenerado y nunca se reutiliza.
+- Campos: fecha y hora de salida (hora local del origen), ciudad origen, ciudad destino, precio en económica y precio en primera clase (COP). El código STA-nnnnn es autogenerado y nunca se reutiliza.
+- La duración no se digita: el sistema la calcula con la distancia entre los aeropuertos de origen y destino, a 800 km/h más 30 minutos de rodaje, ascenso y descenso, redondeada hacia arriba a múltiplos de 5 minutos (SUP-31). Con el origen y el destino elegidos, la vista previa la muestra antes de guardar.
 - Rutas: nacionales entre las 32 capitales departamentales; internacionales entre Pereira, Bogotá, Medellín, Cali o Cartagena y Madrid, Londres, Nueva York, Buenos Aires o Miami, en ambos sentidos.
 - Capacidad automática: nacional 150 sillas (25 primera y 125 económica); internacional 250 (50 y 200).
 - La llegada se calcula como salida en UTC más la duración, y se muestra en la hora local del destino, con horario de verano cuando aplica.
@@ -600,14 +631,17 @@ Total: 50 historias (iteración 1: 19 · iteración 2: 12 · iteración 3: 12 ·
 **Criterio de Aceptación:**
 
 - Pereira → Madrid y Madrid → Cartagena se aceptan; Manizales → Miami y Madrid → Londres se rechazan.
-- Una salida en el pasado, una duración de 0 o de 24 horas o más, o un precio menor o igual a 0 son rechazados.
+- Una salida en el pasado o un precio menor o igual a 0 son rechazados.
+- La duración calculada de Pereira → Bogotá es 45 min: se ve en la vista previa antes de guardar y queda guardada sin que el administrador la escriba.
 - Si ya existe un Pereira → Bogotá a las 06:00, otro el mismo día a las 06:00 es rechazado y uno a las 06:20 es aceptado.
-- Bogotá → Madrid con salida el 10/07/2026 a las 22:00 y 10 h de duración muestra llegada el 11/07/2026 a las 15:00 Madrid (UTC+2); con salida el 10/12/2026 muestra 11/12/2026 14:00 Madrid (UTC+1).
+- Bogotá → Madrid con salida el 10/07/2026 a las 22:00 tiene una duración calculada de 10 h 35 min y muestra llegada el 11/07/2026 a las 15:35 Madrid (UTC+2); con salida el 10/12/2026 muestra 11/12/2026 14:35 Madrid (UTC+1).
 - Crear un Pereira → Miami genera una noticia y un elemento del carrusel con una imagen de Miami.
 
 **Mockup:** wireframe S08, Programar vuelo. Pantalla compartida con HU-14.
 
 ![Wireframe de HU-13](wireframes/HU-13.png)
+
+> **Cambio desde la sustentación ([#102](https://github.com/Bard-o/sta/issues/102)).** El wireframe no se regeneró. Desaparece el campo «Duración». Con el origen y el destino elegidos, la vista previa muestra «Duración estimada: … · calculada por distancia» y la llegada en hora local del destino. Para Bogotá → Madrid con salida el 10/07/2026 a las 22:00, la duración calculada es 10 h 35 min y la llegada es el 11/07/2026 a las 15:35 Madrid (UTC+2), no 10 h y 15:00 como en la imagen.
 
 ### HU-14 Programar vuelos recurrentes
 
@@ -627,6 +661,7 @@ Total: 50 historias (iteración 1: 19 · iteración 2: 12 · iteración 3: 12 ·
 - Se indica el patrón (diario o días de la semana) y el periodo, con un horizonte máximo de 12 meses.
 - Cada ocurrencia es un vuelo independiente, con su propio código y su propia noticia.
 - Las fechas que chocan con un vuelo existente de la misma ruta y hora se omiten y se informan.
+- Todas las ocurrencias tienen la duración calculada para la ruta (HU-13), que se ve en la vista previa de la serie.
 - Trazabilidad: CU-14 · RF-17.
 
 **Criterio de Aceptación:**
@@ -635,10 +670,13 @@ Total: 50 historias (iteración 1: 19 · iteración 2: 12 · iteración 3: 12 ·
 - Un periodo de más de 12 meses, o con fecha de fin anterior a la de inicio, es rechazado.
 - Editar o cancelar una ocurrencia no afecta a las demás.
 - El resumen final lista los vuelos creados y las fechas omitidas con su motivo.
+- La vista previa de la serie Pereira → Bogotá muestra la duración calculada de 45 min, y todos los vuelos creados la tienen.
 
 **Mockup:** wireframe S08, Programar vuelo. Pantalla compartida con HU-13.
 
 ![Wireframe de HU-14](wireframes/HU-14.png)
+
+> **Cambio desde la sustentación ([#102](https://github.com/Bard-o/sta/issues/102)).** El wireframe no se regeneró. Desaparece el campo «Duración». Con el origen y el destino elegidos, la vista previa muestra «Duración estimada: … · calculada por distancia» y la llegada en hora local del destino. Para Bogotá → Madrid con salida el 10/07/2026 a las 22:00, la duración calculada es 10 h 35 min y la llegada es el 11/07/2026 a las 15:35 Madrid (UTC+2), no 10 h y 15:00 como en la imagen.
 
 ### HU-15 Editar vuelo
 
@@ -656,7 +694,7 @@ Total: 50 historias (iteración 1: 19 · iteración 2: 12 · iteración 3: 12 ·
 **Observaciones:**
 
 - Solo se puede editar si el vuelo no ha salido y no tiene ninguna compra ni ninguna reserva activa.
-- Se vuelven a aplicar las validaciones de HU-13, y se recalculan el tipo, la capacidad y la llegada si cambian la ruta, la salida o la duración. El código se conserva.
+- Se vuelven a aplicar las validaciones de HU-13, y se recalculan el tipo, la capacidad, la duración y la llegada si cambian la ruta o la salida. La duración no se edita: la calcula el sistema como en HU-13. El código se conserva.
 - La auditoría guarda los valores anteriores y los nuevos.
 - Trazabilidad: CU-15 · RF-18, RF-26.
 
@@ -666,6 +704,7 @@ Total: 50 historias (iteración 1: 19 · iteración 2: 12 · iteración 3: 12 ·
 - Si la única reserva del vuelo vence o se cancela, el vuelo vuelve a ser editable.
 - Editar el precio de un vuelo deja en la auditoría el precio anterior y el nuevo.
 - Un vuelo realizado o cancelado no se puede editar.
+- Cambiar el destino de un vuelo recalcula la duración con la distancia de la nueva ruta, y la vista previa muestra la duración y la llegada nuevas antes de guardar.
 
 **Mockup:** wireframe S09, Vuelos programados (administrador). Pantalla compartida con HU-16.
 
@@ -1761,7 +1800,7 @@ Total: 50 historias (iteración 1: 19 · iteración 2: 12 · iteración 3: 12 ·
 
 **Observaciones:**
 
-- Se registran: creación, edición y cancelación de vuelos (incluido el motivo de fuerza mayor), creación de promociones, creación y desactivación de administradores, y respuestas en los muros.
+- Se registran: creación, edición y cancelación de vuelos (incluido el motivo de fuerza mayor), creación de promociones, creación, reenvío de la invitación y desactivación de administradores, y respuestas en los muros.
 - Cada registro guarda el usuario, la fecha y hora, la acción y los valores anteriores y nuevos.
 - Los registros no se pueden modificar ni borrar. Filtros por usuario, acción y fecha.
 - Trazabilidad: CU-12 · RF-26, RNF-16.
