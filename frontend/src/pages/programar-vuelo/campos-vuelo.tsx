@@ -7,8 +7,9 @@ import { hoy } from "@/lib/persona";
 import { useCiudades } from "./api";
 import type { Entrada } from "./esquema";
 
-/** Los campos de un vuelo (HU-13, HU-15): ruta, salida, duración y precios. Se usa dentro de un
- *  `<Form>` del tipo `Entrada`. Con `repite` la fecha de salida la reemplaza el periodo. */
+/** Los campos de un vuelo (HU-13, HU-15): ruta, salida y precios. La duración la calcula el
+ *  sistema por la distancia (RF-13, SUP-31). Se usa dentro de un `<Form>` del tipo `Entrada`.
+ *  Con `repite` la fecha de salida la reemplaza el periodo. */
 export function CamposVuelo({ repite = false }: { repite?: boolean }) {
   const ciudades = useCiudades();
   const [codigoOrigen, fechaSalida, desde] = useWatch<Entrada, ["origen", "fecha_salida", "desde"]>(
@@ -60,13 +61,6 @@ export function CamposVuelo({ repite = false }: { repite?: boolean }) {
           />
         )}
         <CampoTexto<Entrada> name="hora_salida" label={etiquetaHora} type="time" />
-        <fieldset className="m-0 flex min-w-0 flex-col gap-1 border-0 p-0 sm:col-span-2">
-          <legend className="sta-field__label mb-1">Duración</legend>
-          <div className="grid grid-cols-2 gap-3">
-            <CampoTexto<Entrada> name="horas" label="Horas" inputMode="numeric" />
-            <CampoTexto<Entrada> name="minutos" label="Minutos" inputMode="numeric" />
-          </div>
-        </fieldset>
         <CampoDinero<Entrada> name="precio_economica" label="Precio por persona, económica" />
         <CampoDinero<Entrada> name="precio_primera" label="Precio por persona, primera" />
       </div>

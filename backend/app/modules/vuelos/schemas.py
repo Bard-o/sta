@@ -18,8 +18,6 @@ DiaSemana = Literal["lun", "mar", "mie", "jue", "vie", "sab", "dom"]
 
 CodigoCiudad = Annotated[str, Field(pattern=r"^[A-Z]{3}$", description="Código de aeropuerto.")]
 Precio = Annotated[int, Field(gt=0, description="COP, entero.")]
-# RF-13: mayor que 0 y menor que 24 horas.
-DuracionMinutos = Annotated[int, Field(ge=1, lt=1440)]
 
 
 # ---------- Ciudades (RF-12) ----------
@@ -51,13 +49,13 @@ class CiudadResumen(BaseModel):
 
 
 class VueloEntrada(BaseModel):
-    """HU-13 y HU-15. La fecha y la hora son locales del origen."""
+    """HU-13 y HU-15. La fecha y la hora son locales del origen. La duración la calcula el
+    sistema con la distancia entre las ciudades (RF-13, SUP-31)."""
 
     origen: CodigoCiudad
     destino: CodigoCiudad
     fecha_salida: date
     hora_salida: time
-    duracion_minutos: DuracionMinutos
     precio_economica: Precio
     precio_primera: Precio
 
@@ -157,7 +155,6 @@ class SerieVuelosEntrada(BaseModel):
     origen: CodigoCiudad
     destino: CodigoCiudad
     hora_salida: time = Field(description="Hora local del origen.")
-    duracion_minutos: DuracionMinutos
     precio_economica: Precio
     precio_primera: Precio
     dias_semana: list[DiaSemana] = Field(
@@ -181,6 +178,9 @@ class SerieVuelosSalida(BaseModel):
 class SerieVistaPrevia(BaseModel):
     tipo: TipoVuelo
     capacidad: Capacidad
+    duracion_minutos: int = Field(
+        description="Duración calculada por distancia; la misma en todas las ocurrencias."
+    )
     fechas: list[date] = Field(description="Fechas en las que se crearía un vuelo.")
     omitidas: list[FechaOmitida]
 

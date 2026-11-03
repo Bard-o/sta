@@ -23,7 +23,6 @@ const bogotaMadrid = (fecha_salida: string) => ({
   destino: "MAD",
   fecha_salida,
   hora_salida: "22:00",
-  duracion_minutos: 600,
   precio_economica: 2_450_000,
   precio_primera: 6_900_000,
 });
@@ -50,12 +49,13 @@ describe("API simulada (MSW)", () => {
 
   it("calcula la llegada en UTC con el horario de verano del destino (RF-15)", async () => {
     await entrar("cruiz");
-    // 22:00 en Bogotá (UTC-5) + 10 h = 15:00 en Madrid (UTC+2) en verano.
+    // 22:00 en Bogotá (UTC-5) + 10 h 35 min = 15:35 en Madrid (UTC+2) en verano.
     const verano = await api("POST", "/api/v1/vuelos/vista-previa", bogotaMadrid("2027-07-10"));
     expect(verano.body).toMatchObject({
       tipo: "internacional",
       salida: "2027-07-11T03:00:00Z",
-      llegada: "2027-07-11T13:00:00Z",
+      llegada: "2027-07-11T13:35:00Z",
+      duracion_minutos: 635,
       capacidad: { primera: 50, economica: 200, total: 250 },
     });
   });

@@ -27,7 +27,6 @@ def datos_vuelo(**cambios: object) -> VueloEntrada:
         "destino": "MAD",
         "fecha_salida": date(2099, 1, 15),
         "hora_salida": time(10, 0),
-        "duracion_minutos": 600,
         "precio_economica": 2_450_000,
         "precio_primera": 6_900_000,
     }
@@ -250,10 +249,10 @@ def test_gestion_marca_sin_edicion_un_vuelo_cerrado(
 # ---------- Edición (HU-15, RF-18, RF-26) ----------
 
 
-def test_editar_recalcula_tipo_capacidad_y_llegada_y_conserva_el_codigo(
+def test_editar_recalcula_tipo_capacidad_duracion_y_llegada_y_conserva_el_codigo(
     db: Session, crear_usuario
 ) -> None:
-    """HU-15 · RF-18: editar recalcula tipo, capacidad y llegada; el código no cambia."""
+    """HU-15 · RF-18: editar recalcula tipo, capacidad, duración y llegada; el código no cambia."""
     usuario = crear_usuario(Rol.ADMIN)
     vuelo = crear_vuelo(db, origen="PEI", destino="BOG", duracion_minutos=50)
     codigo = vuelo.codigo
@@ -264,7 +263,6 @@ def test_editar_recalcula_tipo_capacidad_y_llegada_y_conserva_el_codigo(
         datos_vuelo(
             origen="PEI",
             destino="MAD",
-            duracion_minutos=600,
             precio_economica=2_500_000,
             precio_primera=7_000_000,
         ),
@@ -276,7 +274,8 @@ def test_editar_recalcula_tipo_capacidad_y_llegada_y_conserva_el_codigo(
     assert editado.codigo == codigo
     assert editado.tipo == "internacional"
     assert (editado.capacidad_primera, editado.capacidad_economica) == (50, 200)
-    assert editado.llegada == editado.salida + timedelta(minutes=600)
+    assert editado.duracion_minutos == 645
+    assert editado.llegada == editado.salida + timedelta(minutes=645)
     assert editado.destino_codigo == "MAD"
     assert editado.precio_economica == 2_500_000
 
@@ -285,13 +284,13 @@ def test_editar_actualiza_sus_noticias(db: Session, crear_usuario) -> None:
     """HU-15: editar el vuelo actualiza los datos que muestra su noticia."""
     usuario = crear_usuario(Rol.ADMIN)
     vuelo = service.programar_vuelo(
-        db, datos_vuelo(origen="PEI", destino="BOG", duracion_minutos=50), usuario_id=usuario.id
+        db, datos_vuelo(origen="PEI", destino="BOG"), usuario_id=usuario.id
     ).vuelo
 
     service.editar_vuelo(
         db,
         vuelo.id,
-        datos_vuelo(origen="PEI", destino="MAD", duracion_minutos=600, precio_economica=2_500_000),
+        datos_vuelo(origen="PEI", destino="MAD", precio_economica=2_500_000),
         usuario_id=usuario.id,
         ahora=AHORA,
     )
@@ -388,13 +387,12 @@ def test_editar_no_cuenta_el_propio_vuelo_como_duplicado(db: Session, crear_usua
             destino="BOG",
             fecha_salida=date(2026, 12, 10),
             hora_salida=time(6, 0),
-            duracion_minutos=60,
         ),
         usuario_id=usuario.id,
         ahora=AHORA,
     )
 
-    assert gestion.vuelo.duracion_minutos == 60
+    assert gestion.vuelo.duracion_minutos == 45
 
 
 def test_editar_con_datos_invalidos_no_cambia_el_vuelo(db: Session, crear_usuario) -> None:

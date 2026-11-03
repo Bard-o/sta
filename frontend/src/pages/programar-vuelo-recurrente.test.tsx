@@ -48,12 +48,13 @@ const SERIE_VISTA = {
   body: {
     tipo: "nacional",
     capacidad: { primera: 25, economica: 125, total: 150 },
+    duracion_minutos: 45,
     fechas: ["2026-10-05", "2026-10-12"],
     omitidas: [OMITIDA],
   },
 };
 
-/** Pereira → Bogotá, 06:00 (11:00Z), 50 min. */
+/** Pereira → Bogotá, 06:00 (11:00Z), 45 min. */
 const VISTA_VUELO = {
   status: 200,
   body: {
@@ -61,8 +62,8 @@ const VISTA_VUELO = {
     origen: resumen(PEI),
     destino: resumen(BOG),
     salida: "2026-10-05T11:00:00Z",
-    llegada: "2026-10-05T11:50:00Z",
-    duracion_minutos: 50,
+    llegada: "2026-10-05T11:45:00Z",
+    duracion_minutos: 45,
     capacidad: { primera: 25, economica: 125, total: 150 },
   },
 };
@@ -112,9 +113,6 @@ async function llenarVuelo(user: ReturnType<typeof userEvent.setup>) {
   await user.selectOptions(screen.getByLabelText("Origen", { exact: true }), "PEI");
   await user.selectOptions(screen.getByLabelText("Destino", { exact: true }), "BOG");
   await user.type(screen.getByLabelText(/^Hora de salida/), "06:00");
-  await user.type(screen.getByLabelText("Horas"), "0");
-  await user.clear(screen.getByLabelText("Minutos"));
-  await user.type(screen.getByLabelText("Minutos"), "50");
   await user.type(screen.getByLabelText("Precio por persona, económica"), "280000");
   await user.type(screen.getByLabelText("Precio por persona, primera"), "750000");
 }
@@ -168,11 +166,15 @@ describe("S08 · Vuelos recurrentes (HU-14)", () => {
     expect(linea.parentElement).toHaveTextContent(
       "2 vuelos los lunes. 1 fecha omitida porque ya existe un vuelo igual.",
     );
+    expect(screen.getByText(/Duración estimada:/).parentElement).toHaveTextContent(
+      "45 min · calculada por distancia.",
+    );
+    expect(screen.queryByLabelText("Horas")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Minutos")).not.toBeInTheDocument();
     expect(await peticiones(VISTA_SERIE)[0].json()).toEqual({
       origen: "PEI",
       destino: "BOG",
       hora_salida: "06:00",
-      duracion_minutos: 50,
       precio_economica: 280000,
       precio_primera: 750000,
       dias_semana: ["lun"],
@@ -198,6 +200,9 @@ describe("S08 · Vuelos recurrentes (HU-14)", () => {
     expect(
       await screen.findByText(/no se crearía ningún vuelo/, {}, { timeout: 3000 }),
     ).toBeVisible();
+    expect(screen.getByText(/Duración estimada:/).parentElement).toHaveTextContent(
+      "45 min · calculada por distancia.",
+    );
     expect(peticiones(VISTA)).toHaveLength(0);
   });
 

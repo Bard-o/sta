@@ -11,6 +11,7 @@ import unicodedata
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
+from math import asin, ceil, cos, radians, sin, sqrt
 from typing import Literal
 from zoneinfo import ZoneInfo
 
@@ -38,6 +39,11 @@ _CAPACIDADES: dict[TipoVuelo, tuple[int, int]] = {
     "nacional": (25, 125),
     "internacional": (50, 200),
 }
+# RF-13, SUP-31: la duración se calcula por distancia; el administrador no la digita.
+_RADIO_TIERRA_KM = 6371.0
+_VELOCIDAD_CRUCERO_KMH = 800
+_MINUTOS_RODAJE = 30
+_GRANULARIDAD_MINUTOS = 5
 _MENSAJE_RUTA = "Las rutas internacionales salen de Pereira, Bogotá, Medellín, Cali o Cartagena."
 _MENSAJE_DUPLICADO = "Ya existe un vuelo de esta ruta a esa hora."
 
@@ -276,6 +282,7 @@ class SerieCalculada:
     tipo: TipoVuelo
     origen: Ciudad
     destino: Ciudad
+    duracion_minutos: int
     fechas: list[date]
     omitidas: list[OcurrenciaOmitida]
 
@@ -341,6 +348,25 @@ def salida_en_utc(fecha: date, hora: time, zona_horaria: str) -> datetime:
     return datetime.combine(fecha, hora, tzinfo=ZoneInfo(zona_horaria)).astimezone(UTC)
 
 
+def calcular_duracion_minutos(origen: Ciudad, destino: Ciudad) -> int:
+    """Duración del vuelo según la distancia entre aeropuertos (RF-13, SUP-31).
+
+    Distancia ortodrómica (haversine, radio 6.371 km), crucero de 800 km/h y 30 minutos de
+    rodaje, ascenso y descenso, redondeada hacia arriba a múltiplos de 5 minutos.
+    """
+    lat_origen, lon_origen = radians(float(origen.latitud)), radians(float(origen.longitud))
+    lat_destino, lon_destino = radians(float(destino.latitud)), radians(float(destino.longitud))
+    diferencia_lat = lat_destino - lat_origen
+    diferencia_lon = lon_destino - lon_origen
+    haversine = (
+        sin(diferencia_lat / 2) ** 2
+        + cos(lat_origen) * cos(lat_destino) * sin(diferencia_lon / 2) ** 2
+    )
+    distancia_km = 2 * _RADIO_TIERRA_KM * asin(sqrt(haversine))
+    minutos = distancia_km / _VELOCIDAD_CRUCERO_KMH * 60 + _MINUTOS_RODAJE
+    return ceil(minutos / _GRANULARIDAD_MINUTOS) * _GRANULARIDAD_MINUTOS
+
+
 def validar_vuelo(
     db: Session,
     datos: VueloEntrada,
@@ -363,13 +389,14 @@ def validar_vuelo(
         raise VueloDuplicado(campos={"hora_salida": _MENSAJE_DUPLICADO})
 
     capacidad_primera, capacidad_economica = capacidad_de(tipo)
+    duracion = calcular_duracion_minutos(origen, destino)
     return VueloCalculado(
         tipo=tipo,
         origen=origen,
         destino=destino,
         salida=salida,
-        llegada=salida + timedelta(minutes=datos.duracion_minutos),
-        duracion_minutos=datos.duracion_minutos,
+        llegada=salida + timedelta(minutes=duracion),
+        duracion_minutos=duracion,
         capacidad_primera=capacidad_primera,
         capacidad_economica=capacidad_economica,
     )
@@ -435,8 +462,8 @@ def programar_serie(
             origen=serie.origen,
             destino=serie.destino,
             salida=salida,
-            llegada=salida + timedelta(minutes=datos.duracion_minutos),
-            duracion_minutos=datos.duracion_minutos,
+            llegada=salida + timedelta(minutes=serie.duracion_minutos),
+            duracion_minutos=serie.duracion_minutos,
             capacidad_primera=capacidad_primera,
             capacidad_economica=capacidad_economica,
         )
@@ -493,6 +520,7 @@ def _calcular_serie(
         tipo=tipo,
         origen=origen,
         destino=destino,
+        duracion_minutos=calcular_duracion_minutos(origen, destino),
         fechas=fechas,
         omitidas=omitidas,
     )

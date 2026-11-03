@@ -66,6 +66,52 @@ export function resumenCiudad(c: Ciudad): CiudadResumen {
   return { codigo: c.codigo, nombre: c.nombre, zona_horaria: c.zona_horaria };
 }
 
+// RF-13, SUP-31: coordenadas de los aeropuertos del subconjunto y la misma fórmula del backend.
+const COORDENADAS: Record<string, [number, number]> = {
+  BOG: [4.7016, -74.1469],
+  MDE: [6.16454, -75.4231],
+  CLO: [3.54272, -76.3819],
+  CTG: [10.4424, -75.513],
+  PEI: [4.8127, -75.7395],
+  BAQ: [10.8896, -74.7808],
+  BGA: [7.1265, -73.1848],
+  MZL: [5.0296, -75.4647],
+  SMR: [11.1196, -74.2306],
+  LET: [-4.19115, -69.942],
+  MAD: [40.4719, -3.5626],
+  LHR: [51.47, -0.4543],
+  JFK: [40.6413, -73.7781],
+  EZE: [-34.8222, -58.5358],
+  MIA: [25.7959, -80.287],
+};
+
+const RADIO_TIERRA_KM = 6371;
+const VELOCIDAD_CRUCERO_KMH = 800;
+const MINUTOS_RODAJE = 30;
+
+function coordenadas(codigo: string): [number, number] {
+  const punto = COORDENADAS[codigo];
+  if (!punto) throw new Error(`Falta la coordenada de ${codigo} en los mocks.`);
+  return punto;
+}
+
+/** La duración de la vista previa simulada, con la fórmula de RF-13 y SUP-31. */
+export function duracionMinutos(origen: Ciudad, destino: Ciudad): number {
+  const [latOrigen, lonOrigen] = coordenadas(origen.codigo);
+  const [latDestino, lonDestino] = coordenadas(destino.codigo);
+  const radianes = (grados: number) => (grados * Math.PI) / 180;
+  const diferenciaLat = radianes(latDestino - latOrigen);
+  const diferenciaLon = radianes(lonDestino - lonOrigen);
+  const haversine =
+    Math.sin(diferenciaLat / 2) ** 2 +
+    Math.cos(radianes(latOrigen)) *
+      Math.cos(radianes(latDestino)) *
+      Math.sin(diferenciaLon / 2) ** 2;
+  const distanciaKm = 2 * RADIO_TIERRA_KM * Math.asin(Math.sqrt(haversine));
+  const minutos = (distanciaKm / VELOCIDAD_CRUCERO_KMH) * 60 + MINUTOS_RODAJE;
+  return Math.ceil(minutos / 5) * 5;
+}
+
 // ---------- Vuelos ----------
 
 export function capacidad(tipo: VueloAdmin["tipo"]): VueloAdmin["capacidad"] {

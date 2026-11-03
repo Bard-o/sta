@@ -24,12 +24,49 @@ def datos_vuelo(**cambios: object) -> VueloEntrada:
         "destino": "MAD",
         "fecha_salida": date(2099, 1, 15),
         "hora_salida": time(10, 0),
-        "duracion_minutos": 600,
         "precio_economica": 2_450_000,
         "precio_primera": 6_900_000,
     }
     base.update(cambios)
     return VueloEntrada(**base)
+
+
+@pytest.mark.parametrize(
+    ("origen", "destino", "distancia_km", "minutos"),
+    [
+        ("PEI", "BOG", 177, 45),
+        ("BOG", "CTG", 656, 80),
+        ("BOG", "ADZ", 1208, 125),
+        ("PEI", "MIA", 2383, 210),
+        ("BOG", "EZE", 4689, 385),
+        ("BOG", "MAD", 8031, 635),
+    ],
+)
+def test_duracion_calculada_por_la_distancia(
+    db: Session, origen: str, destino: str, distancia_km: int, minutos: int
+) -> None:
+    """HU-13 · RF-13, SUP-31: la duración sale de la distancia entre los aeropuertos.
+
+    La tabla es la del issue #102: crucero de 800 km/h, 30 min de rodaje y múltiplos de 5 min.
+    """
+    ciudad_origen = service.obtener_ciudad(db, origen)
+    ciudad_destino = service.obtener_ciudad(db, destino)
+    assert ciudad_origen is not None and ciudad_destino is not None
+
+    duracion = service.calcular_duracion_minutos(ciudad_origen, ciudad_destino)
+
+    assert duracion == minutos
+    assert duracion % 5 == 0
+    assert 0 < duracion < 1440
+
+
+def test_la_duracion_enviada_por_un_cliente_se_ignora(db: Session) -> None:
+    """HU-13 · RF-13: `duracion_minutos` ya no es parte de la entrada; si llega, se ignora."""
+    calculado = service.validar_vuelo(
+        db, datos_vuelo(origen="PEI", destino="BOG", duracion_minutos=1439)
+    )
+
+    assert calculado.duracion_minutos == 45
 
 
 @pytest.mark.parametrize(
@@ -117,7 +154,6 @@ def test_duplicado_misma_ruta_y_hora_y_acepta_veinte_minutos_despues(db: Session
         destino="BOG",
         fecha_salida=date(2026, 12, 10),
         hora_salida=time(6, 0),
-        duracion_minutos=50,
     )
 
     with pytest.raises(service.VueloDuplicado) as error:
@@ -147,7 +183,6 @@ def test_un_vuelo_cancelado_no_bloquea_la_misma_ruta_y_hora(db: Session) -> None
             destino="BOG",
             fecha_salida=date(2026, 12, 10),
             hora_salida=time(6, 0),
-            duracion_minutos=50,
         ),
     )
 
@@ -170,7 +205,6 @@ def test_excepto_id_permite_validar_una_edicion(db: Session) -> None:
             destino="BOG",
             fecha_salida=date(2026, 12, 10),
             hora_salida=time(6, 0),
-            duracion_minutos=50,
         ),
         excepto_id=existente.id,
     )
@@ -179,7 +213,7 @@ def test_excepto_id_permite_validar_una_edicion(db: Session) -> None:
 
 
 def test_llegada_en_madrid_con_horario_de_verano(db: Session) -> None:
-    """HU-13 · RF-15: 10/07/2026 22:00 Bogotá + 10 h llega 15:00 a Madrid (UTC+2)."""
+    """HU-13 · RF-15: 10/07/2026 22:00 Bogotá + 10 h 35 min llega 15:35 a Madrid (UTC+2)."""
     calculado = service.validar_vuelo(
         db,
         datos_vuelo(
@@ -187,19 +221,18 @@ def test_llegada_en_madrid_con_horario_de_verano(db: Session) -> None:
             destino="MAD",
             fecha_salida=date(2026, 7, 10),
             hora_salida=time(22, 0),
-            duracion_minutos=600,
         ),
         ahora=datetime(2026, 1, 1, tzinfo=UTC),
     )
 
     assert calculado.salida == datetime(2026, 7, 11, 3, 0, tzinfo=UTC)
-    assert calculado.llegada == datetime(2026, 7, 11, 13, 0, tzinfo=UTC)
+    assert calculado.llegada == datetime(2026, 7, 11, 13, 35, tzinfo=UTC)
     local = calculado.llegada.astimezone(ZoneInfo("Europe/Madrid"))
-    assert (local.date(), local.hour, local.minute) == (date(2026, 7, 11), 15, 0)
+    assert (local.date(), local.hour, local.minute) == (date(2026, 7, 11), 15, 35)
 
 
 def test_llegada_en_madrid_en_horario_estandar(db: Session) -> None:
-    """HU-13 · RF-15: 10/12/2026 22:00 Bogotá + 10 h llega 14:00 a Madrid (UTC+1)."""
+    """HU-13 · RF-15: 10/12/2026 22:00 Bogotá + 10 h 35 min llega 14:35 a Madrid (UTC+1)."""
     calculado = service.validar_vuelo(
         db,
         datos_vuelo(
@@ -207,19 +240,18 @@ def test_llegada_en_madrid_en_horario_estandar(db: Session) -> None:
             destino="MAD",
             fecha_salida=date(2026, 12, 10),
             hora_salida=time(22, 0),
-            duracion_minutos=600,
         ),
         ahora=datetime(2026, 1, 1, tzinfo=UTC),
     )
 
     assert calculado.salida == datetime(2026, 12, 11, 3, 0, tzinfo=UTC)
-    assert calculado.llegada == datetime(2026, 12, 11, 13, 0, tzinfo=UTC)
+    assert calculado.llegada == datetime(2026, 12, 11, 13, 35, tzinfo=UTC)
     local = calculado.llegada.astimezone(ZoneInfo("Europe/Madrid"))
-    assert (local.date(), local.hour, local.minute) == (date(2026, 12, 11), 14, 0)
+    assert (local.date(), local.hour, local.minute) == (date(2026, 12, 11), 14, 35)
 
 
 def test_llegada_en_buenos_aires(db: Session) -> None:
-    """RF-15: Bogotá → Buenos Aires, 08:00 + 6 h 30 min llega 16:30 local (UTC-3)."""
+    """RF-15: Bogotá → Buenos Aires, 08:00 + 6 h 25 min llega 16:25 local (UTC-3)."""
     calculado = service.validar_vuelo(
         db,
         datos_vuelo(
@@ -227,13 +259,12 @@ def test_llegada_en_buenos_aires(db: Session) -> None:
             destino="EZE",
             fecha_salida=date(2026, 12, 10),
             hora_salida=time(8, 0),
-            duracion_minutos=390,
         ),
         ahora=datetime(2026, 1, 1, tzinfo=UTC),
     )
 
     local = calculado.llegada.astimezone(ZoneInfo("America/Argentina/Buenos_Aires"))
-    assert (local.date(), local.hour, local.minute) == (date(2026, 12, 10), 16, 30)
+    assert (local.date(), local.hour, local.minute) == (date(2026, 12, 10), 16, 25)
 
 
 @pytest.mark.parametrize(
@@ -297,7 +328,7 @@ def test_programar_vuelo_no_hace_commit(db: Session, crear_usuario) -> None:
 
     programado = service.programar_vuelo(
         db,
-        datos_vuelo(origen="PEI", destino="MIA", duracion_minutos=240),
+        datos_vuelo(origen="PEI", destino="MIA"),
         usuario_id=usuario.id,
     )
 
@@ -336,7 +367,6 @@ def datos_serie(**cambios: object) -> SerieVuelosEntrada:
         "origen": "PEI",
         "destino": "BOG",
         "hora_salida": time(6, 0),
-        "duracion_minutos": 50,
         "precio_economica": 280_000,
         "precio_primera": 750_000,
         "dias_semana": ["lun"],
@@ -360,7 +390,7 @@ def test_serie_de_lunes_del_ejemplo_crea_un_vuelo_por_lunes(db: Session, crear_u
     for vuelo in serie.creados:
         assert re.fullmatch(r"STA-\d{5}", vuelo.codigo)
         assert (vuelo.origen_codigo, vuelo.destino_codigo) == ("PEI", "BOG")
-        assert vuelo.duracion_minutos == 50
+        assert vuelo.duracion_minutos == 45
         assert (vuelo.precio_economica, vuelo.precio_primera) == (280_000, 750_000)
         assert (vuelo.capacidad_primera, vuelo.capacidad_economica) == (25, 125)
         assert vuelo.estado == "programado"

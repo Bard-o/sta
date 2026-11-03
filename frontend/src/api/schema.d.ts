@@ -1348,6 +1348,11 @@ export interface components {
       tipo: "nacional" | "internacional";
       capacidad: components["schemas"]["Capacidad"];
       /**
+       * Duracion Minutos
+       * @description Duración calculada por distancia; la misma en todas las ocurrencias.
+       */
+      duracion_minutos: number;
+      /**
        * Fechas
        * @description Fechas en las que se crearía un vuelo.
        */
@@ -1373,8 +1378,6 @@ export interface components {
        * @description Hora local del origen.
        */
       hora_salida: string;
-      /** Duracion Minutos */
-      duracion_minutos: number;
       /**
        * Precio Economica
        * @description COP, entero.
@@ -1609,7 +1612,8 @@ export interface components {
     };
     /**
      * VueloEntrada
-     * @description HU-13 y HU-15. La fecha y la hora son locales del origen.
+     * @description HU-13 y HU-15. La fecha y la hora son locales del origen. La duración la calcula el
+     *     sistema con la distancia entre las ciudades (RF-13, SUP-31).
      */
     VueloEntrada: {
       /**
@@ -1632,8 +1636,6 @@ export interface components {
        * Format: time
        */
       hora_salida: string;
-      /** Duracion Minutos */
-      duracion_minutos: number;
       /**
        * Precio Economica
        * @description COP, entero.
