@@ -2286,7 +2286,7 @@ Bloque contiguo (para RF-41): conjunto de sillas libres de una misma fila y clas
 | RNF-05 | Envío oportuno de correos | ENU; SUP-29 | Alta/Esencial |
 | RNF-06 | Escalabilidad vertical | R2 | Alta/Esencial |
 | RNF-07 | Volumen de datos soportado | R2 | Alta/Esencial |
-| RNF-08 | Almacenamiento seguro de contraseñas | R1-P55 | Alta/Esencial |
+| RNF-08 | Almacenamiento seguro de contraseñas | R1-P55; SUST | Alta/Esencial |
 | RNF-09 | Cifrado en tránsito | ENU | Alta/Esencial |
 | RNF-10 | Autorización en el servidor | ENU | Alta/Esencial |
 | RNF-11 | Protección contra vulnerabilidades web comunes | — | Alta/Esencial |
