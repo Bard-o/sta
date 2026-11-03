@@ -67,6 +67,23 @@ describe("Inicio de sesión (HU-03)", () => {
     expect(screen.getByLabelText("Contraseña")).toHaveAttribute("aria-invalid", "true");
   });
 
+  // HU-03: una contraseña de solo espacios cuenta como vacía y no llega a la API.
+  it("trata una contraseña de solo espacios como vacía, sin llamar a la API", async () => {
+    responderApi({ "GET /api/v1/auth/me": SIN_SESION });
+    renderRutas(rutas, "/login");
+
+    await llenarYEnviar("lauragomez", "   ");
+
+    expect(await screen.findByText("Escribe tu contraseña.")).toBeVisible();
+    expect(screen.getByLabelText("Contraseña")).toHaveAttribute("aria-invalid", "true");
+    const llamadas = vi.mocked(fetch).mock.calls.map(([entrada]) => entrada as Request);
+    expect(
+      llamadas.filter(
+        (r) => r.method === "POST" && new URL(r.url).pathname === "/api/v1/auth/login",
+      ),
+    ).toHaveLength(0);
+  });
+
   // HU-03: con credenciales correctas entra a la página de inicio de su rol.
   it.each([
     ["root", ROOT, "Inicio del root", "/root"],

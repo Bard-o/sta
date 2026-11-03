@@ -192,6 +192,57 @@ describe("S05 · Datos personales (HU-07)", () => {
     expect(peticiones(GUARDAR)).toHaveLength(0);
   });
 
+  // RF-03: nombres solo con letras, espacios, apóstrofo o guion.
+  it("rechaza unos nombres con números junto al campo, sin guardar", async () => {
+    servidor();
+    renderRutas(rutas, "/perfil");
+    const user = userEvent.setup();
+
+    const nombres = await campo("Nombres");
+    await user.clear(nombres);
+    await user.type(nombres, "1234");
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
+
+    expect(await screen.findByText("Usa solo letras, espacios, apóstrofo o guion.")).toBeVisible();
+    expect(nombres).toBeInvalid();
+    expect(peticiones(GUARDAR)).toHaveLength(0);
+  });
+
+  // RF-03: el teléfono opcional lleva al menos 7 números.
+  it("rechaza un teléfono con menos de 7 números junto al campo, sin guardar", async () => {
+    servidor();
+    renderRutas(rutas, "/perfil");
+    const user = userEvent.setup();
+
+    const telefono = await campo("Teléfono (opcional)");
+    await user.clear(telefono);
+    await user.type(telefono, "(12) 3-45");
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
+
+    expect(
+      await screen.findByText("Escribe un teléfono válido, con al menos 7 números."),
+    ).toBeVisible();
+    expect(telefono).toBeInvalid();
+    expect(peticiones(GUARDAR)).toHaveLength(0);
+  });
+
+  // RF-03: el lugar de nacimiento admite como máximo 120 caracteres.
+  it("rechaza un lugar de nacimiento de más de 120 caracteres, sin guardar", async () => {
+    servidor();
+    renderRutas(rutas, "/perfil");
+    const user = userEvent.setup();
+
+    const lugar = await campo("Lugar de nacimiento");
+    await user.clear(lugar);
+    await user.click(lugar);
+    await user.paste("P".repeat(121));
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
+
+    expect(await screen.findByText("Usa como máximo 120 caracteres.")).toBeVisible();
+    expect(lugar).toBeInvalid();
+    expect(peticiones(GUARDAR)).toHaveLength(0);
+  });
+
   it("un correo sin verificar ofrece verificarlo", async () => {
     servidor({ ...PERFIL_LAURA, email_verificado: false });
     renderRutas(rutas, "/perfil");
@@ -372,6 +423,28 @@ describe("S05 · Contraseña (HU-06)", () => {
 
     expect(await screen.findByText("La contraseña debe tener al menos un número.")).toBeVisible();
     expect(screen.getByText("No coincide con la contraseña nueva.")).toBeVisible();
+    expect(peticiones(CONTRASENA)).toHaveLength(0);
+  });
+
+  // RNF-08: la contraseña nueva no admite espacios.
+  it("rechaza una contraseña nueva con espacios, sin llamar a la API", async () => {
+    servidor();
+    renderRutas(rutas, "/perfil");
+    await escribirContrasenas("Clave1234", "Clave 1234");
+
+    expect(await screen.findByText("La contraseña no puede tener espacios.")).toBeVisible();
+    expect(screen.getByLabelText("Nueva")).toBeInvalid();
+    expect(peticiones(CONTRASENA)).toHaveLength(0);
+  });
+
+  // La contraseña actual de solo espacios cuenta como vacía.
+  it("trata una contraseña actual de solo espacios como vacía, sin llamar a la API", async () => {
+    servidor();
+    renderRutas(rutas, "/perfil");
+    await escribirContrasenas("   ", "OtraClave99");
+
+    expect(await screen.findByText("Escribe tu contraseña actual.")).toBeVisible();
+    expect(screen.getByLabelText("Actual")).toBeInvalid();
     expect(peticiones(CONTRASENA)).toHaveLength(0);
   });
 

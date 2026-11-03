@@ -105,4 +105,108 @@ describe("API simulada (MSW)", () => {
     expect(carrusel[0]).toMatchObject({ tipo: "promocion", vigente: true });
     expect(carrusel.every((n: { vigente: boolean }) => n.vigente)).toBe(true);
   });
+
+  it("rechaza en el registro una contraseña con espacios y nombres inválidos (HU-01, RNF-08, RF-03)", async () => {
+    const cliente = {
+      tipo_documento: "CC",
+      numero_documento: "1088000111",
+      nombres: "María José",
+      apellidos: "O'Neill",
+      fecha_nacimiento: "1999-05-10",
+      lugar_nacimiento: "Pereira",
+      direccion_facturacion: "Calle 1 # 2-3",
+      genero: "femenino",
+      email: "maria.jose@correo.co",
+      telefono: "3101234567",
+      nombre_usuario: "mariajose",
+      contrasena: "Clave1234",
+      acepta_politica: true,
+    };
+    const conEspacio = await api("POST", "/api/v1/usuarios/registro", {
+      ...cliente,
+      contrasena: "Clave 1234",
+    });
+    expect(conEspacio.status).toBe(422);
+    expect(conEspacio.body.error.codigo).toBe("datos_invalidos");
+    expect(conEspacio.body.error.campos.contrasena).toBe(
+      "Mínimo 8 caracteres, con al menos una letra y un número, sin espacios.",
+    );
+
+    const nombres = await api("POST", "/api/v1/usuarios/registro", {
+      ...cliente,
+      nombres: "1234",
+      apellidos: "Gómez#",
+    });
+    expect(nombres.status).toBe(422);
+    expect(nombres.body.error.campos).toMatchObject({
+      nombres: "El formato no es válido.",
+      apellidos: "El formato no es válido.",
+    });
+
+    expect((await api("POST", "/api/v1/usuarios/registro", cliente)).status).toBe(201);
+  });
+
+  it("valida el formato de los datos del perfil como el backend (HU-07, RF-03)", async () => {
+    await entrar("lauragomez");
+    const { body: perfil } = await api("GET", "/api/v1/usuarios/me/perfil");
+    const edicion = { ...perfil, telefono: "3101234567" };
+
+    const nombres = await api("PUT", "/api/v1/usuarios/me/perfil", { ...edicion, nombres: "1234" });
+    expect(nombres.status).toBe(422);
+    expect(nombres.body.error.codigo).toBe("datos_invalidos");
+    expect(nombres.body.error.campos.nombres).toBe("El formato no es válido.");
+
+    // Seis dígitos no alcanzan el mínimo de siete del teléfono.
+    const telefono = await api("PUT", "/api/v1/usuarios/me/perfil", {
+      ...edicion,
+      telefono: "123456",
+    });
+    expect(telefono.status).toBe(422);
+    expect(telefono.body.error.campos.telefono).toBe("El formato no es válido.");
+
+    const largo = await api("PUT", "/api/v1/usuarios/me/perfil", {
+      ...edicion,
+      lugar_nacimiento: "x".repeat(121),
+    });
+    expect(largo.body.error.campos.lugar_nacimiento).toBe("Es demasiado largo.");
+
+    expect((await api("PUT", "/api/v1/usuarios/me/perfil", edicion)).status).toBe(200);
+  });
+
+  it("valida los datos personales del registro del administrador antes de sus reglas de negocio (HU-12, RF-03)", async () => {
+    await entrar("jtorres");
+    const registro = {
+      tipo_documento: "CC",
+      numero_documento: "1088000222",
+      nombres: "Juan",
+      apellidos: "Torres",
+      fecha_nacimiento: "1990-03-02",
+      lugar_nacimiento: "Cali",
+      direccion_facturacion: "Carrera 5 # 6-7",
+      genero: "masculino",
+      email: "jtorres@avianca.test",
+      contrasena_temporal: CONTRASENA_MOCK,
+      contrasena_nueva: "Nueva1234",
+      confirmacion: "Nueva1234",
+    };
+    const invalido = await api("POST", "/api/v1/administradores/me/registro", {
+      ...registro,
+      nombres: "1234",
+      contrasena_temporal: "otra",
+    });
+    expect(invalido.status).toBe(422);
+    expect(invalido.body.error.codigo).toBe("datos_invalidos");
+    expect(invalido.body.error.campos.nombres).toBe("El formato no es válido.");
+
+    const espacios = await api("POST", "/api/v1/administradores/me/registro", {
+      ...registro,
+      contrasena_nueva: "Nueva 1234",
+      confirmacion: "Nueva 1234",
+    });
+    expect(espacios.body.error.campos.contrasena_nueva).toBe(
+      "Mínimo 8 caracteres, con al menos una letra y un número, sin espacios.",
+    );
+
+    expect((await api("POST", "/api/v1/administradores/me/registro", registro)).status).toBe(200);
+  });
 });
