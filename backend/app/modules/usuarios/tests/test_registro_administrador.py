@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.security import Rol, verificar_contrasena
+from app.core.security import MENSAJE_POLITICA_CONTRASENA, Rol, verificar_contrasena
 from app.core.testing import CONTRASENA_TEST
 from app.modules.usuarios.models import Usuario
 
@@ -337,6 +337,41 @@ def test_contrasena_nueva_invalida_responde_422(
     error = respuesta.json()["error"]
     assert error["codigo"] == "datos_invalidos"
     assert campo in error["campos"]
+
+
+def test_nombres_con_numeros_responde_422_y_el_registro_sigue_incompleto(
+    client: TestClient, crear_usuario: Callable[..., Any], db: Session
+) -> None:
+    """HU-12 · RF-03: los nombres solo llevan letras; el registro no se completa."""
+    administrador = _admin_incompleto(client, crear_usuario)
+
+    respuesta = client.post(RUTA, json=_datos(nombres="1234"))
+
+    assert respuesta.status_code == 422
+    error = respuesta.json()["error"]
+    assert error["codigo"] == "datos_invalidos"
+    assert "nombres" in error["campos"]
+    db.refresh(administrador)
+    assert administrador.registro_completo is False
+
+
+def test_contrasena_nueva_con_espacios_responde_422_y_el_registro_sigue_incompleto(
+    client: TestClient, crear_usuario: Callable[..., Any], db: Session
+) -> None:
+    """HU-12 · RNF-08: la contraseña nueva no puede llevar espacios."""
+    administrador = _admin_incompleto(client, crear_usuario)
+
+    respuesta = client.post(
+        RUTA, json=_datos(contrasena_nueva="Nueva 2026", confirmacion="Nueva 2026")
+    )
+
+    assert respuesta.status_code == 422
+    error = respuesta.json()["error"]
+    assert error["codigo"] == "datos_invalidos"
+    assert error["campos"]["contrasena_nueva"] == MENSAJE_POLITICA_CONTRASENA
+    db.refresh(administrador)
+    assert administrador.registro_completo is False
+    assert verificar_contrasena(CONTRASENA_TEST, administrador.password_hash)
 
 
 def test_el_documento_y_correo_de_un_cliente_no_bloquean_al_administrador(

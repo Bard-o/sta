@@ -3,7 +3,8 @@
 from datetime import date, datetime
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints
+from pydantic_core import PydanticCustomError
 
 from app.core.security import Rol
 
@@ -19,7 +20,40 @@ PATRON_NOMBRE_USUARIO = r"^[A-Za-z0-9._-]{3,50}$"
 PATRON_DOCUMENTO = r"^[A-Za-z0-9]{3,20}$"
 PATRON_TELEFONO = r"^[0-9 +()-]{7,20}$"
 
+# Empieza por letra y solo admite letras (con tildes y ñ), espacios, apóstrofo, punto o guion
+# (RF-03). Es el mismo patrón de frontend/src/lib/persona.ts.
+PATRON_NOMBRE_PROPIO = r"^\p{L}[\p{L} '.-]*$"
+
 Contrasena = Annotated[str, Field(min_length=1, max_length=128)]
+
+# Los espacios al inicio y al final se recortan antes de medir longitud y patrón, así un texto
+# de solo espacios queda vacío y falla `min_length=1`, igual que en el formulario (RF-03).
+NombrePropio = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True, min_length=1, max_length=100, pattern=PATRON_NOMBRE_PROPIO
+    ),
+]
+LugarNacimiento = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)
+]
+DireccionFacturacion = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)
+]
+
+
+def _con_siete_digitos(telefono: str) -> str:
+    # Mismo tipo de error que el patrón, para que `campos.telefono` diga "El formato no es válido."
+    if sum(caracter.isdigit() for caracter in telefono) < 7:
+        raise PydanticCustomError("string_pattern_mismatch", "Debe tener al menos 7 dígitos.")
+    return telefono
+
+
+Telefono = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, pattern=PATRON_TELEFONO),
+    AfterValidator(_con_siete_digitos),
+]
 
 
 # ---------- Sesión (HU-03, HU-04) ----------
@@ -54,14 +88,14 @@ class UsuarioSalida(BaseModel):
 class DatosEditables(BaseModel):
     """Datos que el titular puede cambiar desde su perfil (RF-08)."""
 
-    nombres: str = Field(min_length=1, max_length=100)
-    apellidos: str = Field(min_length=1, max_length=100)
+    nombres: NombrePropio
+    apellidos: NombrePropio
     fecha_nacimiento: date = Field(description="No puede ser futura.")
-    lugar_nacimiento: str = Field(min_length=1, max_length=120)
-    direccion_facturacion: str = Field(min_length=1, max_length=200)
+    lugar_nacimiento: LugarNacimiento
+    direccion_facturacion: DireccionFacturacion
     genero: Genero
     email: str = Field(max_length=254, pattern=PATRON_EMAIL)
-    telefono: str | None = Field(default=None, pattern=PATRON_TELEFONO)
+    telefono: Telefono | None = None
 
 
 class DatosPersonalesEntrada(DatosEditables):

@@ -362,6 +362,37 @@ def test_fecha_nacimiento_futura_es_rechazada(client: TestClient, correos):
     )
 
 
+@pytest.mark.parametrize(
+    ("cambios", "campo"),
+    [
+        ({"nombres": "1234"}, "nombres"),
+        ({"apellidos": "Gómez#"}, "apellidos"),
+        ({"telefono": "123456"}, "telefono"),
+        ({"direccion_facturacion": "   "}, "direccion_facturacion"),
+    ],
+    ids=["nombres", "apellidos", "telefono-6-digitos", "direccion-en-espacios"],
+)
+def test_perfil_aplica_las_reglas_de_formato_del_registro(
+    cambios: dict[str, object], campo: str, client: TestClient, db: Session, correos
+):
+    """HU-07 / RF-03 / RF-08: PerfilEntrada rechaza lo mismo que el registro (letras en
+    nombres y apellidos, 7 dígitos en el teléfono, textos obligatorios sin solo espacios) y el
+    perfil no cambia."""
+    assert _registrar(client).status_code == 201
+
+    respuesta = client.put(PERFIL, json=_entrada(**cambios))
+
+    assert respuesta.status_code == 422
+    error = respuesta.json()["error"]
+    assert error["codigo"] == "datos_invalidos"
+    assert campo in error["campos"]
+    usuario = _usuario(db)
+    assert usuario.nombres == "Laura"
+    assert usuario.apellidos == "Gómez Ríos"
+    assert usuario.telefono == "310 555 0192"
+    assert usuario.direccion_facturacion == "Cra. 7 # 19-28, Pereira"
+
+
 def test_guardar_sin_cambiar_el_correo_no_envia_enlace(client: TestClient, correos):
     """HU-07: guardar otros datos no reenvía el enlace del correo vigente ni del pendiente."""
     assert _registrar(client).status_code == 201
