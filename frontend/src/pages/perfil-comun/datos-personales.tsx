@@ -10,11 +10,11 @@ import { CampoLista, CampoTexto } from "@/components/ui/campos";
 import { Form } from "@/components/ui/form";
 import { Glass } from "@/components/ui/glass";
 import { Notice } from "@/components/ui/notice";
-import { camposPersona, GENEROS, hoy, nombreTipoDocumento } from "@/lib/persona";
+import { camposPersona, GENEROS, hoy, nombreTipoDocumento, telefono } from "@/lib/persona";
 
 type Perfil = Schemas["PerfilSalida"];
 
-const esquema = z.object({ ...camposPersona, telefono: z.string().trim() });
+const esquema = z.object({ ...camposPersona, telefono });
 type Entrada = z.input<typeof esquema>;
 type Datos = z.output<typeof esquema>;
 

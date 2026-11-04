@@ -22,26 +22,32 @@ import { ProfileImage } from "@/components/ui/profile-image";
 import { AYUDA_CONTRASENA, esquemaContrasena } from "@/lib/contrasena";
 import { camposPersona, GENEROS, hoy, TIPOS_DOCUMENTO, type TipoDocumento } from "@/lib/persona";
 
-const esquema = z.object({
-  ...camposPersona,
-  tipo_documento: z
-    .string()
-    .refine((v): v is TipoDocumento => TIPOS_DOCUMENTO.some((t) => t.value === v), {
-      message: "Elige el tipo de documento.",
+const esquema = z
+  .object({
+    ...camposPersona,
+    tipo_documento: z
+      .string()
+      .refine((v): v is TipoDocumento => TIPOS_DOCUMENTO.some((t) => t.value === v), {
+        message: "Elige el tipo de documento.",
+      }),
+    numero_documento: z
+      .string()
+      .trim()
+      .regex(/^[A-Za-z0-9]{3,20}$/, "Usa de 3 a 20 letras o números, sin espacios ni puntos."),
+    nombre_usuario: z
+      .string()
+      .trim()
+      .regex(/^[A-Za-z0-9._-]{3,50}$/, "Usa de 3 a 50 letras, números, punto, guion o guion bajo."),
+    contrasena: esquemaContrasena,
+    confirmar_contrasena: z.string().min(1, "Escribe de nuevo la contraseña."),
+    acepta_politica: z.boolean().refine((v) => v, {
+      message: "Debes aceptar la política de tratamiento de datos personales para crear la cuenta.",
     }),
-  numero_documento: z
-    .string()
-    .trim()
-    .regex(/^[A-Za-z0-9]{3,20}$/, "Usa de 3 a 20 letras o números, sin espacios ni puntos."),
-  nombre_usuario: z
-    .string()
-    .trim()
-    .regex(/^[A-Za-z0-9._-]{3,50}$/, "Usa de 3 a 50 letras, números, punto, guion o guion bajo."),
-  contrasena: esquemaContrasena,
-  acepta_politica: z.boolean().refine((v) => v, {
-    message: "Debes aceptar la política de tratamiento de datos personales para crear la cuenta.",
-  }),
-});
+  })
+  .refine((d) => d.contrasena === d.confirmar_contrasena, {
+    message: "Las contraseñas no coinciden.",
+    path: ["confirmar_contrasena"],
+  });
 
 type Entrada = z.input<typeof esquema>;
 type Datos = z.output<typeof esquema>;
@@ -67,11 +73,14 @@ export function RegistroPage() {
       email: "",
       nombre_usuario: "",
       contrasena: "",
+      confirmar_contrasena: "",
       acepta_politica: false,
     },
   });
 
-  const enviar = form.handleSubmit((datos) => {
+  const enviar = form.handleSubmit((entrada) => {
+    const { confirmar_contrasena, ...datos } = entrada;
+    void confirmar_contrasena;
     setErrorImagen(undefined);
     registro.mutate(
       { datos, imagen },
@@ -176,6 +185,12 @@ export function RegistroPage() {
                   type="password"
                   autoComplete="new-password"
                   ayuda={AYUDA_CONTRASENA}
+                />
+                <CampoTexto<Entrada>
+                  name="confirmar_contrasena"
+                  label="Confirmar contraseña"
+                  type="password"
+                  autoComplete="new-password"
                 />
               </div>
 

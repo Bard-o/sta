@@ -9,6 +9,7 @@ import {
   registroPendiente,
   RUTA_PRIMER_INGRESO,
 } from "@/auth/roles";
+import { usePerfil } from "@/auth/perfil";
 import { useLogout, useSesion } from "@/auth/sesion";
 import { RUTA_VERIFICACION } from "@/auth/verificacion";
 import { Backdrop } from "@/components/ui/backdrop";
@@ -23,6 +24,8 @@ export function AppLayout() {
   const logout = useLogout();
   const navigate = useNavigate();
   const location = useLocation();
+  // El root no tiene perfil con imagen; los demás la muestran en la barra.
+  const { data: perfil } = usePerfil(Boolean(usuario) && usuario?.rol !== "root");
 
   const cerrarSesion = () =>
     logout.mutate(undefined, {
@@ -51,6 +54,7 @@ export function AppLayout() {
       user={{
         name: nombreVisible(usuario),
         role: NOMBRE_ROL[usuario.rol],
+        imageUrl: perfil?.imagen_url,
         // El administrador con el registro pendiente solo ve S07. El root entra a /perfil solo para
         // cambiar su contraseña (HU-06).
         href: pendiente ? undefined : "/perfil",

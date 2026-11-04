@@ -97,12 +97,15 @@ def test_contrasena_actual_incorrecta_no_cambia_nada(
 
 
 @pytest.mark.parametrize(
-    "nueva", ["Clave12", "12345678", "abcdefgh"], ids=["corta", "sin-letra", "sin-numero"]
+    "nueva",
+    ["Clave12", "12345678", "abcdefgh", "Nueva 2026"],
+    ids=["corta", "sin-letra", "sin-numero", "con-espacios"],
 )
 def test_rechaza_contrasena_nueva_que_no_cumple_la_politica(
     nueva: str, client: TestClient, crear_usuario: Callable[..., Any], db: Session
 ) -> None:
-    # HU-06 CA-3 (política) y RNF-08: mínimo 8 caracteres, al menos una letra y un número.
+    # HU-06 CA-3 (política) y RNF-08: mínimo 8 caracteres, al menos una letra y un número, sin
+    # espacios; la contraseña anterior sigue funcionando.
     usuario = _sesion(Rol.CLIENTE, client, crear_usuario)
     hash_antes = usuario.password_hash
 

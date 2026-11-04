@@ -40,6 +40,7 @@ async function llenar({ sinPolitica, sobrescribe = {} }: Opciones = {}) {
     "Correo electrónico": "laura.gomez@correo.co",
     "Nombre de usuario": "lauragomez",
     Contraseña: "Clave1234",
+    "Confirmar contraseña": "Clave1234",
     ...sobrescribe,
   };
   await user.selectOptions(await screen.findByLabelText("Género"), "femenino");
@@ -136,6 +137,61 @@ describe("S01 · Registro de cliente (HU-01)", () => {
     expect(
       await screen.findByText("La contraseña debe tener al menos 8 caracteres."),
     ).toBeInTheDocument();
+  });
+
+  // RNF-08: la contraseña no admite espacios; se avisa junto al campo sin llamar a la API.
+  it("rechaza una contraseña con espacios junto al campo, sin llamar a la API", async () => {
+    responderApi(ok);
+    renderRutas(rutas, "/registro");
+    const user = await llenar({
+      sobrescribe: { Contraseña: "Clave 1234", "Confirmar contraseña": "Clave 1234" },
+    });
+    await crear(user);
+
+    expect(await screen.findByText("La contraseña no puede tener espacios.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Contraseña")).toBeInvalid();
+    expect(peticiones(REGISTRO)).toHaveLength(0);
+  });
+
+  // RF-03: nombres y apellidos solo con letras, espacios, apóstrofo o guion.
+  it("rechaza nombres y apellidos con números o símbolos, junto a cada campo", async () => {
+    responderApi(ok);
+    renderRutas(rutas, "/registro");
+    const user = await llenar({ sobrescribe: { Nombres: "1234", Apellidos: "Gómez#" } });
+    await crear(user);
+
+    expect(
+      await screen.findAllByText("Usa solo letras, espacios, apóstrofo o guion."),
+    ).toHaveLength(2);
+    expect(screen.getByLabelText("Nombres")).toBeInvalid();
+    expect(screen.getByLabelText("Apellidos")).toBeInvalid();
+    expect(peticiones(REGISTRO)).toHaveLength(0);
+  });
+
+  // RNF-08: la confirmación debe coincidir con la contraseña.
+  it("rechaza una confirmación de contraseña distinta, junto al campo", async () => {
+    responderApi(ok);
+    renderRutas(rutas, "/registro");
+    const user = await llenar({ sobrescribe: { "Confirmar contraseña": "Clave9999" } });
+    await crear(user);
+
+    expect(await screen.findByText("Las contraseñas no coinciden.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Confirmar contraseña")).toBeInvalid();
+    expect(peticiones(REGISTRO)).toHaveLength(0);
+  });
+
+  // RF-03: nombres compuestos y apellidos con apóstrofo son válidos.
+  it("acepta nombres compuestos y apellidos con apóstrofo", async () => {
+    responderApi(ok);
+    renderRutas(rutas, "/registro");
+    const user = await llenar({ sobrescribe: { Nombres: "María José", Apellidos: "O'Neill" } });
+    await crear(user);
+
+    await screen.findByText("Inicio del cliente");
+    expect(await peticiones(REGISTRO)[0].json()).toMatchObject({
+      nombres: "María José",
+      apellidos: "O'Neill",
+    });
   });
 
   it("muestra junto a cada campo los duplicados que reporta el servidor", async () => {

@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.core.security import Rol
+from app.core.security import MENSAJE_POLITICA_CONTRASENA, Rol
 from app.modules.usuarios.models import TokenVerificacion, Usuario
 
 REGISTRO = "/api/v1/usuarios/registro"
@@ -193,6 +193,119 @@ def test_registro_con_contrasena_que_no_cumple_rnf_08(client: TestClient, contra
     error = respuesta.json()["error"]
     assert error["codigo"] == "datos_invalidos"
     assert "contrasena" in error["campos"]
+
+
+def test_registro_con_contrasena_con_espacios(client: TestClient, db: Session):
+    """HU-01 / RNF-08: la contraseña no puede llevar espacios; el usuario no se crea."""
+    respuesta = _registrar(client, contrasena="Clave 1234")
+
+    assert respuesta.status_code == 422
+    error = respuesta.json()["error"]
+    assert error["codigo"] == "datos_invalidos"
+    assert error["campos"]["contrasena"] == MENSAJE_POLITICA_CONTRASENA
+    assert db.scalar(select(Usuario).where(Usuario.nombre_usuario == "lauragomez")) is None
+
+
+@pytest.mark.parametrize(
+    ("campo", "valor"),
+    [
+        ("nombres", "1234"),
+        ("apellidos", "Gómez#"),
+        ("nombres", "L" * 101),
+        ("apellidos", "   "),
+        ("nombres", "   "),
+        ("nombres", "-Laura"),
+    ],
+    ids=[
+        "nombres-digitos",
+        "apellidos-simbolo",
+        "nombres-largo",
+        "apellidos-vacio",
+        "nombres-vacio",
+        "nombres-guion",
+    ],
+)
+def test_registro_con_nombres_o_apellidos_invalidos(client: TestClient, campo: str, valor: str):
+    """HU-01 / RF-03: nombres y apellidos llevan de 1 a 100 letras (espacios, apóstrofo, punto
+    o guion permitidos), empiezan por letra y no pueden quedar solo en espacios."""
+    respuesta = _registrar(client, **{campo: valor})
+
+    assert respuesta.status_code == 422
+    error = respuesta.json()["error"]
+    assert error["codigo"] == "datos_invalidos"
+    assert campo in error["campos"]
+
+
+@pytest.mark.parametrize("nombres", ["María José", "O'Neill", "Ana-María", "Ma. Teresa", "Ñuñez"])
+def test_registro_acepta_nombres_con_tildes_apostrofo_punto_y_guion(
+    client: TestClient, nombres: str
+):
+    """HU-01 / RF-03: las letras con tilde o ñ, el apóstrofo, el punto y el guion son válidos."""
+    respuesta = _registrar(client, nombres=nombres)
+
+    assert respuesta.status_code == 201
+    assert respuesta.json()["nombres"] == nombres
+
+
+def test_registro_recorta_los_espacios_de_los_nombres(client: TestClient, db: Session):
+    """HU-01 / RF-03: los espacios al inicio y al final se recortan antes de guardar."""
+    respuesta = _registrar(client, nombres="  Laura  ")
+
+    assert respuesta.status_code == 201
+    usuario = db.scalar(select(Usuario).where(Usuario.nombre_usuario == "lauragomez"))
+    assert usuario is not None
+    assert usuario.nombres == "Laura"
+
+
+def test_registro_con_telefono_de_menos_de_siete_digitos(client: TestClient):
+    """HU-01 / RF-03: el teléfono necesita al menos 7 dígitos, aunque tenga 7 o más caracteres."""
+    respuesta = _registrar(client, telefono="(12) 3-45")
+
+    assert respuesta.status_code == 422
+    error = respuesta.json()["error"]
+    assert error["codigo"] == "datos_invalidos"
+    assert error["campos"]["telefono"] == "El formato no es válido."
+
+
+@pytest.mark.parametrize(
+    "cambios",
+    [{"telefono": "+57 310 555 0192"}, {"telefono": None}, {"telefono": "  3105550192  "}],
+    ids=["con-prefijo", "nulo", "con-espacios-alrededor"],
+)
+def test_registro_acepta_telefono_valido_u_omitido(client: TestClient, cambios: dict):
+    """HU-01 / RF-03: el teléfono es opcional y admite prefijo, espacios y paréntesis."""
+    assert _registrar(client, **cambios).status_code == 201
+
+
+def test_registro_sin_telefono(client: TestClient):
+    """HU-01 / RF-03: el teléfono puede omitirse del cuerpo."""
+    client.cookies.clear()
+    datos = _datos()
+    del datos["telefono"]
+
+    assert client.post(REGISTRO, json=datos).status_code == 201
+
+
+@pytest.mark.parametrize(
+    ("campo", "valor"),
+    [
+        ("lugar_nacimiento", "L" * 121),
+        ("direccion_facturacion", "D" * 201),
+        ("lugar_nacimiento", "   "),
+        ("direccion_facturacion", "   "),
+        ("email", "a" * 244 + "@correo.com"),
+    ],
+    ids=["lugar-largo", "direccion-larga", "lugar-vacio", "direccion-vacia", "email-largo"],
+)
+def test_registro_con_textos_fuera_de_longitud(client: TestClient, campo: str, valor: str):
+    """HU-01 / RF-03: lugar (120), dirección (200) y correo (254) tienen longitud máxima y los
+    obligatorios no pueden quedar vacíos ni en solo espacios."""
+    respuesta = _registrar(client, **{campo: valor})
+
+    assert respuesta.status_code == 422
+    error = respuesta.json()["error"]
+    assert error["codigo"] == "datos_invalidos"
+    assert campo in error["campos"]
 
 
 def test_registro_con_documento_duplicado(client: TestClient):

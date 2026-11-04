@@ -331,7 +331,9 @@ def test_token_inexistente_devuelve_enlace_invalido(client: TestClient) -> None:
 
 
 @pytest.mark.parametrize(
-    "nueva", ["Clave12", "12345678", "abcdefgh"], ids=["corta", "sin-letra", "sin-numero"]
+    "nueva",
+    ["Clave12", "12345678", "abcdefgh", "Nueva 2026"],
+    ids=["corta", "sin-letra", "sin-numero", "con-espacios"],
 )
 def test_rechaza_contrasena_nueva_que_no_cumple_la_politica(
     nueva: str,
@@ -340,7 +342,8 @@ def test_rechaza_contrasena_nueva_que_no_cumple_la_politica(
     crear_usuario: Callable[..., Usuario],
     correos: list[tuple[str, str, str, str | None]],
 ) -> None:
-    """HU-05 CA-2 / RNF-08: la contraseña nueva necesita 8 caracteres, una letra y un número."""
+    """HU-05 CA-2 / RNF-08: la contraseña nueva necesita 8 caracteres, una letra y un número, sin
+    espacios."""
     usuario = crear_usuario(Rol.CLIENTE, email=CORREO)
     assert _solicitar(client).status_code == 202
     token = _token_del_correo(correos[0][2])

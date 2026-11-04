@@ -67,14 +67,14 @@ Entrada (`RegistroClienteEntrada`):
 }
 ```
 
-- `tipo_documento`: `CC`, `TI`, `RC`, `CE` o `PA` (pasaporte). `numero_documento`: alfanumérico, 3 a 20 caracteres, sin espacios ni puntos. `genero`: `femenino`, `masculino` u `otro`. `telefono` es opcional. `nombre_usuario`: 3 a 50 caracteres entre letras, números, `.`, `_` y `-`.
+- `tipo_documento`: `CC`, `TI`, `RC`, `CE` o `PA` (pasaporte). `numero_documento`: alfanumérico, 3 a 20 caracteres, sin espacios ni puntos. `genero`: `femenino`, `masculino` u `otro`. `nombre_usuario`: 3 a 50 caracteres entre letras, números, `.`, `_` y `-`. `nombres` y `apellidos`: 1 a 100 caracteres, empiezan por letra y solo llevan letras, espacios, apóstrofo, punto o guion. `lugar_nacimiento` hasta 120 caracteres, `direccion_facturacion` hasta 200 y `email` hasta 254. `telefono` (opcional): 7 a 20 caracteres entre dígitos, espacios, `+`, paréntesis y guiones, con al menos 7 dígitos. Los textos se recortan (espacios al inicio y al final) y los obligatorios no pueden quedar vacíos.
 - La imagen de perfil (opcional, JPG o PNG de 2 MB como máximo) se sube después del registro, ya con la sesión iniciada: `PUT /usuarios/me/imagen` en `multipart/form-data` con el campo `imagen`.
 
 Reglas:
 
 - `acepta_politica` debe ser `true`; se guarda la fecha de aceptación (Ley 1581 de 2012).
 - `fecha_nacimiento` no puede ser futura. No hay edad mínima de registro.
-- `contrasena`: 8 caracteres o más, con al menos una letra y un número (RNF-08); se guarda con Argon2id.
+- `contrasena`: 8 caracteres o más, con al menos una letra y un número y sin espacios (RNF-08); se guarda con Argon2id.
 - `nombre_usuario` es único en todo el sistema (sin distinguir mayúsculas). El documento (tipo y número) y el correo son únicos entre las cuentas de cliente (RF-04, SUP-18). El correo se guarda en minúscula.
 - La cuenta nace con `email_verificado: false`, el monedero en $ 0 (SUP-39; el monedero llega en la iteración 2) y sin suscripción a noticias. Se envía el enlace de verificación (HU-02) y se inicia la sesión.
 - Con una sesión abierta, el registro responde `403 sin_permiso` (solo el visitante se registra, Apéndice B).
@@ -82,7 +82,7 @@ Reglas:
 | HTTP | `codigo` | Cuándo |
 |---|---|---|
 | 409 | `datos_duplicados` | `campos` con `nombre_usuario`, `numero_documento` o `email`. |
-| 422 | `datos_invalidos` | `campos` con `acepta_politica`, `fecha_nacimiento`, `email`, `contrasena` o el campo con formato inválido. Imagen que no es JPG o PNG o pesa más de 2 MB: `campos.imagen`. |
+| 422 | `datos_invalidos` | `campos` con `acepta_politica`, `fecha_nacimiento`, `email`, `nombres` o `apellidos` (caracteres no permitidos), `telefono` (formato o menos de 7 dígitos), `contrasena` (política, incluidos los espacios) o el campo con formato inválido. Imagen que no es JPG o PNG o pesa más de 2 MB: `campos.imagen`. |
 
 #### HU-02 Verificar correo electrónico
 
@@ -147,12 +147,12 @@ Reglas:
 - La primera respuesta es idéntica exista o no el correo (RF-07). Si el correo pertenece a una cuenta de cliente y a una de administrador (SUP-18), se envía un enlace por cada cuenta.
 - El root no tiene correo, así que nunca recibe enlace (cambia su contraseña con HU-06).
 - El enlace lleva al frontend (`/restablecer-contrasena?token=…`); es de un solo uso y vale 30 minutos.
-- Al confirmar: la contraseña nueva cumple RNF-08, la anterior deja de funcionar y se cierran todas las sesiones del usuario. Nunca se muestra ni se envía la contraseña actual.
+- Al confirmar: la contraseña nueva cumple RNF-08 (8 o más caracteres, letra y número, sin espacios), la anterior deja de funcionar y se cierran todas las sesiones del usuario. Nunca se muestra ni se envía la contraseña actual.
 
 | HTTP | `codigo` | Cuándo |
 |---|---|---|
 | 400 | `enlace_invalido` | Token inexistente, vencido o ya usado. |
-| 422 | `datos_invalidos` | `campos.contrasena_nueva` (política) o `campos.confirmacion` (no coincide). |
+| 422 | `datos_invalidos` | `campos.contrasena_nueva` (política de RNF-08: 8 o más caracteres, letra y número, sin espacios) o `campos.confirmacion` (no coincide). |
 
 #### HU-06 Cambiar contraseña
 
@@ -168,7 +168,7 @@ Reglas:
 | HTTP | `codigo` | Cuándo |
 |---|---|---|
 | 422 | `contrasena_actual_incorrecta` | `campos.contrasena_actual`. |
-| 422 | `datos_invalidos` | `campos.contrasena_nueva` (política) o `campos.confirmacion` (no coincide). |
+| 422 | `datos_invalidos` | `campos.contrasena_nueva` (política de RNF-08: 8 o más caracteres, letra y número, sin espacios) o `campos.confirmacion` (no coincide). |
 
 #### HU-07 Editar perfil
 
@@ -180,7 +180,7 @@ Reglas:
 | GET | `/api/v1/usuarios/me/imagen` | Cliente, Admin | `200` imagen PNG o JPEG |
 | DELETE | `/api/v1/usuarios/me/imagen` | Cliente, Admin | `204` |
 
-`PerfilEntrada`: los campos de `RegistroClienteEntrada` **sin** `tipo_documento`, `numero_documento`, `nombre_usuario`, `contrasena` ni `acepta_politica`, que identifican la cuenta o tienen su propio endpoint.
+`PerfilEntrada`: los campos de `RegistroClienteEntrada` **sin** `tipo_documento`, `numero_documento`, `nombre_usuario`, `contrasena` ni `acepta_politica`, que identifican la cuenta o tienen su propio endpoint. `PerfilEntrada` aplica las mismas reglas de formato de HU-01 (`nombres` y `apellidos` con letras, `telefono` con al menos 7 dígitos, longitudes máximas y textos obligatorios sin quedar solo en espacios).
 
 `PerfilSalida`:
 
@@ -214,7 +214,7 @@ Reglas:
 | HTTP | `codigo` | Cuándo |
 |---|---|---|
 | 409 | `datos_duplicados` | `campos.email`. |
-| 422 | `datos_invalidos` | `campos.fecha_nacimiento` futura, formato inválido o `campos.imagen`. |
+| 422 | `datos_invalidos` | `campos.fecha_nacimiento` futura, `campos.nombres` / `campos.apellidos` (caracteres no permitidos), `campos.telefono` (formato o menos de 7 dígitos), longitudes máximas, formato inválido o `campos.imagen`. |
 | 404 | `no_encontrado` | `GET /me/imagen` sin imagen. |
 
 #### HU-08 Suscribirse a noticias
@@ -291,7 +291,7 @@ Reglas:
 ```
 
 - `estado`: `activo`, `inactivo` o `registro_incompleto`. El listado va del más reciente al más antiguo.
-- `nombre_usuario` único en todo el sistema; la contraseña temporal cumple RNF-08.
+- `nombre_usuario` único en todo el sistema; la contraseña temporal cumple RNF-08 (8 o más caracteres, letra y número, sin espacios).
 - No existe ningún endpoint para crear un root (RF-01).
 - Se audita: `auditoria.registrar(accion="administrador.crear", …)`, sin la contraseña.
 
@@ -350,7 +350,7 @@ Entrada (`RegistroAdministradorEntrada`): los datos personales de HU-01 (sin `no
 | 409 | `registro_ya_completo` | El administrador ya completó su registro. |
 | 409 | `datos_duplicados` | `campos.numero_documento` o `campos.email` entre administradores. |
 | 422 | `contrasena_actual_incorrecta` | `campos.contrasena_temporal`. |
-| 422 | `datos_invalidos` | Política de contraseña, confirmación o datos personales. |
+| 422 | `datos_invalidos` | `campos.contrasena_nueva` (política de RNF-08, sin espacios), `campos.confirmacion`, `campos.fecha_nacimiento`, `campos.nombres` / `campos.apellidos` (caracteres no permitidos) o `campos.telefono` (formato o menos de 7 dígitos). |
 
 ### Módulo vuelos · dueño: Backend B
 

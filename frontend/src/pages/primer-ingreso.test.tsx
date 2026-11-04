@@ -36,7 +36,7 @@ const COMPLETADO = {
   apellidos: "Torres",
 };
 
-async function llenarFormulario(user: ReturnType<typeof userEvent.setup>) {
+async function llenarFormulario(user: ReturnType<typeof userEvent.setup>, enviar = true) {
   // La ruta espera a que responda la sesión antes de pintar el formulario.
   await screen.findByRole("heading", { name: "Tus datos de administrador" });
   await user.selectOptions(screen.getByLabelText("Tipo de documento"), "CC");
@@ -53,7 +53,7 @@ async function llenarFormulario(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText("Contraseña temporal"), "Temporal123");
   await user.type(screen.getByLabelText("Contraseña nueva"), "MiClave2026");
   await user.type(screen.getByLabelText("Repite la nueva"), "MiClave2026");
-  await user.click(screen.getByRole("button", { name: "Guardar y entrar" }));
+  if (enviar) await user.click(screen.getByRole("button", { name: "Guardar y entrar" }));
 }
 
 const errorApi = (status: number, codigo: string, mensaje: string, campos?: object) => ({
@@ -186,7 +186,10 @@ describe("Primer ingreso del administrador (HU-12)", () => {
         422,
         "datos_invalidos",
         "Revisa los campos marcados.",
-        { contrasena_nueva: "Debe tener al menos 8 caracteres, con letras y números." },
+        {
+          contrasena_nueva:
+            "Mínimo 8 caracteres, con al menos una letra y un número, sin espacios.",
+        },
       ),
     });
     const user = userEvent.setup();
@@ -195,9 +198,67 @@ describe("Primer ingreso del administrador (HU-12)", () => {
     await llenarFormulario(user);
 
     expect(
-      await screen.findByText("Debe tener al menos 8 caracteres, con letras y números."),
+      await screen.findByText(
+        "Mínimo 8 caracteres, con al menos una letra y un número, sin espacios.",
+      ),
     ).toBeVisible();
     expect(screen.getByLabelText("Contraseña nueva")).toHaveAttribute("aria-invalid", "true");
+  });
+
+  // RF-03: nombres solo con letras, espacios, apóstrofo o guion; se avisa sin llamar a la API.
+  it("rechaza unos nombres con números junto al campo, sin llamar a la API", async () => {
+    responderApi({ "GET /api/v1/auth/me": sesionDe(ADMIN_INCOMPLETO) });
+    const user = userEvent.setup();
+    renderRutas(rutas, RUTA);
+
+    await llenarFormulario(user, false);
+    const nombres = screen.getByLabelText("Nombres");
+    await user.clear(nombres);
+    await user.type(nombres, "1234");
+    await user.click(screen.getByRole("button", { name: "Guardar y entrar" }));
+
+    expect(await screen.findByText("Usa solo letras, espacios, apóstrofo o guion.")).toBeVisible();
+    expect(nombres).toHaveAttribute("aria-invalid", "true");
+    const metodos = vi.mocked(fetch).mock.calls.map(([entrada]) => (entrada as Request).method);
+    expect(metodos).not.toContain("POST");
+  });
+
+  // RNF-08: la contraseña nueva no admite espacios.
+  it("rechaza una contraseña nueva con espacios, sin llamar a la API", async () => {
+    responderApi({ "GET /api/v1/auth/me": sesionDe(ADMIN_INCOMPLETO) });
+    const user = userEvent.setup();
+    renderRutas(rutas, RUTA);
+
+    await llenarFormulario(user, false);
+    for (const etiqueta of ["Contraseña nueva", "Repite la nueva"]) {
+      await user.clear(screen.getByLabelText(etiqueta));
+      await user.type(screen.getByLabelText(etiqueta), "Clave 1234");
+    }
+    await user.click(screen.getByRole("button", { name: "Guardar y entrar" }));
+
+    expect(await screen.findByText("La contraseña no puede tener espacios.")).toBeVisible();
+    expect(screen.getByLabelText("Contraseña nueva")).toHaveAttribute("aria-invalid", "true");
+    const metodos = vi.mocked(fetch).mock.calls.map(([entrada]) => (entrada as Request).method);
+    expect(metodos).not.toContain("POST");
+  });
+
+  // RNF-08: la contraseña nueva exige al menos un número; se avisa sin llamar a la API.
+  it("rechaza una contraseña nueva sin números, sin llamar a la API", async () => {
+    responderApi({ "GET /api/v1/auth/me": sesionDe(ADMIN_INCOMPLETO) });
+    const user = userEvent.setup();
+    renderRutas(rutas, RUTA);
+
+    await llenarFormulario(user, false);
+    for (const etiqueta of ["Contraseña nueva", "Repite la nueva"]) {
+      await user.clear(screen.getByLabelText(etiqueta));
+      await user.type(screen.getByLabelText(etiqueta), "Abcdefgh");
+    }
+    await user.click(screen.getByRole("button", { name: "Guardar y entrar" }));
+
+    expect(await screen.findByText("La contraseña debe tener al menos un número.")).toBeVisible();
+    expect(screen.getByLabelText("Contraseña nueva")).toHaveAttribute("aria-invalid", "true");
+    const metodos = vi.mocked(fetch).mock.calls.map(([entrada]) => (entrada as Request).method);
+    expect(metodos).not.toContain("POST");
   });
 
   // RF-04: documento y correo únicos entre administradores → datos_duplicados.

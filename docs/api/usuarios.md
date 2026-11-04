@@ -33,8 +33,8 @@ Entrada (`RegistroClienteEntrada`):
 - `acepta_politica` debe ser `true`; se guarda la fecha de aceptación (Ley 1581 de 2012).
 - `fecha_nacimiento` no puede ser futura. No hay edad mínima de registro: un menor de edad
   puede registrarse (la restricción de edad aplica al volar).
-- `contrasena`: 8 caracteres o más, con al menos una letra y un número (RNF-08); se guarda
-  con Argon2id, nunca en claro.
+- `contrasena`: 8 caracteres o más, con al menos una letra y un número y sin espacios
+  (RNF-08); se guarda con Argon2id, nunca en claro.
 - `nombre_usuario` es único en todo el sistema, sin distinguir mayúsculas. El correo y el
   documento (tipo y número) son únicos entre las cuentas de cliente, así que un administrador
   puede registrarse como cliente con sus mismos datos (SUP-18).
@@ -63,7 +63,7 @@ Entrada (`RegistroClienteEntrada`):
 | HTTP | `codigo` | Cuándo |
 |---|---|---|
 | 409 | `datos_duplicados` | `campos` con `nombre_usuario`, `numero_documento` o `email` que ya pertenece a otra cuenta (RF-04). |
-| 422 | `datos_invalidos` | `campos` con `acepta_politica`, `fecha_nacimiento`, `email`, `contrasena` o el campo con formato inválido. |
+| 422 | `datos_invalidos` | `campos` con `acepta_politica`, `fecha_nacimiento`, `email`, `nombres` o `apellidos` (caracteres no permitidos), `telefono` (formato o menos de 7 dígitos), `contrasena` (política, incluidos los espacios) o el campo con formato inválido. |
 | 403 | `sin_permiso` | Hay una sesión abierta (Apéndice B). |
 
 ## Verificación de correo
@@ -173,7 +173,9 @@ Con sesión de cliente o administrador. Actualiza los datos editables y devuelve
 |---|---|---|---|
 | 409 | `datos_duplicados` | `email` | El correo pertenece a otra cuenta del mismo rol. |
 | 422 | `datos_invalidos` | `fecha_nacimiento` | La fecha es futura. |
-| 422 | `datos_invalidos` | otro campo | Formato inválido (`email`, `telefono`, `genero`, etc.). |
+| 422 | `datos_invalidos` | `nombres`, `apellidos` | Caracteres no permitidos (solo letras, espacios, apóstrofo, punto y guion) o texto vacío o demasiado largo. |
+| 422 | `datos_invalidos` | `telefono` | Formato inválido o menos de 7 dígitos. |
+| 422 | `datos_invalidos` | otro campo | Formato inválido o longitud máxima superada (`email`, `lugar_nacimiento`, `direccion_facturacion`, `genero`, etc.); los textos obligatorios no pueden quedar solo en espacios. |
 | 401 | `no_autenticado` | | Sin sesión o sesión vencida. |
 | 403 | `sin_permiso` | | El rol es root. |
 | 404 | `no_encontrado` | | La cuenta aún no tiene sus datos personales. |
@@ -336,13 +338,13 @@ Entrada:
 
 - El token es de un solo uso y vence en 30 minutos (SUP-19). Un enlace vencido, ya usado o de una cuenta desactivada responde `400 enlace_invalido`.
 - El token se valida antes que la contraseña: un enlace inválido siempre responde `enlace_invalido`.
-- La contraseña nueva cumple RNF-08: mínimo 8 caracteres, al menos una letra y un número. Se guarda como hash Argon2id, nunca en texto plano.
+- La contraseña nueva cumple RNF-08: mínimo 8 caracteres, al menos una letra y un número, sin espacios. Se guarda como hash Argon2id, nunca en texto plano.
 - Al confirmar, la contraseña anterior deja de funcionar y se cierran todas las sesiones abiertas de esa cuenta. La cookie no se borra del navegador, pero el servidor la rechaza en la siguiente petición. En ningún caso se muestra ni se envía la contraseña actual.
 
 | HTTP | `codigo` | `campos` | Cuándo |
 |---|---|---|---|
 | 400 | `enlace_invalido` | | Token inexistente, vencido, ya usado o de una cuenta desactivada. |
-| 422 | `datos_invalidos` | `contrasena_nueva` | No cumple la política de RNF-08. |
+| 422 | `datos_invalidos` | `contrasena_nueva` | No cumple la política de RNF-08 (8 caracteres, letra y número, sin espacios). |
 | 422 | `datos_invalidos` | `confirmacion` | No coincide con la contraseña nueva. |
 
 ### `PUT /api/v1/usuarios/me/contrasena`
@@ -355,14 +357,14 @@ Entrada:
 { "contrasena_actual": "Clave1234", "contrasena_nueva": "OtraClave99", "confirmacion": "OtraClave99" }
 ```
 
-- La contraseña nueva cumple RNF-08: mínimo 8 caracteres, al menos una letra y un número. Se guarda como hash Argon2id, nunca en texto plano.
+- La contraseña nueva cumple RNF-08: mínimo 8 caracteres, al menos una letra y un número, sin espacios. Se guarda como hash Argon2id, nunca en texto plano.
 - Las validaciones de `contrasena_nueva` y `confirmacion` se hacen antes de comprobar la actual.
 - La sesión actual sigue abierta: este cambio no invalida ninguna sesión (a diferencia del restablecimiento de HU-05, que las cierra todas).
 
 | HTTP | `codigo` | `campos` | Cuándo |
 |---|---|---|---|
 | 422 | `contrasena_actual_incorrecta` | `contrasena_actual` | La contraseña actual no coincide; no se cambia nada. |
-| 422 | `datos_invalidos` | `contrasena_nueva` | No cumple la política de RNF-08. |
+| 422 | `datos_invalidos` | `contrasena_nueva` | No cumple la política de RNF-08 (8 caracteres, letra y número, sin espacios). |
 | 422 | `datos_invalidos` | `confirmacion` | No coincide con la contraseña nueva. |
 | 401 | `no_autenticado` | | Sin sesión, token inválido o sesión vencida. |
 
@@ -511,7 +513,7 @@ Con sesión de root. Crea un administrador con una contraseña temporal y respon
   único en todo el sistema sin distinguir mayúsculas, así que tampoco puede repetir el del root
   ni el de un cliente (SUP-18).
 - `contrasena_temporal`: cumple la política de RNF-08 (8 caracteres o más, con al menos una
-  letra y un número) y se guarda con Argon2id.
+  letra y un número, sin espacios) y se guarda con Argon2id.
 - El cuerpo no tiene campo `rol` y el rol se fija en el servidor: no existe forma de crear un
   segundo root (RF-01).
 - La creación queda en la auditoría como `administrador.crear` con el nombre de usuario, el rol
@@ -607,8 +609,8 @@ Entrada (`RegistroAdministradorEntrada`): los datos personales de HU-01 sin `nom
 - `contrasena_temporal` se comprueba contra la contraseña que puso el root al crear la cuenta.
   Si no coincide, la respuesta es `422 contrasena_actual_incorrecta` con
   `campos.contrasena_temporal` y no se guarda nada.
-- `contrasena_nueva` cumple RNF-08 (8 caracteres o más, con al menos una letra y un número) y
-  coincide con `confirmacion`; se guarda con Argon2id, nunca en claro. La temporal deja de
+- `contrasena_nueva` cumple RNF-08 (8 caracteres o más, con al menos una letra y un número, sin
+  espacios) y coincide con `confirmacion`; se guarda con Argon2id, nunca en claro. La temporal deja de
   funcionar.
 - `fecha_nacimiento` no puede ser futura.
 - El documento (tipo y número) y el correo son únicos entre administradores (RF-04, SUP-18).
@@ -625,7 +627,7 @@ Entrada (`RegistroAdministradorEntrada`): los datos personales de HU-01 sin `nom
 | 409 | `registro_ya_completo` | | El administrador ya completó su registro. |
 | 409 | `datos_duplicados` | `numero_documento` o `email` | El dato ya pertenece a otro administrador. |
 | 422 | `contrasena_actual_incorrecta` | `contrasena_temporal` | La contraseña temporal no coincide. |
-| 422 | `datos_invalidos` | `contrasena_nueva`, `confirmacion` o `fecha_nacimiento` | Política de contraseña, confirmación o datos personales. |
+| 422 | `datos_invalidos` | `contrasena_nueva`, `confirmacion`, `fecha_nacimiento`, `nombres`, `apellidos` o `telefono` | Política de contraseña (sin espacios), confirmación o datos personales (`nombres` y `apellidos` solo con letras; `telefono` con al menos 7 dígitos). |
 | 401 | `no_autenticado` | | Sin sesión o sesión vencida. |
 | 403 | `sin_permiso` | | El rol no es administrador. |
 

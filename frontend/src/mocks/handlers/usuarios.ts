@@ -4,8 +4,8 @@ import { BLOQUEOS_DESACTIVACION, CONTRASENA_MOCK, usuarioDe } from "../datos";
 import { db, error, exigirRol, nuevoId, sesion } from "../estado";
 import { http } from "../http";
 
-const POLITICA = /^(?=.*[A-Za-zÁÉÍÓÚÜÑáéíóúüñ])(?=.*\d).{8,}$/;
-const MENSAJE_POLITICA = "Debe tener al menos 8 caracteres, con letras y números.";
+const POLITICA = /^(?=.*[A-Za-zÁÉÍÓÚÜÑáéíóúüñ])(?=.*\d)\S{8,}$/;
+const MENSAJE_POLITICA = "Mínimo 8 caracteres, con al menos una letra y un número, sin espacios.";
 const enlaceInvalido = () =>
   error(400, "enlace_invalido", "Este enlace venció o ya fue usado. Pide uno nuevo.");
 
@@ -15,6 +15,55 @@ function cuentaDeSesion() {
   const usuario = sesion.get();
   return db.cuentas.find((c) => c.usuario.id === usuario?.id);
 }
+
+type DatosPersona = {
+  nombres: string;
+  apellidos: string;
+  lugar_nacimiento: string;
+  direccion_facturacion: string;
+  email: string;
+  telefono?: string | null;
+};
+
+/** Longitud y formato de un texto ya recortado, con los mensajes del backend (RF-03). */
+function errorDeTexto(valor: string, max: number, formato?: RegExp): string | undefined {
+  const texto = valor.trim();
+  if (texto.length < 1) return "Es demasiado corto.";
+  if (texto.length > max) return "Es demasiado largo.";
+  if (formato && !formato.test(texto)) return "El formato no es válido.";
+  return undefined;
+}
+
+/** Errores de formato de los datos personales, como los valida el backend antes de cualquier
+ *  regla de negocio (RF-03). Disparan 422: nombres o apellidos que no empiezan con una letra o
+ *  traen dígitos o símbolos («1234», «Gómez#»); más de 100 caracteres; lugar de nacimiento de
+ *  más de 120; dirección de más de 200; correo de más de 254; teléfono que no cumple
+ *  `[0-9 +()-]{7,20}` o con menos de 7 dígitos («(12) 3-45»). */
+function camposDePersona(datos: DatosPersona): Record<string, string> {
+  const nombre = /^\p{L}[\p{L} '.-]*$/u;
+  const revisados: Record<string, string | undefined> = {
+    nombres: errorDeTexto(datos.nombres, 100, nombre),
+    apellidos: errorDeTexto(datos.apellidos, 100, nombre),
+    lugar_nacimiento: errorDeTexto(datos.lugar_nacimiento, 120),
+    direccion_facturacion: errorDeTexto(datos.direccion_facturacion, 200),
+    email: datos.email.trim().length > 254 ? "Es demasiado largo." : undefined,
+  };
+  if (datos.telefono != null) {
+    const telefono = datos.telefono.trim();
+    const digitos = (telefono.match(/\d/g) ?? []).length;
+    if (!/^[0-9 +()-]{7,20}$/.test(telefono) || digitos < 7) {
+      revisados.telefono = "El formato no es válido.";
+    }
+  }
+  const campos: Record<string, string> = {};
+  for (const [campo, mensaje] of Object.entries(revisados)) {
+    if (mensaje) campos[campo] = mensaje;
+  }
+  return campos;
+}
+
+const rechazoDeCampos = (campos: Record<string, string>) =>
+  error(422, "datos_invalidos", "Revisa los campos marcados.", campos);
 
 function camposContrasenaNueva(
   nueva: string,
@@ -119,7 +168,7 @@ export const usuariosHandlers = [
   // nombre_usuario, documento o correo de una cuenta existente → datos_duplicados.
   http.post("/api/v1/usuarios/registro", async ({ request, response }) => {
     const datos = await request.json();
-    const campos: Record<string, string> = {};
+    const campos: Record<string, string> = camposDePersona(datos);
     if (!datos.acepta_politica) campos.acepta_politica = "Debes aceptar la política de datos.";
     if (datos.fecha_nacimiento > new Date().toISOString().slice(0, 10)) {
       campos.fecha_nacimiento = "La fecha de nacimiento no puede ser futura.";
@@ -209,6 +258,8 @@ export const usuariosHandlers = [
     const bloqueo = exigirRol(["cliente", "admin"]);
     if (bloqueo) return response.untyped(bloqueo);
     const datos = await request.json();
+    const invalidos = camposDePersona(datos);
+    if (Object.keys(invalidos).length) return response.untyped(rechazoDeCampos(invalidos));
     const cuenta = cuentaDeSesion();
     if (!cuenta?.perfil)
       return response.untyped(error(404, "no_encontrado", "El recurso no existe."));
@@ -366,6 +417,8 @@ export const usuariosHandlers = [
     if (bloqueo) return response.untyped(bloqueo);
     const datos = await request.json();
     const usuario = sesion.get()!;
+    const invalidos = camposDePersona(datos);
+    if (Object.keys(invalidos).length) return response.untyped(rechazoDeCampos(invalidos));
     if (usuario.registro_completo) {
       return response.untyped(error(409, "registro_ya_completo", "Tu registro ya está completo."));
     }
