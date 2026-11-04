@@ -31,8 +31,12 @@ Entrada (`RegistroClienteEntrada`):
 ```
 
 - `acepta_politica` debe ser `true`; se guarda la fecha de aceptación (Ley 1581 de 2012).
-- `fecha_nacimiento` no puede ser futura. No hay edad mínima de registro: un menor de edad
-  puede registrarse (la restricción de edad aplica al volar).
+- `fecha_nacimiento` no puede ser futura ni de hace más de 120 años (SUP-43). Se acepta a quien
+  cumple exactamente 120 años ese día; quien nació un 29 de febrero cumple años el 28 de febrero
+  en los años no bisiestos. «Hoy» es la fecha de Colombia. El error va en `campos.fecha_nacimiento`:
+  «La fecha de nacimiento no puede ser futura.» o «Revisa la fecha: la edad máxima es 120 años.».
+  No hay edad mínima de registro: un menor de edad puede registrarse (la restricción de edad
+  aplica al volar).
 - `contrasena`: 8 caracteres o más, con al menos una letra y un número y sin espacios
   (RNF-08); se guarda con Argon2id, nunca en claro.
 - `nombre_usuario` es único en todo el sistema, sin distinguir mayúsculas. El correo y el
@@ -63,7 +67,7 @@ Entrada (`RegistroClienteEntrada`):
 | HTTP | `codigo` | Cuándo |
 |---|---|---|
 | 409 | `datos_duplicados` | `campos` con `nombre_usuario`, `numero_documento` o `email` que ya pertenece a otra cuenta (RF-04). |
-| 422 | `datos_invalidos` | `campos` con `acepta_politica`, `fecha_nacimiento`, `email`, `nombres` o `apellidos` (caracteres no permitidos), `telefono` (formato o menos de 7 dígitos), `contrasena` (política, incluidos los espacios) o el campo con formato inválido. |
+| 422 | `datos_invalidos` | `campos` con `acepta_politica`, `fecha_nacimiento` (futura o de hace más de 120 años), `email`, `nombres` o `apellidos` (caracteres no permitidos), `telefono` (formato o menos de 7 dígitos), `contrasena` (política, incluidos los espacios) o el campo con formato inválido. |
 | 403 | `sin_permiso` | Hay una sesión abierta (Apéndice B). |
 
 ## Verificación de correo
@@ -163,7 +167,7 @@ Con sesión de cliente o administrador. Actualiza los datos editables y devuelve
 ```
 
 - `tipo_documento`, `numero_documento` y `nombre_usuario` identifican la cuenta y no se editan: no hacen parte de `PerfilEntrada` y el servidor los ignora si llegan.
-- `fecha_nacimiento` no puede ser futura.
+- `fecha_nacimiento` sigue la regla del registro: ni futura ni de hace más de 120 años (SUP-43).
 - Un correo distinto del vigente queda en `email_pendiente` y se envía el enlace de HU-02 al correo nuevo; `email` sigue siendo el de la cuenta hasta verificarlo (SUP-42).
 - Un correo que ya usa otra cuenta del mismo rol, o que otra cuenta del mismo rol tiene pendiente, se rechaza con `409 datos_duplicados` en `campos.email`.
 - Guardar de nuevo el correo pendiente actualiza el resto de los datos sin enviar otro enlace; para pedir uno nuevo se usa `POST /usuarios/me/verificacion/reenviar`. Volver a escribir el correo vigente descarta el pendiente.
@@ -172,7 +176,7 @@ Con sesión de cliente o administrador. Actualiza los datos editables y devuelve
 | HTTP | `codigo` | `campos` | Cuándo |
 |---|---|---|---|
 | 409 | `datos_duplicados` | `email` | El correo pertenece a otra cuenta del mismo rol. |
-| 422 | `datos_invalidos` | `fecha_nacimiento` | La fecha es futura. |
+| 422 | `datos_invalidos` | `fecha_nacimiento` | La fecha es futura o de hace más de 120 años. |
 | 422 | `datos_invalidos` | `nombres`, `apellidos` | Caracteres no permitidos (solo letras, espacios, apóstrofo, punto y guion) o texto vacío o demasiado largo. |
 | 422 | `datos_invalidos` | `telefono` | Formato inválido o menos de 7 dígitos. |
 | 422 | `datos_invalidos` | otro campo | Formato inválido o longitud máxima superada (`email`, `lugar_nacimiento`, `direccion_facturacion`, `genero`, etc.); los textos obligatorios no pueden quedar solo en espacios. |
@@ -465,6 +469,14 @@ Sin sesión (público). Da de baja al cliente con el token del enlace «cancelar
 
 Función pública que llama `noticias` para enviar el correo de cada noticia nueva (RF-56). Devuelve los clientes activos, con el correo verificado y suscritos, cada uno con `usuario_id`, `email`, `nombres` y `token_baja` para el enlace de baja. No hace commit: se ejecuta dentro de la transacción de quien llama. Los administradores, el root, las cuentas inactivas y los clientes sin verificar o no suscritos quedan fuera.
 
+### `validar_fecha_nacimiento(fecha, hoy)`
+
+Función pública que llamará `reservas` para validar la fecha de nacimiento de los viajeros (RF-30 en adelante). Lanza `DatosInvalidos` con `campos.fecha_nacimiento` si la fecha es futura («La fecha de nacimiento no puede ser futura.») o de hace más de 120 años («Revisa la fecha: la edad máxima es 120 años.», SUP-43).
+
+- Se acepta a quien cumple exactamente 120 años `hoy`: con `hoy` = 03/11/2026, el 03/11/1906 pasa y el 02/11/1906 no.
+- Quien nació un 29 de febrero cumple años el 28 de febrero en los años no bisiestos: con `hoy` = 28/02/2100, el 29/02/1980 pasa; con `hoy` = 01/03/2100, no.
+- `hoy` es la fecha local de Colombia y la pasa quien llama. No consulta la base de datos ni hace commit.
+
 ## Administradores
 
 Solo el root crea y lista administradores (RF-01, RF-02, Apéndice B). El listado también lo usa
@@ -612,7 +624,7 @@ Entrada (`RegistroAdministradorEntrada`): los datos personales de HU-01 sin `nom
 - `contrasena_nueva` cumple RNF-08 (8 caracteres o más, con al menos una letra y un número, sin
   espacios) y coincide con `confirmacion`; se guarda con Argon2id, nunca en claro. La temporal deja de
   funcionar.
-- `fecha_nacimiento` no puede ser futura.
+- `fecha_nacimiento` sigue la regla del registro: ni futura ni de hace más de 120 años (SUP-43).
 - El documento (tipo y número) y el correo son únicos entre administradores (RF-04, SUP-18).
   La misma persona puede tener además una cuenta de cliente: esos datos no chocan con las
   cuentas de cliente. Un correo que otro administrador tenga pendiente de verificar (HU-07)
@@ -627,7 +639,7 @@ Entrada (`RegistroAdministradorEntrada`): los datos personales de HU-01 sin `nom
 | 409 | `registro_ya_completo` | | El administrador ya completó su registro. |
 | 409 | `datos_duplicados` | `numero_documento` o `email` | El dato ya pertenece a otro administrador. |
 | 422 | `contrasena_actual_incorrecta` | `contrasena_temporal` | La contraseña temporal no coincide. |
-| 422 | `datos_invalidos` | `contrasena_nueva`, `confirmacion`, `fecha_nacimiento`, `nombres`, `apellidos` o `telefono` | Política de contraseña (sin espacios), confirmación o datos personales (`nombres` y `apellidos` solo con letras; `telefono` con al menos 7 dígitos). |
+| 422 | `datos_invalidos` | `contrasena_nueva`, `confirmacion`, `fecha_nacimiento`, `nombres`, `apellidos` o `telefono` | Política de contraseña (sin espacios), confirmación o datos personales (`fecha_nacimiento` futura o de hace más de 120 años; `nombres` y `apellidos` solo con letras; `telefono` con al menos 7 dígitos). |
 | 401 | `no_autenticado` | | Sin sesión o sesión vencida. |
 | 403 | `sin_permiso` | | El rol no es administrador. |
 
