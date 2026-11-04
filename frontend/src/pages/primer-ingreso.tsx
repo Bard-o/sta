@@ -19,6 +19,7 @@ import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { Notice } from "@/components/ui/notice";
 import { esquemaContrasena } from "@/lib/contrasena";
+import { fechaMinimaNacimiento, hoy, MENSAJE_EDAD_MAXIMA } from "@/lib/persona";
 
 const TIPOS_DOCUMENTO = [
   { value: "CC", label: "Cédula de ciudadanía" },
@@ -33,11 +34,6 @@ const GENEROS = [
   { value: "masculino", label: "Masculino" },
   { value: "otro", label: "Otro" },
 ] as const;
-
-/** Hoy en la zona del navegador, como aaaa-mm-dd (el mismo formato del control de fecha). */
-function hoy(): string {
-  return new Date().toLocaleDateString("en-CA");
-}
 
 const esquema = z
   .object({
@@ -64,7 +60,8 @@ const esquema = z
     fecha_nacimiento: z
       .string()
       .min(1, "Elige tu fecha de nacimiento.")
-      .refine((valor) => !valor || valor <= hoy(), "La fecha de nacimiento no puede ser futura."),
+      .refine((valor) => !valor || valor <= hoy(), "La fecha de nacimiento no puede ser futura.")
+      .refine((valor) => !valor || valor >= fechaMinimaNacimiento(), MENSAJE_EDAD_MAXIMA),
     lugar_nacimiento: z.string().trim().min(1, "Escribe tu lugar de nacimiento.").max(120),
     direccion_facturacion: z
       .string()
@@ -281,7 +278,13 @@ export function PrimerIngresoPage() {
                   <FormItem>
                     <FormLabel>Fecha de nacimiento</FormLabel>
                     <FormControl>
-                      <Input type="date" autoComplete="bday" {...field} />
+                      <Input
+                        type="date"
+                        autoComplete="bday"
+                        min={fechaMinimaNacimiento()}
+                        max={hoy()}
+                        {...field}
+                      />
                     </FormControl>
                     <FormDescription>dd/mm/aaaa</FormDescription>
                     <FormMessage />

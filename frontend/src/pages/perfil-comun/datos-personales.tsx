@@ -10,7 +10,14 @@ import { CampoLista, CampoTexto } from "@/components/ui/campos";
 import { Form } from "@/components/ui/form";
 import { Glass } from "@/components/ui/glass";
 import { Notice } from "@/components/ui/notice";
-import { camposPersona, GENEROS, hoy, nombreTipoDocumento, telefono } from "@/lib/persona";
+import {
+  camposPersona,
+  fechaMinimaNacimiento,
+  GENEROS,
+  hoy,
+  nombreTipoDocumento,
+  telefono,
+} from "@/lib/persona";
 
 type Perfil = Schemas["PerfilSalida"];
 
@@ -134,6 +141,7 @@ export function DatosPersonales({ perfil }: { perfil: Perfil }) {
               name="fecha_nacimiento"
               label="Fecha de nacimiento"
               type="date"
+              min={fechaMinimaNacimiento()}
               max={hoy()}
               autoComplete="bday"
             />

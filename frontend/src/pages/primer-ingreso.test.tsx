@@ -312,3 +312,29 @@ describe("Primer ingreso del administrador (HU-12)", () => {
     expect(screen.queryByRole("button", { name: "Guardar y entrar" })).not.toBeInTheDocument();
   });
 });
+
+describe("Primer ingreso · Edad máxima de la fecha de nacimiento (HU-12, RF-03, SUP-43)", () => {
+  beforeEach(() => {
+    // Solo la fecha: «hoy» es 03/11/2026; los temporizadores siguen reales para userEvent.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-03T15:00:00Z"));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it("rechaza una fecha de hace más de 120 años antes de enviar", async () => {
+    responderApi({ "GET /api/v1/auth/me": sesionDe(ADMIN_INCOMPLETO) });
+    const user = userEvent.setup();
+    renderRutas(rutas, RUTA);
+
+    await llenarFormulario(user, false);
+    const fecha = screen.getByLabelText("Fecha de nacimiento");
+    expect(fecha).toHaveAttribute("min", "1906-11-03");
+    expect(fecha).toHaveAttribute("max", "2026-11-03");
+    fireEvent.change(fecha, { target: { value: "1906-11-02" } });
+    await user.click(screen.getByRole("button", { name: "Guardar y entrar" }));
+
+    expect(await screen.findByText("Revisa la fecha: la edad máxima es 120 años.")).toBeVisible();
+    const metodos = vi.mocked(fetch).mock.calls.map(([entrada]) => (entrada as Request).method);
+    expect(metodos).not.toContain("POST");
+  });
+});

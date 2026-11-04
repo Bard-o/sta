@@ -24,6 +24,29 @@ export const nombreTipoDocumento = (tipo: TipoDocumento) =>
 /** Hoy como aaaa-mm-dd en la hora local de quien usa la pantalla. */
 export const hoy = () => new Date().toLocaleDateString("sv-SE");
 
+/** SUP-43: la fecha de nacimiento no puede ser de hace más de 120 años. */
+export const EDAD_MAXIMA_ANOS = 120;
+export const MENSAJE_EDAD_MAXIMA = "Revisa la fecha: la edad máxima es 120 años.";
+
+const esBisiesto = (anio: number) => (anio % 4 === 0 && anio % 100 !== 0) || anio % 400 === 0;
+
+/** Fecha de nacimiento más antigua aceptada, como aaaa-mm-dd: quien nació ese día cumple hoy
+ *  exactamente 120 años (SUP-43). Si hoy es 29 de febrero y ese año no fue bisiesto, quien nació
+ *  el 28 cumplió 120 ayer, así que la mínima es el 1 de marzo. Usa solo aritmética, sin `Date`,
+ *  para no depender de la zona horaria. */
+export function fechaMinimaNacimiento(hoyIso: string = hoy()): string {
+  const [anio, mes, dia] = hoyIso.split("-").map(Number);
+  const anioMinimo = anio - EDAD_MAXIMA_ANOS;
+  const ajustar = mes === 2 && dia === 29 && !esBisiesto(anioMinimo);
+  const mesMinimo = ajustar ? 3 : mes;
+  const diaMinimo = ajustar ? 1 : dia;
+  return [
+    String(anioMinimo).padStart(4, "0"),
+    String(mesMinimo).padStart(2, "0"),
+    String(diaMinimo).padStart(2, "0"),
+  ].join("-");
+}
+
 export const requerido = (mensaje: string, max = 200) =>
   z.string().trim().min(1, mensaje).max(max, `Usa como máximo ${max} caracteres.`);
 
@@ -49,9 +72,11 @@ export const camposPersona = {
   }),
   nombres: nombrePropio("Escribe tus nombres."),
   apellidos: nombrePropio("Escribe tus apellidos."),
-  fecha_nacimiento: requerido("Escribe tu fecha de nacimiento.").refine((v) => v <= hoy(), {
-    message: "La fecha de nacimiento no puede ser futura.",
-  }),
+  fecha_nacimiento: requerido("Escribe tu fecha de nacimiento.")
+    .refine((v) => v <= hoy(), {
+      message: "La fecha de nacimiento no puede ser futura.",
+    })
+    .refine((v) => v === "" || v >= fechaMinimaNacimiento(), { message: MENSAJE_EDAD_MAXIMA }),
   lugar_nacimiento: requerido("Escribe tu lugar de nacimiento.", 120),
   direccion_facturacion: requerido("Escribe tu dirección de facturación."),
   email: z

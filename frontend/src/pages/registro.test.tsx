@@ -300,3 +300,43 @@ describe("S01 · Registro de cliente (HU-01)", () => {
     expect(await screen.findByText("Pantalla de inicio de sesión")).toBeInTheDocument();
   });
 });
+
+describe("S01 · Edad máxima de la fecha de nacimiento (HU-01, RF-03, SUP-43)", () => {
+  beforeEach(() => {
+    // Solo la fecha: «hoy» es 03/11/2026; los temporizadores siguen reales para userEvent.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-03T15:00:00Z"));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it("limita el control de fecha entre hace 120 años y hoy", async () => {
+    responderApi(ok);
+    renderRutas(rutas, "/registro");
+
+    const fecha = await screen.findByLabelText("Fecha de nacimiento");
+    expect(fecha).toHaveAttribute("min", "1906-11-03");
+    expect(fecha).toHaveAttribute("max", "2026-11-03");
+  });
+
+  it("rechaza una fecha de hace más de 120 años junto al campo, sin enviar", async () => {
+    responderApi(ok);
+    renderRutas(rutas, "/registro");
+    const user = await llenar({ sobrescribe: { "Fecha de nacimiento": "1906-11-02" } });
+    await crear(user);
+
+    expect(
+      await screen.findByText("Revisa la fecha: la edad máxima es 120 años."),
+    ).toBeInTheDocument();
+    expect(peticiones(REGISTRO)).toHaveLength(0);
+  });
+
+  it("acepta a quien cumple exactamente 120 años hoy", async () => {
+    responderApi(ok);
+    renderRutas(rutas, "/registro");
+    const user = await llenar({ sobrescribe: { "Fecha de nacimiento": "1906-11-03" } });
+    await crear(user);
+
+    await screen.findByText("Inicio del cliente");
+    expect(peticiones(REGISTRO)).toHaveLength(1);
+  });
+});

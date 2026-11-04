@@ -20,7 +20,14 @@ import { Glass } from "@/components/ui/glass";
 import { Notice } from "@/components/ui/notice";
 import { ProfileImage } from "@/components/ui/profile-image";
 import { AYUDA_CONTRASENA, esquemaContrasena } from "@/lib/contrasena";
-import { camposPersona, GENEROS, hoy, TIPOS_DOCUMENTO, type TipoDocumento } from "@/lib/persona";
+import {
+  camposPersona,
+  fechaMinimaNacimiento,
+  GENEROS,
+  hoy,
+  TIPOS_DOCUMENTO,
+  type TipoDocumento,
+} from "@/lib/persona";
 
 const esquema = z
   .object({
@@ -158,6 +165,7 @@ export function RegistroPage() {
                   name="fecha_nacimiento"
                   label="Fecha de nacimiento"
                   type="date"
+                  min={fechaMinimaNacimiento()}
                   max={hoy()}
                   autoComplete="bday"
                 />
