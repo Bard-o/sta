@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.security import MENSAJE_POLITICA_CONTRASENA, Rol
+from app.modules.usuarios import service
 from app.modules.usuarios.models import TokenVerificacion, Usuario
 
 REGISTRO = "/api/v1/usuarios/registro"
@@ -170,6 +171,51 @@ def test_registro_con_fecha_nacimiento_futura(client: TestClient):
     error = respuesta.json()["error"]
     assert error["codigo"] == "datos_invalidos"
     assert "fecha_nacimiento" in error["campos"]
+
+
+@pytest.fixture
+def hoy_fijo(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Congela el reloj del módulo el 03/11/2026 10:00 en Colombia (15:00 UTC)."""
+    monkeypatch.setattr(service, "_ahora_utc", lambda: datetime(2026, 11, 3, 15, 0, tzinfo=UTC))
+
+
+def test_registro_acepta_a_quien_cumple_120_anos_hoy(
+    client: TestClient, hoy_fijo: None, correos: list[tuple[str, str, str, str | None]]
+):
+    """HU-01 / RF-03 / SUP-43: quien cumple exactamente 120 años hoy puede registrarse."""
+    assert _registrar(client, fecha_nacimiento="1906-11-03").status_code == 201
+
+
+def test_registro_rechaza_mas_de_120_anos(client: TestClient, db: Session, hoy_fijo: None):
+    """HU-01 / RF-03 / SUP-43: con 120 años y un día se rechaza y no se crea la cuenta."""
+    respuesta = _registrar(client, fecha_nacimiento="1906-11-02")
+
+    assert respuesta.status_code == 422
+    error = respuesta.json()["error"]
+    assert error["codigo"] == "datos_invalidos"
+    assert error["campos"]["fecha_nacimiento"] == "Revisa la fecha: la edad máxima es 120 años."
+    assert db.scalar(select(Usuario).where(Usuario.nombre_usuario == "lauragomez")) is None
+
+
+def test_registro_acepta_a_un_menor_de_edad(
+    client: TestClient, hoy_fijo: None, correos: list[tuple[str, str, str, str | None]]
+):
+    """HU-01 / RF-03 / SUP-43: no hay edad mínima; un niño de 2 años puede registrarse."""
+    assert _registrar(client, fecha_nacimiento="2024-11-03").status_code == 201
+
+
+def test_registro_usa_la_fecha_de_colombia_como_hoy(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+):
+    """HU-01 / RF-03 / SUP-32 / SUP-43: a las 03:00 UTC del 04/11 en Colombia aún es el 03/11
+    (22:00), así que el 04/11 es una fecha futura."""
+    monkeypatch.setattr(service, "_ahora_utc", lambda: datetime(2026, 11, 4, 3, 0, tzinfo=UTC))
+
+    respuesta = _registrar(client, fecha_nacimiento="2026-11-04")
+
+    assert respuesta.status_code == 422
+    campos = respuesta.json()["error"]["campos"]
+    assert campos["fecha_nacimiento"] == "La fecha de nacimiento no puede ser futura."
 
 
 def test_registro_con_correo_mal_formado(client: TestClient):

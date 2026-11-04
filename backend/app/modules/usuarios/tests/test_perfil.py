@@ -4,7 +4,7 @@ Cada test cita el criterio de aceptación que cubre.
 """
 
 import hashlib
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.security import Rol
+from app.modules.usuarios import service
 from app.modules.usuarios.models import TokenVerificacion, Usuario
 from app.modules.usuarios.schemas import PerfilEntrada
 
@@ -360,6 +361,43 @@ def test_fecha_nacimiento_futura_es_rechazada(client: TestClient, correos):
         "Revisa los campos marcados.",
         {"fecha_nacimiento": "La fecha de nacimiento no puede ser futura."},
     )
+
+
+@pytest.fixture
+def hoy_fijo(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Congela el reloj del módulo el 03/11/2026 10:00 en Colombia (15:00 UTC)."""
+    monkeypatch.setattr(service, "_ahora_utc", lambda: datetime(2026, 11, 3, 15, 0, tzinfo=UTC))
+
+
+def test_fecha_nacimiento_de_mas_de_120_anos_es_rechazada(
+    client: TestClient, db: Session, hoy_fijo: None, correos
+):
+    """HU-07 / RF-08 / SUP-43: con 120 años y un día se responde 422 y el perfil no cambia."""
+    assert _registrar(client).status_code == 201
+
+    respuesta = client.put(PERFIL, json=_entrada(fecha_nacimiento="1906-11-02"))
+
+    _assert_error(
+        respuesta,
+        422,
+        "datos_invalidos",
+        "Revisa los campos marcados.",
+        {"fecha_nacimiento": "Revisa la fecha: la edad máxima es 120 años."},
+    )
+    assert client.get(PERFIL).json()["fecha_nacimiento"] == "1995-03-14"
+    assert _usuario(db).fecha_nacimiento == date(1995, 3, 14)
+
+
+def test_fecha_nacimiento_de_exactamente_120_anos_es_aceptada(
+    client: TestClient, hoy_fijo: None, correos
+):
+    """HU-07 / RF-08 / SUP-43: quien cumple 120 años hoy puede guardar su perfil."""
+    assert _registrar(client).status_code == 201
+
+    respuesta = client.put(PERFIL, json=_entrada(fecha_nacimiento="1906-11-03"))
+
+    assert respuesta.status_code == 200
+    assert client.get(PERFIL).json()["fecha_nacimiento"] == "1906-11-03"
 
 
 @pytest.mark.parametrize(

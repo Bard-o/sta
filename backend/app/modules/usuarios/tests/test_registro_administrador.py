@@ -4,7 +4,7 @@ Cada test cita el criterio de aceptación que cubre.
 """
 
 from collections.abc import Callable
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import MENSAJE_POLITICA_CONTRASENA, Rol, verificar_contrasena
 from app.core.testing import CONTRASENA_TEST
+from app.modules.usuarios import service
 from app.modules.usuarios.models import Usuario
 
 RUTA = "/api/v1/administradores/me/registro"
@@ -311,6 +312,40 @@ def test_fecha_nacimiento_futura_responde_422(
     error = respuesta.json()["error"]
     assert error["codigo"] == "datos_invalidos"
     assert "fecha_nacimiento" in error["campos"]
+
+
+@pytest.fixture
+def hoy_fijo(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Congela el reloj del módulo el 03/11/2026 10:00 en Colombia (15:00 UTC)."""
+    monkeypatch.setattr(service, "_ahora_utc", lambda: datetime(2026, 11, 3, 15, 0, tzinfo=UTC))
+
+
+def test_fecha_nacimiento_de_mas_de_120_anos_responde_422(
+    client: TestClient, db: Session, crear_usuario: Callable[..., Any], hoy_fijo: None
+) -> None:
+    """HU-12 · RF-03 · SUP-43: con 120 años y un día se rechaza y el registro sigue incompleto."""
+    administrador = _admin_incompleto(client, crear_usuario)
+
+    respuesta = client.post(RUTA, json=_datos(fecha_nacimiento="1906-11-02"))
+
+    assert respuesta.status_code == 422
+    error = respuesta.json()["error"]
+    assert error["codigo"] == "datos_invalidos"
+    assert error["campos"]["fecha_nacimiento"] == "Revisa la fecha: la edad máxima es 120 años."
+    db.refresh(administrador)
+    assert administrador.registro_completo is False
+
+
+def test_fecha_nacimiento_de_exactamente_120_anos_completa_el_registro(
+    client: TestClient, crear_usuario: Callable[..., Any], hoy_fijo: None
+) -> None:
+    """HU-12 · RF-03 · SUP-43: quien cumple 120 años hoy puede completar su registro."""
+    _admin_incompleto(client, crear_usuario)
+
+    respuesta = client.post(RUTA, json=_datos(fecha_nacimiento="1906-11-03"))
+
+    assert respuesta.status_code == 200
+    assert respuesta.json()["registro_completo"] is True
 
 
 @pytest.mark.parametrize(

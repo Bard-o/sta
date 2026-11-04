@@ -209,4 +209,96 @@ describe("API simulada (MSW)", () => {
 
     expect((await api("POST", "/api/v1/administradores/me/registro", registro)).status).toBe(200);
   });
+
+  // RF-03, SUP-43: «hoy» es 03/11/2026, así que el 02/11/1906 pasa de 120 años y el 03/11/1906 no.
+  describe("edad máxima de la fecha de nacimiento (HU-01, HU-07, HU-12, RF-03, SUP-43)", () => {
+    const EDAD_MAXIMA = "Revisa la fecha: la edad máxima es 120 años.";
+
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date("2026-11-03T15:00:00Z"));
+    });
+    afterEach(() => vi.useRealTimers());
+
+    it("rechaza en el registro una fecha de hace más de 120 años y una futura", async () => {
+      const cliente = {
+        tipo_documento: "CC",
+        numero_documento: "1088000333",
+        nombres: "Ana",
+        apellidos: "Ríos",
+        fecha_nacimiento: "1906-11-02",
+        lugar_nacimiento: "Pereira",
+        direccion_facturacion: "Calle 1 # 2-3",
+        genero: "femenino",
+        email: "ana.rios@correo.co",
+        nombre_usuario: "anarios",
+        contrasena: "Clave1234",
+        acepta_politica: true,
+      };
+      const antigua = await api("POST", "/api/v1/usuarios/registro", cliente);
+      expect(antigua.status).toBe(422);
+      expect(antigua.body.error.campos.fecha_nacimiento).toBe(EDAD_MAXIMA);
+
+      const futura = await api("POST", "/api/v1/usuarios/registro", {
+        ...cliente,
+        fecha_nacimiento: "2026-11-04",
+      });
+      expect(futura.body.error.campos.fecha_nacimiento).toBe(
+        "La fecha de nacimiento no puede ser futura.",
+      );
+
+      const limite = await api("POST", "/api/v1/usuarios/registro", {
+        ...cliente,
+        fecha_nacimiento: "1906-11-03",
+      });
+      expect(limite.status).toBe(201);
+    });
+
+    it("rechaza en el perfil una fecha de hace más de 120 años", async () => {
+      await entrar("lauragomez");
+      const { body: perfil } = await api("GET", "/api/v1/usuarios/me/perfil");
+      const edicion = { ...perfil, telefono: "3101234567" };
+
+      const antigua = await api("PUT", "/api/v1/usuarios/me/perfil", {
+        ...edicion,
+        fecha_nacimiento: "1906-11-02",
+      });
+      expect(antigua.status).toBe(422);
+      expect(antigua.body.error.campos.fecha_nacimiento).toBe(EDAD_MAXIMA);
+
+      const limite = await api("PUT", "/api/v1/usuarios/me/perfil", {
+        ...edicion,
+        fecha_nacimiento: "1906-11-03",
+      });
+      expect(limite.status).toBe(200);
+    });
+
+    it("rechaza en el registro del administrador una fecha de hace más de 120 años", async () => {
+      await entrar("jtorres");
+      const registro = {
+        tipo_documento: "CC",
+        numero_documento: "1088000444",
+        nombres: "Juan",
+        apellidos: "Torres",
+        fecha_nacimiento: "1906-11-02",
+        lugar_nacimiento: "Cali",
+        direccion_facturacion: "Carrera 5 # 6-7",
+        genero: "masculino",
+        email: "jtorres@avianca.test",
+        contrasena_temporal: CONTRASENA_MOCK,
+        contrasena_nueva: "Nueva1234",
+        confirmacion: "Nueva1234",
+      };
+      const antigua = await api("POST", "/api/v1/administradores/me/registro", registro);
+      expect(antigua.status).toBe(422);
+      expect(antigua.body.error.campos.fecha_nacimiento).toBe(EDAD_MAXIMA);
+
+      const limite = await api("POST", "/api/v1/administradores/me/registro", {
+        ...registro,
+        fecha_nacimiento: "1906-11-03",
+      });
+      // Otro test ya completó este registro: pasar la validación de la fecha basta (no es 422).
+      expect(limite.status).not.toBe(422);
+    });
+  });
 });

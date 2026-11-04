@@ -90,7 +90,9 @@ class DatosEditables(BaseModel):
 
     nombres: NombrePropio
     apellidos: NombrePropio
-    fecha_nacimiento: date = Field(description="No puede ser futura.")
+    fecha_nacimiento: date = Field(
+        description="No puede ser futura ni de hace más de 120 años (SUP-43)."
+    )
     lugar_nacimiento: LugarNacimiento
     direccion_facturacion: DireccionFacturacion
     genero: Genero

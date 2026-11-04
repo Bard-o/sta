@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from html import escape
 from typing import BinaryIO
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, or_, select, update
 from sqlalchemy.exc import IntegrityError
@@ -64,6 +65,13 @@ FIRMA_PNG = b"\x89PNG\r\n\x1a\n"
 FIRMA_JPEG = b"\xff\xd8\xff"
 MENSAJE_IMAGEN_INVALIDA = "La imagen debe ser JPG o PNG."
 MENSAJE_IMAGEN_GRANDE = "La imagen pesa más de 2 MB. Elige una más liviana."
+
+# SUP-43: la fecha de nacimiento no puede ser de hace más de 120 años.
+EDAD_MAXIMA_ANOS = 120
+MENSAJE_FECHA_FUTURA = "La fecha de nacimiento no puede ser futura."
+MENSAJE_EDAD_MAXIMA = "Revisa la fecha: la edad máxima es 120 años."
+# SUP-32: "hoy" para la fecha de nacimiento es la fecha local de Colombia, la que ve el formulario.
+_ZONA_NEGOCIO = ZoneInfo("America/Bogota")
 
 
 class CredencialesInvalidas(AppError):
@@ -325,6 +333,48 @@ def crear_usuario(
     return usuario
 
 
+# ---------- Fecha de nacimiento (RF-03, SUP-43) ----------
+
+
+def _hoy() -> date:
+    """Fecha local de Colombia según el reloj del módulo (los tests sustituyen `_ahora_utc`)."""
+    return _ahora_utc().astimezone(_ZONA_NEGOCIO).date()
+
+
+def _fecha_minima_nacimiento(hoy: date) -> date:
+    """SUP-43: la fecha de nacimiento más antigua aceptada; quien nació ese día cumple hoy 120 años.
+
+    Quien nació un 29 de febrero cumple años el 28 de febrero en los años no bisiestos, así que
+    con hoy = 28/02/2100 se acepta el 29/02/1980. Si hoy es 29 de febrero y el año de hace 120 no
+    fue bisiesto, quien nació el 28 de febrero cumplió 120 ayer: la mínima es el 1 de marzo.
+    """
+    anio = hoy.year - EDAD_MAXIMA_ANOS
+    try:
+        return hoy.replace(year=anio)
+    except ValueError:
+        return date(anio, 3, 1)
+
+
+def _error_fecha_nacimiento(fecha: date, hoy: date) -> str | None:
+    if fecha > hoy:
+        return MENSAJE_FECHA_FUTURA
+    if fecha < _fecha_minima_nacimiento(hoy):
+        return MENSAJE_EDAD_MAXIMA
+    return None
+
+
+def validar_fecha_nacimiento(fecha: date, hoy: date) -> None:
+    """RF-03, SUP-43: la fecha de nacimiento no puede ser futura ni de hace más de 120 años.
+
+    Se acepta a quien cumple exactamente 120 años `hoy`. Función pública: también la usa
+    `reservas` para los datos de los viajeros. `hoy` es la fecha local de Colombia. Lanza
+    DatosInvalidos con `campos.fecha_nacimiento`.
+    """
+    mensaje = _error_fecha_nacimiento(fecha, hoy)
+    if mensaje is not None:
+        raise DatosInvalidos(campos={"fecha_nacimiento": mensaje})
+
+
 # ---------- Registro de clientes (HU-01) ----------
 
 
@@ -398,8 +448,9 @@ def _validar_datos_de_registro(datos: RegistroClienteEntrada) -> None:
     campos: dict[str, str] = {}
     if not datos.acepta_politica:
         campos["acepta_politica"] = "Debes aceptar la política de tratamiento de datos personales."
-    if datos.fecha_nacimiento > date.today():
-        campos["fecha_nacimiento"] = "La fecha de nacimiento no puede ser futura."
+    mensaje = _error_fecha_nacimiento(datos.fecha_nacimiento, _hoy())
+    if mensaje is not None:
+        campos["fecha_nacimiento"] = mensaje
     if not cumple_politica_contrasena(datos.contrasena):
         campos["contrasena"] = MENSAJE_POLITICA_CONTRASENA
     if campos:
@@ -606,16 +657,8 @@ def reenviar_verificacion(db: Session, usuario_id: int) -> None:
 
 
 def _validar_datos_editables(datos: PerfilEntrada) -> None:
-    """RF-08: la fecha de nacimiento no puede ser futura."""
-    _validar_fecha_nacimiento(datos.fecha_nacimiento)
-
-
-def _validar_fecha_nacimiento(fecha_nacimiento: date) -> None:
-    """RF-03, HU-12: la fecha de nacimiento no puede ser futura."""
-    if fecha_nacimiento > date.today():
-        raise DatosInvalidos(
-            campos={"fecha_nacimiento": "La fecha de nacimiento no puede ser futura."}
-        )
+    """RF-08, SUP-43: la fecha de nacimiento no puede ser futura ni de hace más de 120 años."""
+    validar_fecha_nacimiento(datos.fecha_nacimiento, _hoy())
 
 
 def _email_en_uso(db: Session, email: str, rol: Rol, excluir_id: int) -> bool:
@@ -1195,7 +1238,7 @@ def completar_registro_administrador(
     if usuario.registro_completo:
         raise RegistroYaCompleto()
 
-    _validar_fecha_nacimiento(datos.fecha_nacimiento)
+    validar_fecha_nacimiento(datos.fecha_nacimiento, _hoy())
     _validar_contrasena_nueva(datos.contrasena_nueva, datos.confirmacion)
 
     if not verificar_contrasena(datos.contrasena_temporal, usuario.password_hash):

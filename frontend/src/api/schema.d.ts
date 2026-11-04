@@ -1045,7 +1045,7 @@ export interface components {
       /**
        * Fecha Nacimiento
        * Format: date
-       * @description No puede ser futura.
+       * @description No puede ser futura ni de hace más de 120 años (SUP-43).
        */
       fecha_nacimiento: string;
       /** Lugar Nacimiento */
@@ -1245,7 +1245,7 @@ export interface components {
       /**
        * Fecha Nacimiento
        * Format: date
-       * @description No puede ser futura.
+       * @description No puede ser futura ni de hace más de 120 años (SUP-43).
        */
       fecha_nacimiento: string;
       /** Lugar Nacimiento */
@@ -1287,7 +1287,7 @@ export interface components {
       /**
        * Fecha Nacimiento
        * Format: date
-       * @description No puede ser futura.
+       * @description No puede ser futura ni de hace más de 120 años (SUP-43).
        */
       fecha_nacimiento: string;
       /** Lugar Nacimiento */

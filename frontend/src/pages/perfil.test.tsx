@@ -539,3 +539,28 @@ describe("S05 · Correos que recibes (HU-08)", () => {
     expect(screen.queryByRole("switch")).not.toBeInTheDocument();
   });
 });
+
+describe("S05 · Edad máxima de la fecha de nacimiento (HU-07, RF-03, SUP-43)", () => {
+  beforeEach(() => {
+    // Solo la fecha: «hoy» es 03/11/2026; los temporizadores siguen reales para userEvent.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-03T15:00:00Z"));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it("rechaza una fecha de hace más de 120 años en pantalla, sin guardar", async () => {
+    servidor();
+    renderRutas(rutas, "/perfil");
+    const user = userEvent.setup();
+
+    const fecha = await campo("Fecha de nacimiento");
+    expect(fecha).toHaveAttribute("min", "1906-11-03");
+    expect(fecha).toHaveAttribute("max", "2026-11-03");
+    await user.clear(fecha);
+    await user.type(fecha, "1906-11-02");
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
+
+    expect(await screen.findByText("Revisa la fecha: la edad máxima es 120 años.")).toBeVisible();
+    expect(peticiones(GUARDAR)).toHaveLength(0);
+  });
+});

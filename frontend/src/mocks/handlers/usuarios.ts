@@ -1,5 +1,6 @@
 // Módulo usuarios (HU-01 a HU-12). Valores que disparan errores: ver comentarios de cada handler.
 import type { Schemas } from "@/api/client";
+import { fechaMinimaNacimiento, MENSAJE_EDAD_MAXIMA } from "@/lib/persona";
 import { BLOQUEOS_DESACTIVACION, CONTRASENA_MOCK, usuarioDe } from "../datos";
 import { db, error, exigirRol, nuevoId, sesion } from "../estado";
 import { http } from "../http";
@@ -19,6 +20,7 @@ function cuentaDeSesion() {
 type DatosPersona = {
   nombres: string;
   apellidos: string;
+  fecha_nacimiento: string;
   lugar_nacimiento: string;
   direccion_facturacion: string;
   email: string;
@@ -34,9 +36,14 @@ function errorDeTexto(valor: string, max: number, formato?: RegExp): string | un
   return undefined;
 }
 
+/** Fecha de hoy en Colombia (aaaa-mm-dd), como la calcula el backend. */
+const hoyEnColombia = () => new Date().toLocaleDateString("sv-SE", { timeZone: "America/Bogota" });
+
 /** Errores de formato de los datos personales, como los valida el backend antes de cualquier
  *  regla de negocio (RF-03). Disparan 422: nombres o apellidos que no empiezan con una letra o
- *  traen dígitos o símbolos («1234», «Gómez#»); más de 100 caracteres; lugar de nacimiento de
+ *  traen dígitos o símbolos («1234», «Gómez#»); fecha de nacimiento futura («La fecha de
+ *  nacimiento no puede ser futura.») o de hace más de 120 años («Revisa la fecha: la edad máxima
+ *  es 120 años.», SUP-43); más de 100 caracteres; lugar de nacimiento de
  *  más de 120; dirección de más de 200; correo de más de 254; teléfono que no cumple
  *  `[0-9 +()-]{7,20}` o con menos de 7 dígitos («(12) 3-45»). */
 function camposDePersona(datos: DatosPersona): Record<string, string> {
@@ -54,6 +61,12 @@ function camposDePersona(datos: DatosPersona): Record<string, string> {
     if (!/^[0-9 +()-]{7,20}$/.test(telefono) || digitos < 7) {
       revisados.telefono = "El formato no es válido.";
     }
+  }
+  const hoy = hoyEnColombia();
+  if (datos.fecha_nacimiento > hoy) {
+    revisados.fecha_nacimiento = "La fecha de nacimiento no puede ser futura.";
+  } else if (datos.fecha_nacimiento < fechaMinimaNacimiento(hoy)) {
+    revisados.fecha_nacimiento = MENSAJE_EDAD_MAXIMA;
   }
   const campos: Record<string, string> = {};
   for (const [campo, mensaje] of Object.entries(revisados)) {
@@ -170,9 +183,6 @@ export const usuariosHandlers = [
     const datos = await request.json();
     const campos: Record<string, string> = camposDePersona(datos);
     if (!datos.acepta_politica) campos.acepta_politica = "Debes aceptar la política de datos.";
-    if (datos.fecha_nacimiento > new Date().toISOString().slice(0, 10)) {
-      campos.fecha_nacimiento = "La fecha de nacimiento no puede ser futura.";
-    }
     if (!POLITICA.test(datos.contrasena)) campos.contrasena = MENSAJE_POLITICA;
     if (Object.keys(campos).length) {
       return response.untyped(error(422, "datos_invalidos", "Revisa los campos marcados.", campos));

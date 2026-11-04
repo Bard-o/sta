@@ -73,7 +73,7 @@ Entrada (`RegistroClienteEntrada`):
 Reglas:
 
 - `acepta_politica` debe ser `true`; se guarda la fecha de aceptación (Ley 1581 de 2012).
-- `fecha_nacimiento` no puede ser futura. No hay edad mínima de registro.
+- `fecha_nacimiento` no puede ser futura ni de hace más de 120 años (SUP-43). Se acepta a quien cumple exactamente 120 años ese día; quien nació un 29 de febrero cumple años el 28 de febrero en los años no bisiestos. «Hoy» es la fecha de Colombia. El error va en `campos.fecha_nacimiento`: «La fecha de nacimiento no puede ser futura.» o «Revisa la fecha: la edad máxima es 120 años.». No hay edad mínima de registro.
 - `contrasena`: 8 caracteres o más, con al menos una letra y un número y sin espacios (RNF-08); se guarda con Argon2id.
 - `nombre_usuario` es único en todo el sistema (sin distinguir mayúsculas). El documento (tipo y número) y el correo son únicos entre las cuentas de cliente (RF-04, SUP-18). El correo se guarda en minúscula.
 - La cuenta nace con `email_verificado: false`, el monedero en $ 0 (SUP-39; el monedero llega en la iteración 2) y sin suscripción a noticias. Se envía el enlace de verificación (HU-02) y se inicia la sesión.
@@ -82,7 +82,7 @@ Reglas:
 | HTTP | `codigo` | Cuándo |
 |---|---|---|
 | 409 | `datos_duplicados` | `campos` con `nombre_usuario`, `numero_documento` o `email`. |
-| 422 | `datos_invalidos` | `campos` con `acepta_politica`, `fecha_nacimiento`, `email`, `nombres` o `apellidos` (caracteres no permitidos), `telefono` (formato o menos de 7 dígitos), `contrasena` (política, incluidos los espacios) o el campo con formato inválido. Imagen que no es JPG o PNG o pesa más de 2 MB: `campos.imagen`. |
+| 422 | `datos_invalidos` | `campos` con `acepta_politica`, `fecha_nacimiento` (futura o de hace más de 120 años), `email`, `nombres` o `apellidos` (caracteres no permitidos), `telefono` (formato o menos de 7 dígitos), `contrasena` (política, incluidos los espacios) o el campo con formato inválido. Imagen que no es JPG o PNG o pesa más de 2 MB: `campos.imagen`. |
 
 #### HU-02 Verificar correo electrónico
 
@@ -207,6 +207,7 @@ Reglas:
 ```
 
 - El root no tiene perfil (`403 sin_permiso`).
+- `fecha_nacimiento` sigue la regla de HU-01: ni futura ni de hace más de 120 años (SUP-43).
 - Un correo distinto no reemplaza al actual: queda en `email_pendiente`, se le envía el enlace de HU-02 y `email` sigue siendo el de la cuenta hasta verificarlo (SUP-42). Un correo que ya usa otra cuenta del mismo rol se rechaza.
 - `imagen_url` cambia cada vez que se sube una imagen, para que el navegador no muestre la anterior desde su caché.
 - Los datos nuevos se usarán en el autocompletado de viajeros (iteración 2); los tiquetes ya emitidos no cambian (RF-08).
@@ -214,7 +215,7 @@ Reglas:
 | HTTP | `codigo` | Cuándo |
 |---|---|---|
 | 409 | `datos_duplicados` | `campos.email`. |
-| 422 | `datos_invalidos` | `campos.fecha_nacimiento` futura, `campos.nombres` / `campos.apellidos` (caracteres no permitidos), `campos.telefono` (formato o menos de 7 dígitos), longitudes máximas, formato inválido o `campos.imagen`. |
+| 422 | `datos_invalidos` | `campos.fecha_nacimiento` futura o de hace más de 120 años, `campos.nombres` / `campos.apellidos` (caracteres no permitidos), `campos.telefono` (formato o menos de 7 dígitos), longitudes máximas, formato inválido o `campos.imagen`. |
 | 404 | `no_encontrado` | `GET /me/imagen` sin imagen. |
 
 #### HU-08 Suscribirse a noticias
@@ -340,6 +341,7 @@ Entrada (`RegistroAdministradorEntrada`): los datos personales de HU-01 (sin `no
 }
 ```
 
+- `fecha_nacimiento` sigue la regla de HU-01: ni futura ni de hace más de 120 años (SUP-43).
 - Mientras el registro esté incompleto, cualquier otro endpoint responde `403 registro_incompleto` (lo aplica `core`, ver [Pendientes de infraestructura](#pendientes-de-infraestructura)).
 - El documento y el correo son únicos entre administradores; la misma persona puede tener además una cuenta de cliente (RF-04).
 - La contraseña temporal deja de funcionar. La sesión actual sigue abierta.
@@ -350,7 +352,7 @@ Entrada (`RegistroAdministradorEntrada`): los datos personales de HU-01 (sin `no
 | 409 | `registro_ya_completo` | El administrador ya completó su registro. |
 | 409 | `datos_duplicados` | `campos.numero_documento` o `campos.email` entre administradores. |
 | 422 | `contrasena_actual_incorrecta` | `campos.contrasena_temporal`. |
-| 422 | `datos_invalidos` | `campos.contrasena_nueva` (política de RNF-08, sin espacios), `campos.confirmacion`, `campos.fecha_nacimiento`, `campos.nombres` / `campos.apellidos` (caracteres no permitidos) o `campos.telefono` (formato o menos de 7 dígitos). |
+| 422 | `datos_invalidos` | `campos.contrasena_nueva` (política de RNF-08, sin espacios), `campos.confirmacion`, `campos.fecha_nacimiento` (futura o de hace más de 120 años), `campos.nombres` / `campos.apellidos` (caracteres no permitidos) o `campos.telefono` (formato o menos de 7 dígitos). |
 
 ### Módulo vuelos · dueño: Backend B
 
@@ -635,11 +637,12 @@ Cuando un módulo necesita a otro, llama a estas funciones públicas del `servic
 
 `VueloPublicado` y `PromocionPublicada` son dataclasses de `noticias/service.py` con la copia de los datos que la noticia muestra (código, ciudades, salida, precios, imagen; porcentaje, clases y vigencia). Noticias no consulta a vuelos: vuelos le avisa de cada cambio, así la dependencia va en un solo sentido.
 
-### `usuarios.service` · dueño: Backend A · la llama noticias
+### `usuarios.service` · dueño: Backend A · la llaman noticias y reservas
 
 | Función | Para qué |
 |---|---|
 | `suscriptores_noticias(db) -> list[SuscriptorNoticias]` | Destinatarios del correo de cada noticia: clientes activos, con el correo verificado y suscritos. Cada uno trae `token_baja` para el enlace de baja (HU-08, RF-56). |
+| `validar_fecha_nacimiento(fecha: date, hoy: date) -> None` | reservas: datos de los viajeros (RF-30 en adelante). Lanza `DatosInvalidos` con `campos.fecha_nacimiento` si la fecha es futura o de hace más de 120 años (SUP-43, `EDAD_MAXIMA_ANOS = 120`). `hoy` es la fecha local de Colombia y la pasa quien llama; si reservas valida varios viajeros, reubica el error en el campo de cada uno. |
 
 ### `auditoria.service` · dueño: Backend B · la llaman usuarios y vuelos
 
