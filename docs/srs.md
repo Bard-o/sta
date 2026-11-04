@@ -6,7 +6,7 @@
 
 **Revisa:** profesor del curso
 
-Revisión 1.2 · 07/10/2026 · Laboratorio de Software · Universidad Tecnológica de Pereira · 2026-2
+Revisión 1.3 · 03/11/2026 · Laboratorio de Software · Universidad Tecnológica de Pereira · 2026-2
 
 Conforme a la plantilla basada en el estándar IEEE Std 830-1998
 
@@ -21,6 +21,7 @@ Conforme a la plantilla basada en el estándar IEEE Std 830-1998
 | 11/09/2026 | 1.0 | Versión inicial construida a partir del enunciado, la reunión 1 (09/09/2026), la reunión 2 (11/09/2026) y los supuestos documentados del equipo. | Equipo de desarrollo |
 | 16/09/2026 | 1.1 | Se completan los integrantes del equipo y la tabla de personal involucrado. Se define Resend como candidato para el servicio de correo SMTP. | Equipo de desarrollo |
 | 07/10/2026 | 1.2 | Se asignan los roles del equipo (backend A, backend B y frontend) y se corrige el nombre de Juan Camilo Murillo Ruiz. Se agregan los supuestos SUP-39 a SUP-42, definidos en la especificación de casos de uso. | Equipo de desarrollo |
+| 03/11/2026 | 1.3 | Se ajustan los requisitos a las observaciones del cliente en la sustentación de la iteración 1: el root invita a los administradores por correo en lugar de darles una contraseña temporal (RF-02, RF-04, SUP-17); la fecha de nacimiento tiene una edad máxima de 120 años y el lugar de nacimiento se elige de listas (RF-03, SUP-43, SUP-44); el sistema calcula la duración del vuelo según la distancia entre aeropuertos (RF-12, RF-13, RF-15, SUP-31); la contraseña no admite espacios (RNF-08). | Equipo de desarrollo |
 
 ## 1 Introducción
 
@@ -58,13 +59,15 @@ Este documento es la Especificación de Requisitos de Software (SRS, por sus sig
 | RNF | Requisito no funcional: una propiedad o restricción de calidad del sistema (cómo lo hace: rendimiento, seguridad, escalabilidad, etc.). Cada RNF incluye su métrica y su método de validación. |
 | Criterio de aceptación | Condición verificable que debe cumplirse para dar un requisito por satisfecho. |
 | Supuesto (SUP) | Decisión tomada por el equipo cuando el cliente la dejó a criterio del equipo. Queda documentada en la sección 2.5; si resulta equivocada, se trata como cambio de alcance. |
-| Root | Usuario superadministrador único, creado por defecto, que crea y desactiva administradores. |
+| Root | Usuario superadministrador único, creado por defecto, que invita y desactiva administradores. |
 | Administrador | Usuario creado por el root que gestiona vuelos, promociones y responde los muros de mensajes. No puede comprar ni reservar. |
+| Invitación de administrador | Enlace de un solo uso, válido por 72 horas, que el sistema envía al correo de un administrador nuevo para que complete su registro y defina su contraseña (RF-02). |
 | Cliente | Usuario registrado que puede buscar, reservar, comprar, cancelar, hacer check-in y usar el monedero. |
 | Visitante | Persona no autenticada. Solo puede buscar vuelos, ver noticias y usar el chatbot. |
 | Viajero / pasajero | Persona que viaja en un vuelo. Puede ser o no un usuario registrado; sus datos los aporta el cliente que compra o reserva. |
 | Vuelo | Operación directa programada entre una ciudad origen y una ciudad destino, en una fecha y hora, con código consecutivo único. |
 | Vuelo nacional / internacional | Nacional: entre dos capitales departamentales de Colombia (150 sillas). Internacional: entre una ciudad colombiana habilitada y un destino internacional habilitado, en cualquier sentido (250 sillas). |
+| Distancia ortodrómica | Distancia más corta entre dos puntos sobre la superficie de la Tierra. Se calcula con la fórmula de haversine a partir de la latitud y la longitud. |
 | Vuelo realizado | Vuelo cuya hora de llegada ya pasó sin haber sido cancelado. Se archiva en la categoría "vuelos realizados". |
 | Reserva | Bloqueo temporal de sillas, con precio congelado, sin pago, válido hasta 24 horas. La única diferencia con la compra es el pago (R1). |
 | Compra | Adquisición pagada de uno o más tiquetes. Genera código de reserva, comprobante PDF y correos a los viajeros. |
@@ -88,6 +91,7 @@ Este documento es la Especificación de Requisitos de Software (SRS, por sus sig
 | Zona horaria IANA | Identificador estándar de zona horaria (p. ej. America/Bogota, Europe/Madrid) que incluye las reglas de horario de verano. |
 | Horario de verano (DST) | Adelanto estacional de la hora local. Aplica en Madrid, Londres, Nueva York y Miami; no aplica en Colombia ni en Buenos Aires. |
 | COP | Peso colombiano. Única moneda del sistema. |
+| DIVIPOLA | División Político-Administrativa de Colombia, publicada por el DANE: códigos y nombres de los departamentos y municipios. |
 | Borrado lógico | Desactivación de un registro marcándolo como inactivo, sin eliminarlo físicamente, para conservar el histórico. |
 | Hash de contraseña | Transformación irreversible de la contraseña. Por eso las contraseñas no se "recuperan": se restablecen. |
 | Responsive | Diseño web que se adapta a pantallas de celular, tableta y computador. |
@@ -108,10 +112,11 @@ Este documento es la Especificación de Requisitos de Software (SRS, por sus sig
 | [7] PLANT | Plantilla de especificación de requisitos de software | Para requerimientos/plantilla_ieee.pdf | — | Coloriuris / qualitatis.org |
 | [8] IEEE830 | IEEE Std 830-1998, Recommended Practice for Software Requirements Specifications (explicación en castellano) | Para requerimientos/explicación_plantilla_ieee830.pdf | 22/10/2008 | IEEE |
 | [9] LEY1581 | Ley Estatutaria 1581 de 2012 de protección de datos personales, y Decreto 1377 de 2013 | — | 2012 / 2013 | Congreso de la República de Colombia |
+| [10] SUST | Observaciones del cliente en la sustentación de la iteración 1 | Issues #99, #100, #101 y #102 del repositorio | 2026-2 | Cliente / equipo |
 
-Las rutas de esta tabla son del archivo de trabajo del equipo; esos documentos no están en el repositorio.
+Salvo [10], las rutas de esta tabla son del archivo de trabajo del equipo; esos documentos no están en el repositorio.
 
-Convención de fuentes. En el campo "Fuente del requisito" se usan estos códigos: ENU (enunciado); R1-Pnn (respuesta del cliente a la pregunta nn en la reunión 1); R2 (reunión 2); EQ (aclaración o decisión del equipo del 11/09/2026); SUP-nn (supuesto documentado en la sección 2.5). Así cada requisito tiene trazabilidad hacia atrás, es decir, se puede rastrear hasta su origen.
+Convención de fuentes. En el campo "Fuente del requisito" se usan estos códigos: ENU (enunciado); R1-Pnn (respuesta del cliente a la pregunta nn en la reunión 1); R2 (reunión 2); EQ (aclaración o decisión del equipo del 11/09/2026); SUST (observación del cliente en la sustentación de la iteración 1); SUP-nn (supuesto documentado en la sección 2.5). Así cada requisito tiene trazabilidad hacia atrás, es decir, se puede rastrear hasta su origen.
 
 ### 1.6 Resumen
 
@@ -134,7 +139,7 @@ El STA es un producto independiente, construido desde cero. No reemplaza ni se i
 | Visitante (navegador web) | Busca vuelos, ve noticias y usa el chatbot, sobre HTTPS. |
 | Cliente (navegador web) | Todas las funciones de compra, reserva, monedero, check-in, muro y recomendaciones, sobre HTTPS. |
 | Administrador / Root (navegador web) | Gestiona vuelos, promociones, administradores y muros, sobre HTTPS. |
-| Servicio de correo (SMTP) | El STA envía correos de verificación, restablecimiento de contraseña, código de reserva, comprobantes, pasabordos, noticias, recomendaciones y respuestas del muro. |
+| Servicio de correo (SMTP) | El STA envía correos de verificación, invitación de administradores, restablecimiento de contraseña, código de reserva, comprobantes, pasabordos, noticias, recomendaciones y respuestas del muro. |
 | Proveedor de modelo de lenguaje (API LLM) | El STA le envía la conversación del chatbot junto con el contexto autorizado y recibe la respuesta en lenguaje natural. |
 | Base de datos de zonas horarias IANA | Permite calcular las horas locales, incluido el horario de verano, en origen y destino. |
 
@@ -144,7 +149,7 @@ El sistema se organiza en los módulos definidos por el cliente en el enunciado.
 
 | Módulo | Funciones principales | Actores |
 |---|---|---|
-| Usuarios | Root por defecto; creación de administradores; registro, verificación de correo, inicio de sesión, restablecimiento de contraseña, edición de perfil, suscripción a noticias, desactivación de cuenta. | Root, Administrador, Cliente, Visitante |
+| Usuarios | Root por defecto; invitación de administradores por correo; registro, verificación de correo, inicio de sesión, restablecimiento de contraseña, edición de perfil, suscripción a noticias, desactivación de cuenta. | Root, Administrador, Cliente, Visitante |
 | Administración de vuelos | Programar vuelos nacionales e internacionales (también recurrentes), calcular la llegada en hora local, editar, cancelar (normal o por fuerza mayor), archivar vuelos realizados, aplicar promociones. | Administrador |
 | Búsqueda | Buscar vuelos por cualquier campo o combinación de campos, con rangos, incluida la búsqueda de ida y regreso. | Visitante, Cliente, Chatbot |
 | Compra y reserva | Carrito, datos de viajeros, reserva de hasta 24 h, compra con monedero, asignación agrupada de sillas, trayecto único o completo, cancelaciones con reembolso, histórico. | Cliente |
@@ -159,7 +164,7 @@ El sistema se organiza en los módulos definidos por el cliente en el enunciado.
 
 | Tipo de usuario | Formación | Habilidades | Actividades |
 |---|---|---|---|
-| Root | Personal técnico o directivo de la aerolínea | Manejo básico de aplicaciones web | Crear y desactivar administradores; cambiar su propia contraseña. Existe uno solo. |
+| Root | Personal técnico o directivo de la aerolínea | Manejo básico de aplicaciones web | Invitar y desactivar administradores; cambiar su propia contraseña. Existe uno solo. |
 | Administrador | Personal comercial u operativo de la aerolínea | Manejo intermedio de aplicaciones web; conoce las reglas del negocio aéreo | Programar, editar y cancelar vuelos; crear promociones; responder los muros de los clientes. No compra ni reserva. |
 | Cliente | Cualquier nivel educativo; público general | Manejo básico de web o de celular | Buscar, reservar, comprar, cancelar, gestionar el monedero, hacer check-in, cambiar silla, escribir en su muro, suscribirse a noticias. |
 | Visitante | Cualquier nivel educativo | Manejo básico de web o de celular | Buscar vuelos, ver noticias, conversar con el chatbot. |
@@ -202,7 +207,7 @@ Supuestos. Son decisiones del equipo sobre puntos que el cliente dejó a su crit
 | SUP-14 | P41 | Un trayecto completo es una sola compra con código de reserva común y dos tiquetes por viajero (ida y regreso) vinculados. Cancelar solo el regreso no cancela la ida. |
 | SUP-15 | P47 | El carrito persiste entre sesiones y puede contener vuelos de rutas distintas. Al iniciar el pago, las sillas se bloquean 15 minutos; si el pago no se confirma, se liberan. |
 | SUP-16 | P49 | Una compra se puede cancelar por viajero individual o completa. |
-| SUP-17 | P52 | El root crea al administrador con un usuario y una contraseña temporal. El administrador completa sus datos y cambia la contraseña en su primer ingreso. |
+| SUP-17 | P52; SUST | El root crea al administrador con un nombre de usuario y un correo; nadie escribe ni ve una contraseña. El sistema envía a ese correo una invitación de un solo uso, válida por 72 horas, con la que el administrador completa sus datos y define su contraseña. Abrir el enlace prueba que el correo es suyo, así que no hay verificación aparte. El root puede reenviar la invitación; la anterior deja de servir. El root nunca conoce la contraseña de nadie. |
 | SUP-18 | P53 | El nombre de usuario es único en todo el sistema. El documento y el correo son únicos dentro de las cuentas de cliente y dentro de las de administrador, de modo que una misma persona puede tener una cuenta de cada tipo. |
 | SUP-19 | P55 | El enlace de verificación de correo vence en 24 horas y el de restablecimiento de contraseña en 30 minutos. Ambos son de un solo uso. |
 | SUP-20 | P65 / P66 | Los vuelos sin cupo aparecen en los resultados marcados como "agotado". Los resultados se ordenan por precio ascendente por defecto y se paginan de 20 en 20. |
@@ -216,18 +221,20 @@ Supuestos. Son decisiones del equipo sobre puntos que el cliente dejó a su crit
 | SUP-28 | P82 | No hay sillas bloqueadas, de emergencia ni con costo adicional. |
 | SUP-29 | P7 | Los correos se envían de verdad mediante un servicio SMTP. |
 | SUP-30 | P25 | La imagen alusiva de cada vuelo se toma de un banco de imágenes precargado por ciudad destino (el cliente lo dejó a criterio de diseño). |
-| SUP-31 | P2 | El administrador digita la duración del vuelo (campo obligatorio del enunciado); el sistema no la calcula por distancia. |
+| SUP-31 | P2; SUST | El sistema calcula la duración del vuelo; el administrador no la digita. Se toma la distancia ortodrómica entre los aeropuertos de origen y destino (fórmula de haversine, radio terrestre de 6.371 km) a una velocidad de crucero de 800 km/h, se suman 30 minutos de rodaje, ascenso y descenso, y el resultado se redondea hacia arriba a múltiplos de 5 minutos. Ejemplos: Pereira → Bogotá 45 min; Bogotá → Buenos Aires 6 h 25 min; Bogotá → Madrid 10 h 35 min. |
 | SUP-32 | P13 | Todas las ciudades nacionales comparten la zona America/Bogota (UTC-5, sin horario de verano). |
 | SUP-33 | P85 | En el inicio del cliente autenticado se muestran hasta 4 recomendaciones, y se envía un correo semanal de recomendaciones que el cliente puede desactivar. |
 | SUP-34 | R2 | Un cliente recibe recomendaciones cuando tiene al menos 1 compra o reserva, o al menos 3 búsquedas registradas. |
 | SUP-35 | P89 | Si la API del modelo de lenguaje no responde, el chatbot muestra un mensaje de indisponibilidad y enlaces a la búsqueda y al muro. La demostración requiere conexión a internet. |
-| SUP-36 | P101 | Se registran en auditoría las acciones administrativas: crear, editar o cancelar vuelos, crear promociones y crear o desactivar administradores. |
+| SUP-36 | P101 | Se registran en auditoría las acciones administrativas: crear, editar o cancelar vuelos, crear promociones y crear o desactivar administradores y reenviar sus invitaciones. |
 | SUP-37 | R1-P18 | Los vuelos recurrentes se programan con un horizonte máximo de 12 meses desde la fecha de creación. |
 | SUP-38 | R1-P21 | El descuento de una promoción está entre el 1 % y el 90 %. |
 | SUP-39 | Guion CU-04 | El monedero de un cliente nuevo inicia con saldo $ 0. |
 | SUP-40 | Guion CU-31 | Una reserva se puede pagar por viajero. Los viajeros que no se pagan siguen como reserva, con el mismo vencimiento. |
 | SUP-41 | Guion CU-19 | Si el carrusel ya tiene 10 elementos, el elemento nuevo reemplaza al más antiguo. |
 | SUP-42 | Guion CU-06 | Al cambiar el correo desde el perfil, el correo nuevo queda pendiente hasta que se verifique (RF-05). |
+| SUP-43 | SUST | La fecha de nacimiento no puede ser futura ni de hace más de 120 años. Se acepta a quien cumple exactamente 120 años ese día; para quien nació un 29 de febrero, en los años no bisiestos se compara contra el 28 de febrero. Motivo: en Colombia hay unas 20.000 personas de más de 100 años (DANE), así que un tope de 90 o 100 dejaría sin cuenta a personas reales; 120 es el tope habitual en formularios y la persona más longeva verificada vivió 122. |
+| SUP-44 | SUST | El lugar de nacimiento se elige como país (lista ISO 3166-1, con nombres en español y Colombia por defecto) y, si es Colombia, departamento y municipio según la DIVIPOLA del DANE. Para otro país se escribe la ciudad (máximo 120 caracteres). El sistema guarda además el texto para mostrar, p. ej. "Santa Rosa de Cabal, Risaralda, Colombia". |
 
 Dependencias.
 
@@ -313,19 +320,23 @@ El sistema debe crear en su instalación un único usuario root, que solo tiene 
 | Número de requisito | RF-02 |
 | Nombre de requisito | Gestión de administradores por el root |
 | Tipo | Requisito |
-| Fuente del requisito | ENU; R1-P51; SUP-17 |
+| Fuente del requisito | ENU; R1-P51; SUST; SUP-17 |
 | Prioridad del requisito | Alta/Esencial |
 
 **Descripción:**
 
-El root es el único usuario que puede crear administradores. Los crea con un nombre de usuario y una contraseña temporal. En su primer ingreso, el administrador debe completar su registro con los mismos campos del cliente (RF-03) y cambiar la contraseña.
+El root es el único usuario que puede crear administradores. Los crea con un nombre de usuario y un correo; el root no define ni conoce la contraseña de nadie. El sistema envía a ese correo una invitación de un solo uso, válida por 72 horas (SUP-17). Con el enlace, el administrador completa su registro con los mismos campos del cliente (RF-03), salvo el correo, que ya viene de la invitación, y define su contraseña. Abrir el enlace prueba que el correo es suyo, así que no hay verificación aparte (RF-05). Mientras no complete el registro, la cuenta no tiene contraseña y no puede iniciar sesión.
 
-El root puede desactivar y reactivar administradores (borrado lógico). Un administrador desactivado no puede iniciar sesión, pero sus acciones pasadas se conservan en la auditoría.
+El root ve el estado de cada invitación (pendiente, con su vencimiento, o vencida) y puede reenviarla: el enlace anterior deja de servir y corren otras 72 horas. Si el correo no se puede enviar, el administrador queda creado y el root reenvía la invitación.
+
+El root puede desactivar y reactivar administradores (borrado lógico). Un administrador desactivado no puede iniciar sesión, pero sus acciones pasadas se conservan en la auditoría. Desactivar a un administrador con la invitación pendiente invalida el enlace; al reactivarlo, el root debe reenviar la invitación.
 
 **Criterios de aceptación:**
 
-- Un usuario sin rol root que intente crear un administrador recibe un rechazo de autorización.
-- Un administrador con registro incompleto solo ve el formulario para completarlo.
+- Un usuario sin rol root que intente crear un administrador o reenviar una invitación recibe un rechazo de autorización.
+- En ningún paso de la creación ni de la invitación aparece una contraseña.
+- Antes de completar el registro, el administrador invitado no puede iniciar sesión con ninguna contraseña.
+- Un enlace de invitación vencido, ya usado o reemplazado por un reenvío es rechazado, y el root puede enviar uno nuevo.
 - Un administrador desactivado que intenta iniciar sesión recibe el mensaje "cuenta inactiva".
 
 ##### RF-03 Registro de clientes
@@ -335,19 +346,21 @@ El root puede desactivar y reactivar administradores (borrado lógico). Un admin
 | Número de requisito | RF-03 |
 | Nombre de requisito | Registro de clientes |
 | Tipo | Requisito |
-| Fuente del requisito | ENU; R1-P32; R1-P54; R1-P57 |
+| Fuente del requisito | ENU; R1-P32; R1-P54; R1-P57; SUST; SUP-43; SUP-44 |
 | Prioridad del requisito | Alta/Esencial |
 
 **Descripción:**
 
-Un visitante puede registrarse como cliente aportando: tipo de documento (cédula de ciudadanía, tarjeta de identidad, registro civil, cédula de extranjería o pasaporte), número de documento (alfanumérico), nombres, apellidos, fecha de nacimiento, lugar de nacimiento, dirección de facturación, género, correo electrónico, nombre de usuario y contraseña. De forma opcional, puede subir una imagen de perfil (JPG o PNG, máximo 2 MB).
+Un visitante puede registrarse como cliente aportando: tipo de documento (cédula de ciudadanía, tarjeta de identidad, registro civil, cédula de extranjería o pasaporte), número de documento (alfanumérico), nombres, apellidos, fecha de nacimiento, lugar de nacimiento (país y, si es Colombia, departamento y municipio; si es otro país, la ciudad, SUP-44), dirección de facturación, género, correo electrónico, nombre de usuario y contraseña. De forma opcional, puede subir una imagen de perfil (JPG o PNG, máximo 2 MB).
 
-Para registrarse es obligatorio aceptar la política de tratamiento de datos personales (Ley 1581 de 2012). No hay edad mínima de registro.
+Para registrarse es obligatorio aceptar la política de tratamiento de datos personales (Ley 1581 de 2012). No hay edad mínima de registro; la edad máxima es de 120 años (SUP-43).
 
 **Criterios de aceptación:**
 
 - El registro sin aceptar la política de datos es rechazado.
 - Una fecha de nacimiento futura es rechazada.
+- Quien cumple 120 años el día del registro puede registrarse; quien cumpliría 121 o más es rechazado con un mensaje junto al campo.
+- Con Colombia como país, el municipio debe existir en la DIVIPOLA. Un municipio inexistente, o un municipio con un país distinto de Colombia, es rechazado indicando el campo.
 - La contraseña debe cumplir RNF-08.
 - Un menor de edad puede registrarse (la restricción aplica al volar, RF-35).
 
@@ -363,12 +376,13 @@ Para registrarse es obligatorio aceptar la política de tratamiento de datos per
 
 **Descripción:**
 
-El nombre de usuario es único en todo el sistema. El tipo y número de documento y el correo son únicos entre las cuentas de cliente y, por separado, entre las de administrador. Una persona que es administrador y quiere comprar debe crearse una cuenta de cliente independiente.
+El nombre de usuario es único en todo el sistema. El tipo y número de documento y el correo son únicos entre las cuentas de cliente y, por separado, entre las de administrador. Una persona que es administrador y quiere comprar debe crearse una cuenta de cliente independiente. Entre los administradores, el correo de una invitación pendiente (RF-02) cuenta como ocupado.
 
 **Criterios de aceptación:**
 
 - Registrar un cliente con un documento o correo que ya tiene otra cuenta de cliente es rechazado.
 - Un administrador puede registrarse como cliente con su mismo documento, usando otro nombre de usuario.
+- Invitar a un administrador con un correo que ya tiene otra cuenta de administrador o una invitación pendiente es rechazado; un correo que pertenece a una cuenta de cliente se acepta.
 
 ##### RF-05 Verificación de correo electrónico
 
@@ -382,7 +396,7 @@ El nombre de usuario es único en todo el sistema. El tipo y número de document
 
 **Descripción:**
 
-Al registrarse, el sistema envía al correo del cliente un enlace de verificación de un solo uso, válido por 24 horas. Hasta verificar el correo, la cuenta no puede comprar, reservar ni suscribirse a noticias. El cliente puede solicitar el reenvío del enlace.
+Al registrarse, el sistema envía al correo del cliente un enlace de verificación de un solo uso, válido por 24 horas. Hasta verificar el correo, la cuenta no puede comprar, reservar ni suscribirse a noticias. El cliente puede solicitar el reenvío del enlace. Los administradores no usan este enlace al registrarse: la invitación de RF-02 ya prueba su correo.
 
 **Criterios de aceptación:**
 
@@ -515,7 +529,7 @@ El sistema debe restringir cada función al rol autorizado, según la matriz de 
 
 **Descripción:**
 
-El sistema debe tener un catálogo precargado de ciudades, cada una con su nombre, país, código de aeropuerto y zona horaria IANA:
+El sistema debe tener un catálogo precargado de ciudades, cada una con su nombre, país, código de aeropuerto, coordenadas del aeropuerto (latitud y longitud, para calcular la duración de los vuelos, SUP-31) y zona horaria IANA:
 
 - Nacionales: las 32 capitales departamentales de Colombia.
 - Internacionales: Madrid, Londres, Nueva York, Buenos Aires y Miami.
@@ -532,20 +546,21 @@ El sistema debe tener un catálogo precargado de ciudades, cada una con su nombr
 | Número de requisito | RF-13 |
 | Nombre de requisito | Programar un vuelo |
 | Tipo | Requisito |
-| Fuente del requisito | ENU; R1-P1; SUP-01; SUP-31 |
+| Fuente del requisito | ENU; R1-P1; SUST; SUP-01; SUP-31 |
 | Prioridad del requisito | Alta/Esencial |
 
 **Descripción:**
 
-Un administrador puede crear un vuelo con los campos obligatorios: código (autogenerado, SUP-01), fecha de salida, hora de salida (hora local del origen), ciudad origen, ciudad destino, duración del vuelo (horas y minutos), precio por persona en clase económica y precio por persona en primera clase (COP). El sistema determina si el vuelo es nacional o internacional según las ciudades, y asigna la capacidad correspondiente (150 o 250 sillas).
+Un administrador puede crear un vuelo con los campos obligatorios: código (autogenerado, SUP-01), fecha de salida, hora de salida (hora local del origen), ciudad origen, ciudad destino, precio por persona en clase económica y precio por persona en primera clase (COP). El sistema determina si el vuelo es nacional o internacional según las ciudades, y asigna la capacidad correspondiente (150 o 250 sillas). La duración no la digita el administrador: el sistema la calcula según la distancia entre los aeropuertos de origen y destino (SUP-31) y la muestra, junto con la llegada (RF-15), antes de guardar.
 
-Validaciones: origen distinto del destino; ruta permitida (RF-14); fecha y hora de salida futuras; duración mayor a 0 y menor a 24 horas; precios enteros mayores a 0.
+Validaciones: origen distinto del destino; ruta permitida (RF-14); fecha y hora de salida futuras; precios enteros mayores a 0. Además, la base de datos rechaza una duración que no sea mayor a 0 y menor a 24 horas; con el catálogo actual la ruta más larga, Cali → Londres, da unas 11 h 25 min.
 
 **Criterios de aceptación:**
 
 - Al guardar, el vuelo recibe un código consecutivo nuevo que nunca se repite.
 - Un vuelo con la fecha de salida en el pasado es rechazado.
 - Un vuelo con precio de primera clase y precio de económica queda guardado con ambos precios.
+- Un vuelo Pereira → Bogotá queda guardado con una duración calculada de 45 min, sin que el administrador la escriba.
 
 ##### RF-14 Rutas permitidas
 
@@ -576,20 +591,20 @@ No se permiten vuelos entre dos destinos internacionales (p. ej. Madrid → Lond
 | Número de requisito | RF-15 |
 | Nombre de requisito | Cálculo de la hora de llegada en hora local |
 | Tipo | Requisito |
-| Fuente del requisito | ENU; R1-P2; R1-P14; SUP-32 |
+| Fuente del requisito | ENU; R1-P2; R1-P14; SUP-31; SUP-32 |
 | Prioridad del requisito | Alta/Esencial |
 
 **Descripción:**
 
-El sistema almacena la salida en UTC y calcula la llegada como salida (UTC) + duración. La muestra en la hora local de la ciudad destino según su zona IANA, incluido el horario de verano vigente en esa fecha. En vuelos nacionales, la llegada local es la salida más la duración (Colombia no tiene horario de verano).
+El sistema almacena la salida en UTC y calcula la llegada como salida (UTC) + duración calculada (SUP-31). La muestra en la hora local de la ciudad destino según su zona IANA, incluido el horario de verano vigente en esa fecha. En vuelos nacionales, la llegada local es la salida más la duración (Colombia no tiene horario de verano).
 
 Toda pantalla, correo y PDF que muestre horas de un vuelo presenta la salida en hora local del origen y la llegada en hora local del destino, con la ciudad y el desfase frente a UTC.
 
 **Criterios de aceptación:**
 
-- Bogotá → Madrid, salida 10/07/2026 22:00 (UTC-5), duración 10 h: la llegada se muestra 11/07/2026 15:00 Madrid (UTC+2, horario de verano).
-- El mismo vuelo con salida 10/12/2026 22:00: la llegada se muestra 11/12/2026 14:00 Madrid (UTC+1, horario estándar).
-- Bogotá → Buenos Aires, salida 10/12/2026 08:00, duración 6 h 30 min: la llegada se muestra 10/12/2026 16:30 Buenos Aires (UTC-3).
+- Bogotá → Madrid, salida 10/07/2026 22:00 (UTC-5), duración calculada 10 h 35 min: la llegada se muestra 11/07/2026 15:35 Madrid (UTC+2, horario de verano).
+- El mismo vuelo con salida 10/12/2026 22:00: la llegada se muestra 11/12/2026 14:35 Madrid (UTC+1, horario estándar).
+- Bogotá → Buenos Aires, salida 10/12/2026 08:00, duración calculada 6 h 25 min: la llegada se muestra 10/12/2026 16:25 Buenos Aires (UTC-3).
 
 ##### RF-16 Unicidad de vuelos
 
@@ -622,7 +637,7 @@ No pueden existir dos vuelos activos con el mismo origen, el mismo destino y la 
 
 **Descripción:**
 
-Al crear un vuelo, el administrador puede indicar que se repite: diario o en días de la semana seleccionados (p. ej. todos los lunes), entre una fecha de inicio y una de fin, con un horizonte máximo de 12 meses. El sistema genera cada ocurrencia como un vuelo independiente, con su propio código, y omite las fechas que violen RF-16, informándolas al administrador.
+Al crear un vuelo, el administrador puede indicar que se repite: diario o en días de la semana seleccionados (p. ej. todos los lunes), entre una fecha de inicio y una de fin, con un horizonte máximo de 12 meses. El sistema genera cada ocurrencia como un vuelo independiente, con su propio código, y omite las fechas que violen RF-16, informándolas al administrador. Todas las ocurrencias tienen la duración calculada para la ruta (SUP-31).
 
 **Criterios de aceptación:**
 
@@ -641,7 +656,7 @@ Al crear un vuelo, el administrador puede indicar que se repite: diario o en dí
 
 **Descripción:**
 
-Un administrador puede editar cualquier campo de un vuelo programado, siempre que el vuelo no haya salido y no tenga ninguna compra ni ninguna reserva activa. Las validaciones de RF-13, RF-14 y RF-16 se vuelven a aplicar.
+Un administrador puede editar cualquier campo de un vuelo programado, siempre que el vuelo no haya salido y no tenga ninguna compra ni ninguna reserva activa. Las validaciones de RF-13, RF-14 y RF-16 se vuelven a aplicar. Si cambia la ruta, el sistema recalcula la duración (SUP-31) y la llegada; la duración no se edita a mano.
 
 **Criterios de aceptación:**
 
@@ -800,7 +815,7 @@ Al crear una promoción, el sistema publica una noticia con el vuelo, el descuen
 
 **Descripción:**
 
-El sistema registra, sin permitir modificarlas ni borrarlas: la creación, edición y cancelación de vuelos; la creación de promociones; la creación y desactivación de administradores; y las respuestas en los muros. Cada registro guarda el usuario, la fecha y hora, la acción y los valores anteriores y nuevos. El root y los administradores pueden consultar la auditoría con filtros.
+El sistema registra, sin permitir modificarlas ni borrarlas: la creación, edición y cancelación de vuelos; la creación de promociones; la creación, el reenvío de la invitación, la desactivación y la reactivación de administradores; y las respuestas en los muros. Cada registro guarda el usuario, la fecha y hora, la acción y los valores anteriores y nuevos. El root y los administradores pueden consultar la auditoría con filtros.
 
 **Criterios de aceptación:**
 
@@ -1752,8 +1767,8 @@ Entorno de referencia para las mediciones: servidor con 2 vCPU, 4 GB de RAM y di
 | Fuente del requisito | ENU; SUP-29 |
 | Prioridad del requisito | Alta/Esencial |
 | Descripción | Los correos se envían mediante una cola asíncrona, para no demorar las transacciones. |
-| Cómo aplica al sistema | Aplica a los correos de código de reserva, comprobante, pasabordo, verificación, restablecimiento, noticias, recomendaciones y respuestas del muro. |
-| Métrica de aceptación | Correos transaccionales (código de reserva, comprobante, pasabordo, verificación, restablecimiento): entregados al servidor SMTP en ≤ 2 min en el 95 % de los casos. Noticias: ≤ 5 min para hasta 10.000 suscritos. |
+| Cómo aplica al sistema | Aplica a los correos de código de reserva, comprobante, pasabordo, verificación, invitación de administradores, restablecimiento, noticias, recomendaciones y respuestas del muro. |
+| Métrica de aceptación | Correos transaccionales (código de reserva, comprobante, pasabordo, verificación, invitación de administradores, restablecimiento): entregados al servidor SMTP en ≤ 2 min en el 95 % de los casos. Noticias: ≤ 5 min para hasta 10.000 suscritos. |
 | Método de validación | Se generan 100 compras y se comparan las marcas de tiempo de la transacción y del envío en el registro de la cola. Para noticias, se simulan 10.000 suscritos con un servidor SMTP de pruebas. |
 
 ##### RNF-06 Escalabilidad vertical
@@ -1793,9 +1808,9 @@ Entorno de referencia para las mediciones: servidor con 2 vCPU, 4 GB de RAM y di
 | Número de requisito | RNF-08 |
 | Nombre de requisito | Almacenamiento seguro de contraseñas |
 | Tipo | Requisito |
-| Fuente del requisito | R1-P55 |
+| Fuente del requisito | R1-P55; SUST |
 | Prioridad del requisito | Alta/Esencial |
-| Descripción | Las contraseñas se guardan con un hash adaptativo y con sal, nunca en texto plano ni cifradas de forma reversible. Política mínima: 8 caracteres, al menos una letra y un número. |
+| Descripción | Las contraseñas se guardan con un hash adaptativo y con sal, nunca en texto plano ni cifradas de forma reversible. Política mínima: 8 caracteres, al menos una letra y un número, sin espacios. |
 | Cómo aplica al sistema | Aplica a RF-01, RF-02, RF-03, RF-07 y RF-08. |
 | Métrica de aceptación | 0 contraseñas legibles en la base de datos. Algoritmo bcrypt (costo ≥ 10) o Argon2id. El 100 % de las contraseñas que no cumplen la política son rechazadas. |
 | Método de validación | Inspección directa de la tabla de usuarios; prueba unitaria que verifica el formato del hash; pruebas de registro con contraseñas débiles. |
@@ -2170,7 +2185,7 @@ Bloque contiguo (para RF-41): conjunto de sillas libres de una misma fila y clas
 | Recibir recomendaciones | — | ✔ | — | — |
 | Crear, editar y cancelar vuelos; crear promociones | — | — | ✔ | — |
 | Consultar vuelos realizados y auditoría | — | — | ✔ | Solo auditoría |
-| Crear y desactivar administradores | — | — | — | ✔ |
+| Invitar, reenviar invitaciones y desactivar administradores | — | — | — | ✔ |
 
 ### Apéndice C. Resumen de reglas de tiempo
 
@@ -2184,6 +2199,7 @@ Bloque contiguo (para RF-41): conjunto de sillas libres de una misma fila y clas
 | Bloqueo de sillas durante el pago | 15 min | RF-30 |
 | Plazo para decidir tras una cancelación por fuerza mayor | 48 h (si no decide, reembolso automático) | RF-20 |
 | Enlace de verificación de correo | 24 h, un solo uso | RF-05 |
+| Enlace de invitación de administrador | 72 h, un solo uso | RF-02 |
 | Enlace de restablecimiento de contraseña | 30 min, un solo uso | RF-07 |
 | Horizonte de vuelos recurrentes | 12 meses | RF-17 |
 | Paso a "vuelo realizado" | A la hora de llegada (tolerancia de 2 min) | RF-21 |
@@ -2193,8 +2209,8 @@ Bloque contiguo (para RF-41): conjunto de sillas libres de una misma fila y clas
 | ID | Nombre | Fuente | Prioridad |
 |---|---|---|---|
 | RF-01 | Usuario root por defecto | ENU; R1-P51 | Alta/Esencial |
-| RF-02 | Gestión de administradores por el root | ENU; R1-P51; SUP-17 | Alta/Esencial |
-| RF-03 | Registro de clientes | ENU; R1-P32; R1-P54; R1-P57 | Alta/Esencial |
+| RF-02 | Gestión de administradores por el root | ENU; R1-P51; SUST; SUP-17 | Alta/Esencial |
+| RF-03 | Registro de clientes | ENU; R1-P32; R1-P54; R1-P57; SUST; SUP-43; SUP-44 | Alta/Esencial |
 | RF-04 | Unicidad de cuentas | R1-P53; SUP-18 | Alta/Esencial |
 | RF-05 | Verificación de correo electrónico | R1-P55; SUP-19 | Alta/Esencial |
 | RF-06 | Inicio y cierre de sesión | ENU | Alta/Esencial |
@@ -2204,9 +2220,9 @@ Bloque contiguo (para RF-41): conjunto de sillas libres de una misma fila y clas
 | RF-10 | Desactivación de cuenta (borrado lógico) | R1-P56 | Media/Deseado |
 | RF-11 | Control de acceso por rol | ENU | Alta/Esencial |
 | RF-12 | Catálogo de ciudades | ENU; R1-P9 | Alta/Esencial |
-| RF-13 | Programar un vuelo | ENU; R1-P1; SUP-01; SUP-31 | Alta/Esencial |
+| RF-13 | Programar un vuelo | ENU; R1-P1; SUST; SUP-01; SUP-31 | Alta/Esencial |
 | RF-14 | Rutas permitidas | ENU; R1-P42; R1-P43 | Alta/Esencial |
-| RF-15 | Cálculo de la hora de llegada en hora local | ENU; R1-P2; R1-P14; SUP-32 | Alta/Esencial |
+| RF-15 | Cálculo de la hora de llegada en hora local | ENU; R1-P2; R1-P14; SUP-31; SUP-32 | Alta/Esencial |
 | RF-16 | Unicidad de vuelos | R1-P19 | Alta/Esencial |
 | RF-17 | Programación de vuelos recurrentes | R1-P18; SUP-37 | Media/Deseado |
 | RF-18 | Editar un vuelo | ENU; R1-P17; EQ | Alta/Esencial |
@@ -2270,7 +2286,7 @@ Bloque contiguo (para RF-41): conjunto de sillas libres de una misma fila y clas
 | RNF-05 | Envío oportuno de correos | ENU; SUP-29 | Alta/Esencial |
 | RNF-06 | Escalabilidad vertical | R2 | Alta/Esencial |
 | RNF-07 | Volumen de datos soportado | R2 | Alta/Esencial |
-| RNF-08 | Almacenamiento seguro de contraseñas | R1-P55 | Alta/Esencial |
+| RNF-08 | Almacenamiento seguro de contraseñas | R1-P55; SUST | Alta/Esencial |
 | RNF-09 | Cifrado en tránsito | ENU | Alta/Esencial |
 | RNF-10 | Autorización en el servidor | ENU | Alta/Esencial |
 | RNF-11 | Protección contra vulnerabilidades web comunes | — | Alta/Esencial |

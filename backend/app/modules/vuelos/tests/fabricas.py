@@ -66,7 +66,6 @@ def cuerpo_vuelo(**cambios: object) -> dict[str, object]:
         "destino": "MAD",
         "fecha_salida": "2099-01-15",
         "hora_salida": "10:00",
-        "duracion_minutos": 600,
         "precio_economica": 2_450_000,
         "precio_primera": 6_900_000,
     }

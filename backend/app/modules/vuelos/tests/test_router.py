@@ -69,7 +69,8 @@ def test_vista_previa_calcula_tipo_capacidad_y_llegada(
     }
     assert datos["destino"]["codigo"] == "MAD"
     assert datos["salida"] == "2099-01-15T15:00:00Z"
-    assert datos["llegada"] == "2099-01-16T01:00:00Z"
+    assert datos["llegada"] == "2099-01-16T01:45:00Z"
+    assert datos["duracion_minutos"] == 645
     assert datos["capacidad"] == {"primera": 50, "economica": 200, "total": 250}
 
 
@@ -146,7 +147,6 @@ def test_vista_previa_rechaza_vuelo_duplicado(
             destino="BOG",
             fecha_salida="2026-12-10",
             hora_salida="06:00",
-            duracion_minutos=50,
         ),
     )
 
@@ -175,7 +175,6 @@ def test_vista_previa_acepta_la_misma_ruta_veinte_minutos_despues(
             destino="BOG",
             fecha_salida="2026-12-10",
             hora_salida="06:20",
-            duracion_minutos=50,
         ),
     )
 
@@ -183,16 +182,13 @@ def test_vista_previa_acepta_la_misma_ruta_veinte_minutos_despues(
     assert respuesta.json()["salida"] == "2026-12-10T11:20:00Z"
 
 
-def test_vista_previa_rechaza_duracion_y_precios_invalidos(
+def test_vista_previa_rechaza_precios_invalidos(
     client_como: Callable[[Rol], TestClient],
 ) -> None:
-    """HU-13 · RF-13: duración 0 o 1440 y precios ≤ 0 responden datos_invalidos."""
+    """HU-13 · RF-13: precios ≤ 0 responden datos_invalidos."""
     admin = client_como(Rol.ADMIN)
 
     casos = [
-        ({"duracion_minutos": 0}, "duracion_minutos"),
-        ({"duracion_minutos": -1}, "duracion_minutos"),
-        ({"duracion_minutos": 1440}, "duracion_minutos"),
         ({"precio_economica": 0}, "precio_economica"),
         ({"precio_economica": -1}, "precio_economica"),
         ({"precio_primera": 0}, "precio_primera"),
@@ -209,7 +205,7 @@ def test_vista_previa_rechaza_duracion_y_precios_invalidos(
 def test_vista_previa_muestra_el_horario_de_verano_de_madrid(
     client_como: Callable[[Rol], TestClient],
 ) -> None:
-    """HU-13 · RF-15: julio de 2027 llega 15:00 a Madrid (UTC+2)."""
+    """HU-13 · RF-15: julio de 2027 llega 15:35 a Madrid (UTC+2)."""
     admin = client_como(Rol.ADMIN)
 
     respuesta = admin.post(
@@ -225,13 +221,13 @@ def test_vista_previa_muestra_el_horario_de_verano_de_madrid(
     assert respuesta.status_code == 200
     datos = respuesta.json()
     assert datos["salida"] == "2027-07-11T03:00:00Z"
-    assert datos["llegada"] == "2027-07-11T13:00:00Z"
+    assert datos["llegada"] == "2027-07-11T13:35:00Z"
 
 
 def test_vista_previa_muestra_el_horario_estandar_de_madrid(
     client_como: Callable[[Rol], TestClient],
 ) -> None:
-    """HU-13 · RF-15: diciembre de 2027 llega 14:00 a Madrid (UTC+1)."""
+    """HU-13 · RF-15: diciembre de 2027 llega 14:35 a Madrid (UTC+1)."""
     admin = client_como(Rol.ADMIN)
 
     respuesta = admin.post(
@@ -247,13 +243,13 @@ def test_vista_previa_muestra_el_horario_estandar_de_madrid(
     assert respuesta.status_code == 200
     datos = respuesta.json()
     assert datos["salida"] == "2027-12-11T03:00:00Z"
-    assert datos["llegada"] == "2027-12-11T13:00:00Z"
+    assert datos["llegada"] == "2027-12-11T13:35:00Z"
 
 
 def test_llegada_local_de_madrid_en_verano_e_invierno(
     client_como: Callable[[Rol], TestClient],
 ) -> None:
-    """HU-13 · RF-15: el frontend muestra 15:00 y 14:00 en Madrid según la fecha."""
+    """HU-13 · RF-15: el frontend muestra 15:35 y 14:35 en Madrid según la fecha."""
     admin = client_como(Rol.ADMIN)
     verano = datetime.fromisoformat(
         admin.post(
@@ -274,8 +270,16 @@ def test_llegada_local_de_madrid_en_verano_e_invierno(
 
     local_verano = verano.astimezone(ZoneInfo("Europe/Madrid"))
     local_invierno = invierno.astimezone(ZoneInfo("Europe/Madrid"))
-    assert (local_verano.date(), local_verano.hour) == (date(2027, 7, 11), 15)
-    assert (local_invierno.date(), local_invierno.hour) == (date(2027, 12, 11), 14)
+    assert (local_verano.date(), local_verano.hour, local_verano.minute) == (
+        date(2027, 7, 11),
+        15,
+        35,
+    )
+    assert (local_invierno.date(), local_invierno.hour, local_invierno.minute) == (
+        date(2027, 12, 11),
+        14,
+        35,
+    )
 
 
 # ---------- POST /vuelos (HU-13) ----------
@@ -296,7 +300,8 @@ def test_programar_vuelo_devuelve_201_con_el_vuelo_admin(
     assert datos["origen"]["codigo"] == "PEI"
     assert datos["destino"]["codigo"] == "MAD"
     assert datos["salida"] == "2099-01-15T15:00:00Z"
-    assert datos["llegada"] == "2099-01-16T01:00:00Z"
+    assert datos["llegada"] == "2099-01-16T01:45:00Z"
+    assert datos["duracion_minutos"] == 645
     assert datos["capacidad"] == {"primera": 50, "economica": 200, "total": 250}
     assert datos["ocupacion"] == {
         "primera": {"capacidad": 50, "vendidas": 0, "reservadas": 0, "disponibles": 50},
@@ -323,7 +328,7 @@ def test_programar_vuelo_publica_la_noticia_con_la_imagen_de_miami(
 
     respuesta = client.post(
         RUTA_CREAR,
-        json=cuerpo_vuelo(origen="PEI", destino="MIA", duracion_minutos=240),
+        json=cuerpo_vuelo(origen="PEI", destino="MIA"),
     )
 
     assert respuesta.status_code == 201
@@ -338,6 +343,21 @@ def test_programar_vuelo_publica_la_noticia_con_la_imagen_de_miami(
     assert noticia.destino_nombre == "Miami"
     assert noticia.imagen_url == "/imagenes/ciudades/MIA.jpg"
     assert noticia.titulo == "Nuevo vuelo Pereira → Miami"
+
+
+def test_guardar_ignora_la_duracion_enviada_por_un_cliente(
+    client: TestClient, crear_usuario: Callable[..., Any]
+) -> None:
+    """HU-13 · RF-13: `duracion_minutos` ya no se acepta; el sistema la calcula por distancia."""
+    iniciar_sesion_admin(client, crear_usuario)
+
+    respuesta = client.post(
+        RUTA_CREAR,
+        json=cuerpo_vuelo(origen="PEI", destino="BOG", duracion_minutos=1),
+    )
+
+    assert respuesta.status_code == 201
+    assert respuesta.json()["duracion_minutos"] == 45
 
 
 def test_la_creacion_queda_en_la_auditoria(
@@ -375,7 +395,6 @@ def test_el_codigo_sale_de_la_secuencia_y_no_se_reutiliza(
         "origen": "PEI",
         "destino": "BOG",
         "hora_salida": "06:00",
-        "duracion_minutos": 50,
     }
 
     primero = client.post(RUTA_CREAR, json=cuerpo_vuelo(fecha_salida="2099-02-01", **ruta_nacional))
@@ -398,8 +417,6 @@ def test_el_codigo_sale_de_la_secuencia_y_no_se_reutiliza(
         ({"destino": "ZZZ"}, 422, "datos_invalidos", "destino"),
         ({"destino": "PEI"}, 422, "datos_invalidos", "destino"),
         ({"fecha_salida": "2020-01-01"}, 422, "datos_invalidos", "fecha_salida"),
-        ({"duracion_minutos": 0}, 422, "datos_invalidos", "duracion_minutos"),
-        ({"duracion_minutos": 1440}, 422, "datos_invalidos", "duracion_minutos"),
         ({"precio_economica": 0}, 422, "datos_invalidos", "precio_economica"),
         ({"precio_primera": -1}, 422, "datos_invalidos", "precio_primera"),
     ],
@@ -441,7 +458,6 @@ def test_programar_vuelo_rechaza_duplicado_y_acepta_veinte_minutos_despues(
         "origen": "PEI",
         "destino": "BOG",
         "fecha_salida": "2099-01-15",
-        "duracion_minutos": 50,
     }
 
     duplicado = client.post(RUTA_CREAR, json=cuerpo_vuelo(hora_salida="06:00", **ruta))
@@ -508,7 +524,6 @@ def cuerpo_serie(**cambios: object) -> dict[str, object]:
         "origen": "PEI",
         "destino": "BOG",
         "hora_salida": "06:00",
-        "duracion_minutos": 50,
         "precio_economica": 280_000,
         "precio_primera": 750_000,
         "dias_semana": ["lun"],
@@ -545,6 +560,7 @@ def test_vista_previa_de_la_serie_devuelve_tipo_capacidad_y_fechas(
     datos = respuesta.json()
     assert datos["tipo"] == "nacional"
     assert datos["capacidad"] == {"primera": 25, "economica": 125, "total": 150}
+    assert datos["duracion_minutos"] == 45
     assert datos["fechas"] == [fecha.isoformat() for fecha in fechas]
     assert datos["omitidas"] == []
     assert db.scalar(select(func.count(Vuelo.id))) == vuelos_antes
@@ -572,6 +588,7 @@ def test_programar_serie_crea_un_vuelo_independiente_por_fecha(
         assert vuelo["origen"]["codigo"] == "PEI"
         assert vuelo["destino"]["codigo"] == "BOG"
         assert vuelo["salida"] == f"{fecha.isoformat()}T11:00:00Z"
+        assert vuelo["duracion_minutos"] == 45
         assert vuelo["capacidad"] == {"primera": 25, "economica": 125, "total": 150}
 
 

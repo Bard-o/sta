@@ -13,7 +13,6 @@ const NOMBRE_CAMPO: Record<string, string> = {
   destino: "Destino",
   fecha_salida: "Fecha de salida",
   hora_salida: "Hora de salida",
-  duracion_minutos: "Duración",
   precio_economica: "Precio económica",
   precio_primera: "Precio primera",
   dias_semana: "Días",
@@ -59,6 +58,10 @@ function Pase({
         <p>
           <strong>Tipo:</strong> {vista.tipo}, {vista.capacidad.total} sillas (
           {vista.capacidad.primera} en primera, {vista.capacidad.economica} en económica).
+        </p>
+        <p>
+          <strong>Duración estimada:</strong> {duracion(vista.duracion_minutos)} · calculada por
+          distancia.
         </p>
         <p>
           <strong>Llegada calculada:</strong> {fecha(vista.llegada, zd)} {hora(vista.llegada, zd)}{" "}
@@ -140,7 +143,7 @@ function PorSerie({ serie, precio }: { serie: SerieEntrada | null; precio: numbe
   }
   if (consulta.isError) return <Errores error={consulta.error} />;
 
-  const { fechas, omitidas } = consulta.data;
+  const { fechas, omitidas, duracion_minutos } = consulta.data;
   const repeticiones = (
     <p>
       <strong>Repeticiones:</strong> {resumenSerie(fechas.length, omitidas, serie.dias_semana)}
@@ -151,7 +154,6 @@ function PorSerie({ serie, precio }: { serie: SerieEntrada | null; precio: numbe
     destino: serie.destino,
     fecha_salida: fechas[0] ?? "",
     hora_salida: serie.hora_salida,
-    duracion_minutos: serie.duracion_minutos,
     precio_economica: serie.precio_economica,
     precio_primera: serie.precio_primera,
   };
@@ -159,6 +161,10 @@ function PorSerie({ serie, precio }: { serie: SerieEntrada | null; precio: numbe
   if (fechas.length === 0) {
     return (
       <div className="sta-notice" style={{ display: "block" }}>
+        <p>
+          <strong>Duración estimada:</strong> {duracion(duracion_minutos)} · calculada por
+          distancia.
+        </p>
         {repeticiones}
         <p>Con estos datos no se crearía ningún vuelo: cambia los días o el periodo.</p>
       </div>

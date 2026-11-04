@@ -366,8 +366,8 @@ Entrada (`RegistroAdministradorEntrada`): los datos personales de HU-01 (sin `no
   "origen": { "codigo": "BOG", "nombre": "Bogotá", "zona_horaria": "America/Bogota" },
   "destino": { "codigo": "MAD", "nombre": "Madrid", "zona_horaria": "Europe/Madrid" },
   "salida": "2026-12-11T03:00:00Z",
-  "llegada": "2026-12-11T13:00:00Z",
-  "duracion_minutos": 600,
+  "llegada": "2026-12-11T13:35:00Z",
+  "duracion_minutos": 635,
   "precio_economica": 2450000,
   "precio_primera": 6900000,
   "capacidad": { "primera": 50, "economica": 200, "total": 250 },
@@ -409,16 +409,16 @@ Entrada (`RegistroAdministradorEntrada`): los datos personales de HU-01 (sin `no
   "destino": "MAD",
   "fecha_salida": "2026-12-10",
   "hora_salida": "22:00",
-  "duracion_minutos": 600,
   "precio_economica": 2450000,
   "precio_primera": 6900000
 }
 ```
 
 - El catálogo (RF-12) son las 32 capitales departamentales, Madrid, Londres, Nueva York, Buenos Aires y Miami, con su código de aeropuerto y su zona IANA. Todas las ciudades colombianas usan `America/Bogota` (SUP-32).
-- La vista previa aplica las mismas validaciones que guardar y devuelve tipo, capacidad, salida y llegada sin guardar nada (el recuadro «Así lo verá el cliente» de S08).
-- Validaciones (RF-13, RF-14, RF-16): ciudades del catálogo; origen distinto del destino; ruta permitida (nacional entre capitales, o internacional entre Pereira, Bogotá, Medellín, Cali o Cartagena y un destino internacional, en ambos sentidos); salida futura; `duracion_minutos` entre 1 y 1439; precios enteros mayores que 0; ningún otro vuelo programado con el mismo origen, destino y salida.
-- El sistema calcula `tipo`, la capacidad (nacional 25 + 125; internacional 50 + 200), `salida` en UTC y `llegada` = salida + duración (RF-15). El código `STA-nnnnn` sale de una secuencia y nunca se reutiliza (SUP-01).
+- La vista previa aplica las mismas validaciones que guardar y devuelve tipo, capacidad, salida, llegada y `duracion_minutos` sin guardar nada (el recuadro «Así lo verá el cliente» de S08).
+- Validaciones (RF-13, RF-14, RF-16): ciudades del catálogo; origen distinto del destino; ruta permitida (nacional entre capitales, o internacional entre Pereira, Bogotá, Medellín, Cali o Cartagena y un destino internacional, en ambos sentidos); salida futura; precios enteros mayores que 0; ningún otro vuelo programado con el mismo origen, destino y salida.
+- El sistema calcula `tipo`, la capacidad (nacional 25 + 125; internacional 50 + 200), la duración por la distancia entre los aeropuertos, `salida` en UTC y `llegada` = salida + duración (RF-13, RF-15, SUP-31). El código `STA-nnnnn` sale de una secuencia y nunca se reutiliza (SUP-01).
+- La duración no se envía: `distancia_km` es la distancia ortodrómica entre las coordenadas del catálogo (haversine, radio 6.371 km); `duracion_minutos = ceil((distancia_km / 800 × 60 + 30) / 5) × 5`. Ejemplo: Pereira → Bogotá son 177 km y 45 min. Si un cliente sigue enviando `duracion_minutos`, se ignora.
 - En la misma transacción: `noticias.publicar_noticia_vuelo(...)` (RF-22) y `auditoria.registrar(accion="vuelo.crear", …)`.
 
 | HTTP | `codigo` | Cuándo |
@@ -439,7 +439,6 @@ Entrada (`RegistroAdministradorEntrada`): los datos personales de HU-01 (sin `no
   "origen": "PEI",
   "destino": "BOG",
   "hora_salida": "06:00",
-  "duracion_minutos": 50,
   "precio_economica": 280000,
   "precio_primera": 750000,
   "dias_semana": ["lun"],
@@ -458,7 +457,18 @@ Entrada (`RegistroAdministradorEntrada`): los datos personales de HU-01 (sin `no
 }
 ```
 
+```json
+{
+  "tipo": "nacional",
+  "capacidad": { "primera": 25, "economica": 125, "total": 150 },
+  "duracion_minutos": 45,
+  "fechas": ["2026-10-05", "2026-10-12"],
+  "omitidas": [{ "fecha": "2026-10-19", "codigo": "vuelo_duplicado", "motivo": "Ya existe un vuelo igual." }]
+}
+```
+
 - Los 7 días equivalen a «diario». Se genera una fecha por cada día del periodo (ambos extremos incluidos) que cae en `dias_semana`.
+- La serie no recibe `duracion_minutos`: todas sus ocurrencias usan la calculada para la ruta, que la vista previa devuelve en `duracion_minutos`.
 - `hasta` no puede ser anterior a `desde` ni estar a más de 12 meses de hoy (SUP-37).
 - Cada ocurrencia es un vuelo independiente, con su código, su noticia y su registro de auditoría; editarla o cancelarla no afecta a las demás.
 - Las fechas que chocan con un vuelo existente (RF-16) o cuya salida ya pasó se omiten y se informan; no son un error. Las demás validaciones de HU-13 sí rechazan toda la serie.
@@ -477,7 +487,7 @@ Entrada (`RegistroAdministradorEntrada`): los datos personales de HU-01 (sin `no
 | PUT | `/api/v1/vuelos/{vuelo_id}` | Admin | `200 VueloAdmin` |
 
 - Filtros de `GET /vuelos`: `estado` (por defecto `programado`), `desde` y `hasta` (fechas en hora de Colombia: salida para programados y cancelados, llegada para realizados), `q` (código o nombre de ciudad), `pagina`, `por_pagina`. Los programados van por salida ascendente; los realizados y cancelados, del más reciente al más antiguo.
-- `PUT` recibe `VueloEntrada` completo y vuelve a aplicar todas las validaciones de HU-13, excluyendo al propio vuelo de la unicidad. Recalcula tipo, capacidad y llegada; el código se conserva.
+- `PUT` recibe `VueloEntrada` completo y vuelve a aplicar todas las validaciones de HU-13, excluyendo al propio vuelo de la unicidad. Recalcula tipo, capacidad, duración, salida y llegada; el código se conserva. Los vuelos ya guardados conservan su duración.
 - Solo se edita un vuelo `programado`, que no ha salido y que no tiene compras ni reservas vigentes (`editable: true`). Si la única reserva vence o se cancela, vuelve a ser editable.
 - En la misma transacción: `noticias.actualizar_noticias_de_vuelo(...)` y `auditoria.registrar(accion="vuelo.editar", antes=…, despues=…)` con los valores anteriores y nuevos de los campos que cambiaron.
 

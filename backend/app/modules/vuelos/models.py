@@ -7,6 +7,7 @@ clase y su vigencia; el estado efectivo se calcula al consultar (RF-23).
 """
 
 from datetime import UTC, datetime
+from decimal import Decimal
 from typing import Literal
 
 from sqlalchemy import (
@@ -17,6 +18,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    Numeric,
     String,
     false,
     text,
@@ -54,6 +56,9 @@ class Ciudad(Base):
     )
     # RF-14: solo cinco ciudades colombianas tienen rutas internacionales.
     habilitada_internacional: Mapped[bool] = mapped_column(Boolean, server_default=false())
+    # RF-13, SUP-31: coordenadas del aeropuerto para calcular la duración por distancia.
+    latitud: Mapped[Decimal] = mapped_column(Numeric(8, 5))
+    longitud: Mapped[Decimal] = mapped_column(Numeric(8, 5))
     imagen_url: Mapped[str] = mapped_column(String(255))
 
 

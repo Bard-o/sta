@@ -34,7 +34,6 @@ def datos_vuelo(**cambios: object) -> VueloEntrada:
         "destino": "BOG",
         "fecha_salida": date(2099, 1, 15),
         "hora_salida": time(10, 0),
-        "duracion_minutos": 50,
         "precio_economica": 280_000,
         "precio_primera": 750_000,
     }
