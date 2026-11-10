@@ -6,6 +6,7 @@ import { z } from "zod";
 import { ApiError } from "@/api/client";
 import { useRegistro } from "@/auth/registro";
 import { Button } from "@/components/ui/button";
+import { CampoLugarNacimiento } from "@/components/ui/campo-lugar-nacimiento";
 import { CampoLista, CampoTexto } from "@/components/ui/campos";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -28,6 +29,7 @@ import {
   TIPOS_DOCUMENTO,
   type TipoDocumento,
 } from "@/lib/persona";
+import { LUGAR_VACIO } from "@/lib/lugares";
 
 const esquema = z
   .object({
@@ -75,7 +77,7 @@ export function RegistroPage() {
       nombres: "",
       apellidos: "",
       fecha_nacimiento: "",
-      lugar_nacimiento: "",
+      lugar_nacimiento: LUGAR_VACIO,
       direccion_facturacion: "",
       email: "",
       nombre_usuario: "",
@@ -97,7 +99,10 @@ export function RegistroPage() {
           // IU-07: cada error se muestra junto a su campo.
           for (const [campo, mensaje] of Object.entries(error.campos)) {
             if (campo === "imagen") setErrorImagen(mensaje);
-            else if (CAMPOS.includes(campo as FieldPath<Entrada>)) {
+            else if (
+              CAMPOS.includes(campo as FieldPath<Entrada>) ||
+              campo.startsWith("lugar_nacimiento.")
+            ) {
               form.setError(campo as FieldPath<Entrada>, { message: mensaje });
             }
           }
@@ -169,7 +174,10 @@ export function RegistroPage() {
                   max={hoy()}
                   autoComplete="bday"
                 />
-                <CampoTexto<Entrada> name="lugar_nacimiento" label="Lugar de nacimiento" />
+                <CampoLugarNacimiento<Entrada>
+                  name="lugar_nacimiento"
+                  className="sm:col-span-2 lg:col-span-3"
+                />
                 <CampoTexto<Entrada>
                   name="direccion_facturacion"
                   label="Dirección de facturación"

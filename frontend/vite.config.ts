@@ -28,5 +28,7 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
     css: false,
+    // Los formularios con catálogo encadenan varias peticiones y clics; 5 s es justo en CI.
+    testTimeout: 10_000,
   },
 });

@@ -33,11 +33,15 @@ from app.core.security import (
 )
 from app.modules.auditoria import service as auditoria_service
 from app.modules.reservas import service as reservas_service
+from app.modules.usuarios import catalogos
+from app.modules.usuarios.catalogos import LugarResuelto
 from app.modules.usuarios.models import TokenRestablecimiento, TokenVerificacion, Usuario
 from app.modules.usuarios.schemas import (
     AdministradorEntrada,
     AdministradorSalida,
     EstadoAdministrador,
+    LugarNacimientoEntrada,
+    LugarNacimientoSalida,
     PerfilEntrada,
     PerfilSalida,
     RegistroAdministradorEntrada,
@@ -375,6 +379,44 @@ def validar_fecha_nacimiento(fecha: date, hoy: date) -> None:
         raise DatosInvalidos(campos={"fecha_nacimiento": mensaje})
 
 
+def _resolver_lugar_nacimiento(datos: LugarNacimientoEntrada) -> LugarResuelto:
+    """HU-01, HU-07, HU-12: valida el lugar contra el catálogo y calcula el texto para mostrar."""
+    return catalogos.resolver_lugar_nacimiento(datos.pais, datos.municipio, datos.ciudad)
+
+
+def _asignar_lugar_nacimiento(usuario: Usuario, lugar: LugarResuelto) -> None:
+    """Guarda el lugar estructurado y su texto; lo usan el registro, el perfil y HU-12."""
+    usuario.pais_nacimiento = lugar.pais.codigo
+    usuario.municipio_nacimiento = lugar.municipio.codigo if lugar.municipio else None
+    usuario.ciudad_nacimiento = lugar.ciudad
+    usuario.lugar_nacimiento = lugar.texto
+
+
+def _lugar_nacimiento_salida(usuario: Usuario) -> LugarNacimientoSalida | None:
+    """Lugar de nacimiento con nombres para el perfil; `None` en una cuenta anterior al cambio."""
+    if usuario.pais_nacimiento is None:
+        return None
+
+    info_pais = catalogos.buscar_pais(usuario.pais_nacimiento)
+    info_municipio = (
+        catalogos.buscar_municipio(usuario.municipio_nacimiento)
+        if usuario.municipio_nacimiento
+        else None
+    )
+    info_departamento = (
+        catalogos.buscar_departamento(info_municipio.departamento) if info_municipio else None
+    )
+    return LugarNacimientoSalida(
+        pais=usuario.pais_nacimiento,
+        pais_nombre=info_pais.nombre if info_pais else usuario.pais_nacimiento,
+        departamento=info_departamento.codigo if info_departamento else None,
+        departamento_nombre=info_departamento.nombre if info_departamento else None,
+        municipio=info_municipio.codigo if info_municipio else None,
+        municipio_nombre=info_municipio.nombre if info_municipio else None,
+        ciudad=usuario.ciudad_nacimiento,
+    )
+
+
 # ---------- Registro de clientes (HU-01) ----------
 
 
@@ -391,6 +433,7 @@ def registrar_cliente(db: Session, datos: RegistroClienteEntrada) -> Usuario:
     DatosInvalidos o DatosDuplicados.
     """
     _validar_datos_de_registro(datos)
+    lugar = _resolver_lugar_nacimiento(datos.lugar_nacimiento)
     email = datos.email.strip().lower()
     nombre_usuario = datos.nombre_usuario.strip()
 
@@ -416,13 +459,13 @@ def registrar_cliente(db: Session, datos: RegistroClienteEntrada) -> Usuario:
         nombres=datos.nombres.strip(),
         apellidos=datos.apellidos.strip(),
         fecha_nacimiento=datos.fecha_nacimiento,
-        lugar_nacimiento=datos.lugar_nacimiento.strip(),
         direccion_facturacion=datos.direccion_facturacion.strip(),
         genero=datos.genero,
         telefono=datos.telefono.strip() if datos.telefono else None,
         # Ley 1581 de 2012 (RF-03).
         fecha_aceptacion_politica=datetime.now(UTC),
     )
+    _asignar_lugar_nacimiento(usuario, lugar)
     db.add(usuario)
     try:
         db.flush()  # asigna el id antes de crear el token
@@ -703,7 +746,9 @@ def _perfil_salida(usuario: Usuario) -> PerfilSalida:
         nombres=usuario.nombres,
         apellidos=usuario.apellidos,
         fecha_nacimiento=usuario.fecha_nacimiento,
-        lugar_nacimiento=usuario.lugar_nacimiento,
+        lugar_nacimiento=_lugar_nacimiento_salida(usuario),
+        # `usuario.lugar_nacimiento` no es nulo: el bloque de arriba ya lo exige.
+        lugar_nacimiento_texto=usuario.lugar_nacimiento,
         direccion_facturacion=usuario.direccion_facturacion,
         genero=usuario.genero,
         email=usuario.email,
@@ -742,6 +787,7 @@ def actualizar_perfil(db: Session, usuario_id: int, datos: PerfilEntrada) -> Per
         raise NoAutenticado()
 
     _validar_datos_editables(datos)
+    lugar = _resolver_lugar_nacimiento(datos.lugar_nacimiento)
     email = datos.email.strip().lower()
     token: str | None = None
 
@@ -760,7 +806,7 @@ def actualizar_perfil(db: Session, usuario_id: int, datos: PerfilEntrada) -> Per
     usuario.nombres = datos.nombres.strip()
     usuario.apellidos = datos.apellidos.strip()
     usuario.fecha_nacimiento = datos.fecha_nacimiento
-    usuario.lugar_nacimiento = datos.lugar_nacimiento.strip()
+    _asignar_lugar_nacimiento(usuario, lugar)
     usuario.direccion_facturacion = datos.direccion_facturacion.strip()
     usuario.genero = datos.genero
     usuario.telefono = datos.telefono.strip() if datos.telefono else None
@@ -1239,6 +1285,7 @@ def completar_registro_administrador(
         raise RegistroYaCompleto()
 
     validar_fecha_nacimiento(datos.fecha_nacimiento, _hoy())
+    lugar = _resolver_lugar_nacimiento(datos.lugar_nacimiento)
     _validar_contrasena_nueva(datos.contrasena_nueva, datos.confirmacion)
 
     if not verificar_contrasena(datos.contrasena_temporal, usuario.password_hash):
@@ -1265,7 +1312,7 @@ def completar_registro_administrador(
     usuario.nombres = datos.nombres.strip()
     usuario.apellidos = datos.apellidos.strip()
     usuario.fecha_nacimiento = datos.fecha_nacimiento
-    usuario.lugar_nacimiento = datos.lugar_nacimiento.strip()
+    _asignar_lugar_nacimiento(usuario, lugar)
     usuario.direccion_facturacion = datos.direccion_facturacion.strip()
     usuario.genero = datos.genero
     usuario.telefono = datos.telefono.strip() if datos.telefono else None

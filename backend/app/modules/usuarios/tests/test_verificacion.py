@@ -31,7 +31,7 @@ def _datos(**cambios: object) -> dict[str, object]:
         "nombres": "Laura",
         "apellidos": "Gómez Ríos",
         "fecha_nacimiento": "1995-03-14",
-        "lugar_nacimiento": "Pereira, Risaralda",
+        "lugar_nacimiento": {"pais": "CO", "municipio": "66001", "ciudad": None},
         "direccion_facturacion": "Cra. 7 # 19-28, Pereira",
         "genero": "femenino",
         "email": "laura.gomez@correo.co",

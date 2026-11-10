@@ -2,6 +2,7 @@
 import type { Schemas } from "@/api/client";
 import { fechaMinimaNacimiento, MENSAJE_EDAD_MAXIMA } from "@/lib/persona";
 import { BLOQUEOS_DESACTIVACION, CONTRASENA_MOCK, usuarioDe } from "../datos";
+import { lugarSalida, textoLugar, validarLugar } from "../lugares";
 import { db, error, exigirRol, nuevoId, sesion } from "../estado";
 import { http } from "../http";
 
@@ -21,7 +22,7 @@ type DatosPersona = {
   nombres: string;
   apellidos: string;
   fecha_nacimiento: string;
-  lugar_nacimiento: string;
+  lugar_nacimiento: Schemas["LugarNacimientoEntrada"];
   direccion_facturacion: string;
   email: string;
   telefono?: string | null;
@@ -43,17 +44,17 @@ const hoyEnColombia = () => new Date().toLocaleDateString("sv-SE", { timeZone: "
  *  regla de negocio (RF-03). Disparan 422: nombres o apellidos que no empiezan con una letra o
  *  traen dígitos o símbolos («1234», «Gómez#»); fecha de nacimiento futura («La fecha de
  *  nacimiento no puede ser futura.») o de hace más de 120 años («Revisa la fecha: la edad máxima
- *  es 120 años.», SUP-43); más de 100 caracteres; lugar de nacimiento de
- *  más de 120; dirección de más de 200; correo de más de 254; teléfono que no cumple
+ *  es 120 años.», SUP-43); más de 100 caracteres; ciudad de nacimiento de más de 120;
+ *  dirección de más de 200; correo de más de 254; teléfono que no cumple
  *  `[0-9 +()-]{7,20}` o con menos de 7 dígitos («(12) 3-45»). */
 function camposDePersona(datos: DatosPersona): Record<string, string> {
   const nombre = /^\p{L}[\p{L} '.-]*$/u;
   const revisados: Record<string, string | undefined> = {
     nombres: errorDeTexto(datos.nombres, 100, nombre),
     apellidos: errorDeTexto(datos.apellidos, 100, nombre),
-    lugar_nacimiento: errorDeTexto(datos.lugar_nacimiento, 120),
     direccion_facturacion: errorDeTexto(datos.direccion_facturacion, 200),
     email: datos.email.trim().length > 254 ? "Es demasiado largo." : undefined,
+    ...validarLugar(datos.lugar_nacimiento),
   };
   if (datos.telefono != null) {
     const telefono = datos.telefono.trim();
@@ -93,6 +94,7 @@ function perfilNuevo(
   rol: Perfil["rol"],
   datos: Schemas["RegistroClienteEntrada"] | Schemas["RegistroAdministradorEntrada"],
 ): Perfil {
+  const lugar = lugarSalida(datos.lugar_nacimiento);
   return {
     id,
     nombre_usuario,
@@ -102,7 +104,8 @@ function perfilNuevo(
     nombres: datos.nombres,
     apellidos: datos.apellidos,
     fecha_nacimiento: datos.fecha_nacimiento,
-    lugar_nacimiento: datos.lugar_nacimiento,
+    lugar_nacimiento: lugar,
+    lugar_nacimiento_texto: lugar ? textoLugar(lugar) : "",
     direccion_facturacion: datos.direccion_facturacion,
     genero: datos.genero,
     email: datos.email.toLowerCase(),
@@ -285,9 +288,12 @@ export const usuariosHandlers = [
         }),
       );
     }
+    const lugar = lugarSalida(datos.lugar_nacimiento);
     cuenta.perfil = {
       ...cuenta.perfil,
       ...datos,
+      lugar_nacimiento: lugar,
+      lugar_nacimiento_texto: lugar ? textoLugar(lugar) : cuenta.perfil.lugar_nacimiento_texto,
       email: cuenta.perfil.email,
       telefono: datos.telefono ?? null,
       email_pendiente: cambiaCorreo ? email : cuenta.perfil.email_pendiente,

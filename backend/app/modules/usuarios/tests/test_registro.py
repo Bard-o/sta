@@ -28,7 +28,7 @@ def _datos(**cambios: object) -> dict[str, object]:
         "nombres": "Laura",
         "apellidos": "Gómez Ríos",
         "fecha_nacimiento": "1995-03-14",
-        "lugar_nacimiento": "Pereira, Risaralda",
+        "lugar_nacimiento": {"pais": "CO", "municipio": "66001", "ciudad": None},
         "direccion_facturacion": "Cra. 7 # 19-28, Pereira",
         "genero": "femenino",
         "email": "laura.gomez@correo.co",
@@ -335,17 +335,16 @@ def test_registro_sin_telefono(client: TestClient):
 @pytest.mark.parametrize(
     ("campo", "valor"),
     [
-        ("lugar_nacimiento", "L" * 121),
         ("direccion_facturacion", "D" * 201),
-        ("lugar_nacimiento", "   "),
         ("direccion_facturacion", "   "),
         ("email", "a" * 244 + "@correo.com"),
     ],
-    ids=["lugar-largo", "direccion-larga", "lugar-vacio", "direccion-vacia", "email-largo"],
+    ids=["direccion-larga", "direccion-vacia", "email-largo"],
 )
 def test_registro_con_textos_fuera_de_longitud(client: TestClient, campo: str, valor: str):
-    """HU-01 / RF-03: lugar (120), dirección (200) y correo (254) tienen longitud máxima y los
-    obligatorios no pueden quedar vacíos ni en solo espacios."""
+    """HU-01 / RF-03: dirección (200) y correo (254) tienen longitud máxima y los obligatorios
+    no pueden quedar vacíos ni en solo espacios. El lugar de nacimiento se valida contra el
+    catálogo en `test_lugar_nacimiento.py`."""
     respuesta = _registrar(client, **{campo: valor})
 
     assert respuesta.status_code == 422

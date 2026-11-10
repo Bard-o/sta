@@ -4,6 +4,7 @@ import { RequireRole, SoloRegistroPendiente } from "@/auth/require-role";
 import { AppLayout } from "@/layouts/app-layout";
 import { PrimerIngresoPage } from "@/pages/primer-ingreso";
 import { ADMIN, ADMIN_INCOMPLETO, responderApi, sesionDe } from "@/test/api";
+import { elegirLugar } from "@/test/lugar";
 import { renderRutas } from "@/test/render";
 
 const RUTA = "/admin/primer-ingreso";
@@ -47,7 +48,10 @@ async function llenarFormulario(user: ReturnType<typeof userEvent.setup>, enviar
   fireEvent.change(screen.getByLabelText("Fecha de nacimiento"), {
     target: { value: "1990-05-02" },
   });
-  await user.type(screen.getByLabelText("Lugar de nacimiento"), "Cali, Valle del Cauca");
+  await elegirLugar(user, {
+    departamento: "Valle del Cauca",
+    municipio: "Santiago de Cali",
+  });
   await user.type(screen.getByLabelText("Dirección de facturación"), "Cl. 5 # 38-14, Cali");
   await user.type(screen.getByLabelText("Correo"), "jorge.torres@avianco.test");
   await user.type(screen.getByLabelText("Contraseña temporal"), "Temporal123");
@@ -104,7 +108,7 @@ describe("Primer ingreso del administrador (HU-12)", () => {
       nombres: "Jorge",
       apellidos: "Torres",
       fecha_nacimiento: "1990-05-02",
-      lugar_nacimiento: "Cali, Valle del Cauca",
+      lugar_nacimiento: { pais: "CO", municipio: "76001", ciudad: null },
       direccion_facturacion: "Cl. 5 # 38-14, Cali",
       genero: "masculino",
       email: "jorge.torres@avianco.test",

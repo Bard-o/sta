@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { SoloVisitantes } from "@/auth/require-role";
 import { RegistroPage } from "@/pages/registro";
 import { CLIENTE, responderApi, SIN_SESION } from "@/test/api";
+import { elegirLugar } from "@/test/lugar";
 import { renderRutas } from "@/test/render";
 
 const rutas = [
@@ -35,7 +36,6 @@ async function llenar({ sinPolitica, sobrescribe = {} }: Opciones = {}) {
     Nombres: "Laura",
     Apellidos: "Gómez Ríos",
     "Fecha de nacimiento": "1995-03-14",
-    "Lugar de nacimiento": "Pereira, Risaralda",
     "Dirección de facturación": "Cra. 7 # 19-28, Pereira",
     "Correo electrónico": "laura.gomez@correo.co",
     "Nombre de usuario": "lauragomez",
@@ -49,6 +49,10 @@ async function llenar({ sinPolitica, sobrescribe = {} }: Opciones = {}) {
     await user.clear(campo);
     if (valor) await user.type(campo, valor);
   }
+  await elegirLugar(user, {
+    departamento: "Risaralda",
+    municipio: "Pereira",
+  });
   if (!sinPolitica)
     await user.click(screen.getByRole("checkbox", { name: /política de tratamiento/ }));
   return user;
@@ -88,7 +92,7 @@ describe("S01 · Registro de cliente (HU-01)", () => {
       nombres: "Laura",
       apellidos: "Gómez Ríos",
       fecha_nacimiento: "1995-03-14",
-      lugar_nacimiento: "Pereira, Risaralda",
+      lugar_nacimiento: { pais: "CO", municipio: "66001", ciudad: null },
       direccion_facturacion: "Cra. 7 # 19-28, Pereira",
       email: "laura.gomez@correo.co",
       nombre_usuario: "lauragomez",
