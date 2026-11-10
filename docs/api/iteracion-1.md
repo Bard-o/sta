@@ -40,6 +40,43 @@ Además de los de [`README.md`](README.md):
 
 ### Módulo usuarios · dueño: Backend A
 
+#### Lugares de nacimiento (HU-01, HU-07, HU-12)
+
+| Método | Ruta | Rol | Respuesta |
+|---|---|---|---|
+| GET | `/api/v1/lugares/paises` | Público | `200 Pais[]` |
+| GET | `/api/v1/lugares/departamentos` | Público | `200 Departamento[]` |
+| GET | `/api/v1/lugares/departamentos/{codigo}/municipios` | Público | `200 Municipio[]` |
+
+```json
+[{ "codigo": "CO", "nombre": "Colombia" }]
+```
+
+```json
+[{ "codigo": "66", "nombre": "Risaralda" }]
+```
+
+```json
+[{ "codigo": "66682", "nombre": "Santa Rosa de Cabal" }]
+```
+
+- El catálogo es estático: los países son la lista ISO 3166-1 (249, con nombres en español) y los departamentos y municipios son la DIVIPOLA del DANE (33 departamentos, 1.122 municipios y áreas no municipalizadas). La fuente y la fecha de descarga están en `backend/app/modules/usuarios/datos/README.md`.
+- Los tres endpoints son públicos y responden `Cache-Control: public, max-age=86400`: el catálogo solo cambia con un despliegue.
+- Un departamento que no existe responde `404 no_encontrado`.
+- Los municipios se filtran por departamento. El código de municipio ya incluye el departamento en sus dos primeros dígitos, así que el backend deriva el departamento sin pedirlo en la entrada.
+
+`LugarNacimientoEntrada`, el mismo objeto en el registro, el perfil y el registro del administrador:
+
+```json
+{ "pais": "CO", "municipio": "66682", "ciudad": null }
+```
+
+- `pais`: código ISO alpha-2 en mayúsculas que exista en el catálogo.
+- Con `pais = "CO"`: `municipio` es obligatorio y debe existir en la DIVIPOLA; `ciudad` va en `null`.
+- Con otro país: `ciudad` es obligatoria (1 a 120 caracteres) y `municipio` va en `null`.
+- El backend calcula y guarda el texto para mostrar: «Santa Rosa de Cabal, Risaralda, Colombia» o «Madrid, España».
+- Los errores van en `campos["lugar_nacimiento.pais"]`, `campos["lugar_nacimiento.municipio"]` o `campos["lugar_nacimiento.ciudad"]`, con el nombre exacto del campo.
+
 #### HU-01 Registrarse como cliente
 
 | Método | Ruta | Rol | Respuesta |
@@ -56,7 +93,7 @@ Entrada (`RegistroClienteEntrada`):
   "nombres": "Laura",
   "apellidos": "Gómez Ríos",
   "fecha_nacimiento": "1995-03-14",
-  "lugar_nacimiento": "Pereira, Risaralda",
+  "lugar_nacimiento": { "pais": "CO", "municipio": "66682", "ciudad": null },
   "direccion_facturacion": "Cra. 7 # 19-28, Pereira",
   "genero": "femenino",
   "email": "laura.gomez@correo.co",
@@ -67,7 +104,7 @@ Entrada (`RegistroClienteEntrada`):
 }
 ```
 
-- `tipo_documento`: `CC`, `TI`, `RC`, `CE` o `PA` (pasaporte). `numero_documento`: alfanumérico, 3 a 20 caracteres, sin espacios ni puntos. `genero`: `femenino`, `masculino` u `otro`. `nombre_usuario`: 3 a 50 caracteres entre letras, números, `.`, `_` y `-`. `nombres` y `apellidos`: 1 a 100 caracteres, empiezan por letra y solo llevan letras, espacios, apóstrofo, punto o guion. `lugar_nacimiento` hasta 120 caracteres, `direccion_facturacion` hasta 200 y `email` hasta 254. `telefono` (opcional): 7 a 20 caracteres entre dígitos, espacios, `+`, paréntesis y guiones, con al menos 7 dígitos. Los textos se recortan (espacios al inicio y al final) y los obligatorios no pueden quedar vacíos.
+- `tipo_documento`: `CC`, `TI`, `RC`, `CE` o `PA` (pasaporte). `numero_documento`: alfanumérico, 3 a 20 caracteres, sin espacios ni puntos. `genero`: `femenino`, `masculino` u `otro`. `nombre_usuario`: 3 a 50 caracteres entre letras, números, `.`, `_` y `-`. `nombres` y `apellidos`: 1 a 100 caracteres, empiezan por letra y solo llevan letras, espacios, apóstrofo, punto o guion. `lugar_nacimiento` es el objeto de [Lugares de nacimiento](#lugares-de-nacimiento-hu-01-hu-07-hu-12), `direccion_facturacion` hasta 200 y `email` hasta 254. `telefono` (opcional): 7 a 20 caracteres entre dígitos, espacios, `+`, paréntesis y guiones, con al menos 7 dígitos. Los textos se recortan (espacios al inicio y al final) y los obligatorios no pueden quedar vacíos.
 - La imagen de perfil (opcional, JPG o PNG de 2 MB como máximo) se sube después del registro, ya con la sesión iniciada: `PUT /usuarios/me/imagen` en `multipart/form-data` con el campo `imagen`.
 
 Reglas:
@@ -82,7 +119,7 @@ Reglas:
 | HTTP | `codigo` | Cuándo |
 |---|---|---|
 | 409 | `datos_duplicados` | `campos` con `nombre_usuario`, `numero_documento` o `email`. |
-| 422 | `datos_invalidos` | `campos` con `acepta_politica`, `fecha_nacimiento` (futura o de hace más de 120 años), `email`, `nombres` o `apellidos` (caracteres no permitidos), `telefono` (formato o menos de 7 dígitos), `contrasena` (política, incluidos los espacios) o el campo con formato inválido. Imagen que no es JPG o PNG o pesa más de 2 MB: `campos.imagen`. |
+| 422 | `datos_invalidos` | `campos` con `acepta_politica`, `fecha_nacimiento` (futura o de hace más de 120 años), `lugar_nacimiento.pais`, `lugar_nacimiento.municipio` o `lugar_nacimiento.ciudad` (combinación inválida), `email`, `nombres` o `apellidos` (caracteres no permitidos), `telefono` (formato o menos de 7 dígitos), `contrasena` (política, incluidos los espacios) o el campo con formato inválido. Imagen que no es JPG o PNG o pesa más de 2 MB: `campos.imagen`. |
 
 #### HU-02 Verificar correo electrónico
 
@@ -194,7 +231,16 @@ Reglas:
   "nombres": "Laura",
   "apellidos": "Gómez Ríos",
   "fecha_nacimiento": "1995-03-14",
-  "lugar_nacimiento": "Pereira, Risaralda",
+  "lugar_nacimiento": {
+    "pais": "CO",
+    "pais_nombre": "Colombia",
+    "departamento": "66",
+    "departamento_nombre": "Risaralda",
+    "municipio": "66682",
+    "municipio_nombre": "Santa Rosa de Cabal",
+    "ciudad": null
+  },
+  "lugar_nacimiento_texto": "Santa Rosa de Cabal, Risaralda, Colombia",
   "direccion_facturacion": "Cra. 7 # 19-28, Pereira",
   "genero": "femenino",
   "email": "laura.gomez@correo.co",
@@ -207,6 +253,7 @@ Reglas:
 ```
 
 - El root no tiene perfil (`403 sin_permiso`).
+- `lugar_nacimiento` trae el código y el nombre de país, departamento y municipio, o `ciudad` para otro país. `lugar_nacimiento_texto` es el texto para mostrar, calculado por el backend. Una cuenta creada antes de este cambio devuelve `lugar_nacimiento: null` y conserva su texto en `lugar_nacimiento_texto`; al editar el perfil debe enviar el objeto completo.
 - `fecha_nacimiento` sigue la regla de HU-01: ni futura ni de hace más de 120 años (SUP-43).
 - Un correo distinto no reemplaza al actual: queda en `email_pendiente`, se le envía el enlace de HU-02 y `email` sigue siendo el de la cuenta hasta verificarlo (SUP-42). Un correo que ya usa otra cuenta del mismo rol se rechaza.
 - `imagen_url` cambia cada vez que se sube una imagen, para que el navegador no muestre la anterior desde su caché.
@@ -215,7 +262,7 @@ Reglas:
 | HTTP | `codigo` | Cuándo |
 |---|---|---|
 | 409 | `datos_duplicados` | `campos.email`. |
-| 422 | `datos_invalidos` | `campos.fecha_nacimiento` futura o de hace más de 120 años, `campos.nombres` / `campos.apellidos` (caracteres no permitidos), `campos.telefono` (formato o menos de 7 dígitos), longitudes máximas, formato inválido o `campos.imagen`. |
+| 422 | `datos_invalidos` | `campos.fecha_nacimiento` futura o de hace más de 120 años, `campos.lugar_nacimiento.pais` / `.municipio` / `.ciudad` (combinación inválida), `campos.nombres` / `campos.apellidos` (caracteres no permitidos), `campos.telefono` (formato o menos de 7 dígitos), longitudes máximas, formato inválido o `campos.imagen`. |
 | 404 | `no_encontrado` | `GET /me/imagen` sin imagen. |
 
 #### HU-08 Suscribirse a noticias
@@ -330,7 +377,7 @@ Entrada (`RegistroAdministradorEntrada`): los datos personales de HU-01 (sin `no
   "nombres": "Jorge",
   "apellidos": "Torres",
   "fecha_nacimiento": "1990-05-02",
-  "lugar_nacimiento": "Cali, Valle del Cauca",
+  "lugar_nacimiento": { "pais": "CO", "municipio": "76001", "ciudad": null },
   "direccion_facturacion": "Cl. 5 # 38-14, Cali",
   "genero": "masculino",
   "email": "jorge.torres@avianco.test",
@@ -341,7 +388,7 @@ Entrada (`RegistroAdministradorEntrada`): los datos personales de HU-01 (sin `no
 }
 ```
 
-- `fecha_nacimiento` sigue la regla de HU-01: ni futura ni de hace más de 120 años (SUP-43).
+- `fecha_nacimiento` sigue la regla de HU-01: ni futura ni de hace más de 120 años (SUP-43). `lugar_nacimiento` usa el mismo objeto de [Lugares de nacimiento](#lugares-de-nacimiento-hu-01-hu-07-hu-12).
 - Mientras el registro esté incompleto, cualquier otro endpoint responde `403 registro_incompleto` (lo aplica `core`, ver [Pendientes de infraestructura](#pendientes-de-infraestructura)).
 - El documento y el correo son únicos entre administradores; la misma persona puede tener además una cuenta de cliente (RF-04).
 - La contraseña temporal deja de funcionar. La sesión actual sigue abierta.
@@ -352,7 +399,7 @@ Entrada (`RegistroAdministradorEntrada`): los datos personales de HU-01 (sin `no
 | 409 | `registro_ya_completo` | El administrador ya completó su registro. |
 | 409 | `datos_duplicados` | `campos.numero_documento` o `campos.email` entre administradores. |
 | 422 | `contrasena_actual_incorrecta` | `campos.contrasena_temporal`. |
-| 422 | `datos_invalidos` | `campos.contrasena_nueva` (política de RNF-08, sin espacios), `campos.confirmacion`, `campos.fecha_nacimiento` (futura o de hace más de 120 años), `campos.nombres` / `campos.apellidos` (caracteres no permitidos) o `campos.telefono` (formato o menos de 7 dígitos). |
+| 422 | `datos_invalidos` | `campos.contrasena_nueva` (política de RNF-08, sin espacios), `campos.confirmacion`, `campos.fecha_nacimiento` (futura o de hace más de 120 años), `campos.lugar_nacimiento.pais` / `.municipio` / `.ciudad` (combinación inválida), `campos.nombres` / `campos.apellidos` (caracteres no permitidos) o `campos.telefono` (formato o menos de 7 dígitos). |
 
 ### Módulo vuelos · dueño: Backend B
 
@@ -688,6 +735,8 @@ Puntos que el SRS y las HU dejan abiertos y que este contrato fija. Si alguno ca
 - Las noticias de vuelos cancelados o realizados siguen en el listado como no vigentes; el carrusel muestra cada vuelo una sola vez.
 - `GET /vuelos/{vuelo_id}` es público para cualquier estado del vuelo.
 - `UsuarioSalida` cambia (contrato existente): agrega `registro_completo`, `nombres` y `apellidos`.
+- `lugar_nacimiento` deja de ser texto libre y pasa a ser un objeto con códigos y nombres; `PerfilSalida` cambia (contrato existente) y agrega `lugar_nacimiento_texto`. El texto se sigue guardando para mostrar y para las cuentas anteriores, que devuelven `lugar_nacimiento: null`.
+- El catálogo de países y la DIVIPOLA se incluyen completos (1.122 subdivisiones oficiales) y se sirven con caché de un día.
 
 ## Mocks para el frontend
 

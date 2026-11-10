@@ -36,7 +36,7 @@ def _datos(**cambios: object) -> dict[str, object]:
         "nombres": "Laura",
         "apellidos": "Gómez Ríos",
         "fecha_nacimiento": "1995-03-14",
-        "lugar_nacimiento": "Pereira, Risaralda",
+        "lugar_nacimiento": {"pais": "CO", "municipio": "66001", "ciudad": None},
         "direccion_facturacion": "Cra. 7 # 19-28, Pereira",
         "genero": "femenino",
         "email": "laura.gomez@correo.co",
@@ -55,7 +55,7 @@ def _entrada(**cambios: object) -> dict[str, object]:
         "nombres": "Laura",
         "apellidos": "Gómez Ríos",
         "fecha_nacimiento": "1995-03-14",
-        "lugar_nacimiento": "Pereira, Risaralda",
+        "lugar_nacimiento": {"pais": "CO", "municipio": "66001", "ciudad": None},
         "direccion_facturacion": "Cra. 7 # 19-28, Pereira",
         "genero": "femenino",
         "email": "laura.gomez@correo.co",
@@ -131,7 +131,7 @@ def test_perfil_actualizado_se_ve_al_volver_a_abrir(
             nombres="Laura Sofía",
             apellidos="Gómez Ruiz",
             fecha_nacimiento="1996-04-15",
-            lugar_nacimiento="Manizales, Caldas",
+            lugar_nacimiento={"pais": "CO", "municipio": "17001", "ciudad": None},
             direccion_facturacion="Calle 10 # 4-20, Manizales",
             genero="otro",
             telefono="320 555 0000",
@@ -143,7 +143,16 @@ def test_perfil_actualizado_se_ve_al_volver_a_abrir(
     assert perfil["nombres"] == "Laura Sofía"
     assert perfil["apellidos"] == "Gómez Ruiz"
     assert perfil["fecha_nacimiento"] == "1996-04-15"
-    assert perfil["lugar_nacimiento"] == "Manizales, Caldas"
+    assert perfil["lugar_nacimiento"] == {
+        "pais": "CO",
+        "pais_nombre": "Colombia",
+        "departamento": "17",
+        "departamento_nombre": "Caldas",
+        "municipio": "17001",
+        "municipio_nombre": "Manizales",
+        "ciudad": None,
+    }
+    assert perfil["lugar_nacimiento_texto"] == "Manizales, Caldas, Colombia"
     assert perfil["direccion_facturacion"] == "Calle 10 # 4-20, Manizales"
     assert perfil["genero"] == "otro"
     assert perfil["telefono"] == "320 555 0000"
@@ -151,7 +160,10 @@ def test_perfil_actualizado_se_ve_al_volver_a_abrir(
 
     usuario = _usuario(db)
     assert usuario.nombres == "Laura Sofía"
-    assert usuario.lugar_nacimiento == "Manizales, Caldas"
+    assert usuario.pais_nacimiento == "CO"
+    assert usuario.municipio_nacimiento == "17001"
+    assert usuario.ciudad_nacimiento is None
+    assert usuario.lugar_nacimiento == "Manizales, Caldas, Colombia"
 
 
 def test_documento_y_nombre_usuario_solo_lectura(

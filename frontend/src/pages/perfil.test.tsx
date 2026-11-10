@@ -28,7 +28,16 @@ const PERFIL_LAURA: Perfil = {
   nombres: "Laura",
   apellidos: "Gómez Ríos",
   fecha_nacimiento: "1995-03-14",
-  lugar_nacimiento: "Pereira, Risaralda",
+  lugar_nacimiento: {
+    pais: "CO",
+    pais_nombre: "Colombia",
+    departamento: "66",
+    departamento_nombre: "Risaralda",
+    municipio: "66001",
+    municipio_nombre: "Pereira",
+    ciudad: null,
+  },
+  lugar_nacimiento_texto: "Pereira, Risaralda, Colombia",
   direccion_facturacion: "Cra. 7 # 19-28, Pereira",
   genero: "femenino",
   email: "laura.gomez@correo.co",
@@ -108,7 +117,7 @@ describe("S05 · Datos personales (HU-07)", () => {
       nombres: "Laura Sofía",
       apellidos: "Gómez Ríos",
       fecha_nacimiento: "1995-03-14",
-      lugar_nacimiento: "Pereira, Risaralda",
+      lugar_nacimiento: { pais: "CO", municipio: "66001", ciudad: null },
       direccion_facturacion: "Cra. 7 # 19-28, Pereira",
       genero: "femenino",
       email: "laura.gomez@correo.co",
@@ -226,20 +235,21 @@ describe("S05 · Datos personales (HU-07)", () => {
     expect(peticiones(GUARDAR)).toHaveLength(0);
   });
 
-  // RF-03: el lugar de nacimiento admite como máximo 120 caracteres.
-  it("rechaza un lugar de nacimiento de más de 120 caracteres, sin guardar", async () => {
+  // HU-01: con otro país la ciudad es libre, pero de 120 caracteres como máximo.
+  it("rechaza una ciudad de más de 120 caracteres, sin guardar", async () => {
     servidor();
     renderRutas(rutas, "/perfil");
     const user = userEvent.setup();
 
-    const lugar = await campo("Lugar de nacimiento");
-    await user.clear(lugar);
-    await user.click(lugar);
+    await user.click(await screen.findByRole("combobox", { name: "País" }));
+    await user.click(await screen.findByRole("option", { name: "España" }));
+    const ciudad = await screen.findByLabelText("Ciudad");
+    await user.click(ciudad);
     await user.paste("P".repeat(121));
     await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
 
     expect(await screen.findByText("Usa como máximo 120 caracteres.")).toBeVisible();
-    expect(lugar).toBeInvalid();
+    expect(ciudad).toBeInvalid();
     expect(peticiones(GUARDAR)).toHaveLength(0);
   });
 
