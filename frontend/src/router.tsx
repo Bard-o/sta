@@ -1,8 +1,8 @@
 import { createBrowserRouter } from "react-router";
-import { RequireRole, SoloRegistroPendiente, SoloVisitantes } from "@/auth/require-role";
-import { RUTA_PRIMER_INGRESO } from "@/auth/roles";
+import { RequireRole, SoloVisitantes } from "@/auth/require-role";
 import { AppLayout } from "@/layouts/app-layout";
 import { AdministradoresPage } from "@/pages/administradores";
+import { CompletarRegistroPage } from "@/pages/completar-registro";
 import { EditarVueloPage } from "@/pages/editar-vuelo";
 import { InicioPage } from "@/pages/inicio";
 import { InicioRolPage } from "@/pages/inicio-rol";
@@ -12,7 +12,6 @@ import { NoticiasPage } from "@/pages/noticias";
 import { BajaNoticiasPage } from "@/pages/noticias-baja";
 import { NuevaPromocionPage } from "@/pages/nueva-promocion";
 import { PerfilPage } from "@/pages/perfil";
-import { PrimerIngresoPage } from "@/pages/primer-ingreso";
 import { ProgramarVueloPage } from "@/pages/programar-vuelo";
 import { PromocionesPage } from "@/pages/promociones";
 import { RegistroPage } from "@/pages/registro";
@@ -33,6 +32,8 @@ export const router = createBrowserRouter([
       { path: "/vuelos/:vueloId", element: <VueloDetallePage /> },
       { path: "/verificar-correo", element: <VerificarCorreoPage /> },
       { path: "/restablecer-contrasena", element: <RestablecerContrasenaPage /> },
+      // HU-10 y HU-12: el enlace de la invitación llega sin sesión.
+      { path: "/completar-registro", element: <CompletarRegistroPage /> },
       {
         element: <SoloVisitantes />,
         children: [
@@ -53,11 +54,6 @@ export const router = createBrowserRouter([
       {
         element: <RequireRole roles={["admin"]} />,
         children: [
-          // HU-12: con el registro pendiente solo se puede ver S07.
-          {
-            element: <SoloRegistroPendiente />,
-            children: [{ path: RUTA_PRIMER_INGRESO, element: <PrimerIngresoPage /> }],
-          },
           { path: "/admin", element: <InicioRolPage /> },
           { path: "/admin/vuelos", element: <VuelosProgramadosPage /> },
           { path: "/admin/vuelos/nuevo", element: <ProgramarVueloPage /> },
