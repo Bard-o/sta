@@ -1,6 +1,6 @@
 # Módulo usuarios
 
-Dueño: Backend A. Requisitos: RF-01 a RF-11 y RF-56. Este archivo cubre el registro de clientes (RF-03, RF-04, HU-01), la verificación de correo (RF-05, HU-02), la sesión (RF-06, HU-03, HU-04), el restablecimiento de contraseña (RF-07, HU-05), el cambio de contraseña (HU-06), el perfil (HU-07), la suscripción a noticias (RF-09, HU-08), la desactivación de la cuenta (RF-10, HU-09), la creación y el listado de administradores (RF-02, HU-10), el primer ingreso del administrador (HU-12) y los destinatarios del correo de noticias (RF-56); el resto de endpoints del módulo se agregan aquí con sus issues. El contrato acordado de todo el módulo está en [iteracion-1.md](iteracion-1.md).
+Dueño: Backend A. Requisitos: RF-01 a RF-11 y RF-56. Este archivo cubre el registro de clientes (RF-03, RF-04, HU-01), la verificación de correo (RF-05, HU-02), la sesión (RF-06, HU-03, HU-04), el restablecimiento de contraseña (RF-07, HU-05), el cambio de contraseña (HU-06), el perfil (HU-07), la suscripción a noticias (RF-09, HU-08), la desactivación de la cuenta (RF-10, HU-09), la invitación, el listado y el registro de administradores (RF-02, HU-10, HU-11, HU-12) y los destinatarios del correo de noticias (RF-56); el resto de endpoints del módulo se agregan aquí con sus issues. El contrato acordado de todo el módulo está en [iteracion-1.md](iteracion-1.md).
 
 ## Registro de clientes
 
@@ -479,8 +479,8 @@ Función pública que llamará `reservas` para validar la fecha de nacimiento de
 
 ## Administradores
 
-Solo el root crea y lista administradores (RF-01, RF-02, Apéndice B). El listado también lo usa
-HU-11 para mostrar el estado de cada uno.
+Solo el root invita, reenvía invitaciones y lista administradores (RF-01, RF-02, Apéndice B). El
+listado también lo usa HU-11 para mostrar el estado de cada uno.
 
 ### `GET /api/v1/administradores`
 
@@ -492,17 +492,20 @@ Con sesión de root. Devuelve `200 AdministradorSalida[]`, del más reciente al 
   {
     "id": 5,
     "nombre_usuario": "jtorres",
+    "email": "jorge.torres@avianco.test",
     "nombres": null,
     "apellidos": null,
-    "estado": "registro_incompleto",
+    "estado": "invitacion_pendiente",
+    "invitacion_expira_en": "2026-10-02T21:40:00Z",
     "creado_en": "2026-09-29T21:40:00Z"
   }
 ]
 ```
 
-- `estado`: `activo`, `inactivo` o `registro_incompleto`. Un administrador desactivado se
-  muestra siempre como `inactivo`; sus banderas guardan el estado al que vuelve cuando se
-  reactive (HU-11).
+- `estado`: `activo`, `inactivo`, `invitacion_pendiente` o `invitacion_vencida`. Un administrador
+  desactivado se muestra siempre como `inactivo`. Si no completó su registro, el estado depende
+  de que su última invitación siga vigente y sin usar; el vencimiento se calcula al leer.
+- `invitacion_expira_en` es `null` cuando el registro está completo o no hay invitación.
 
 | HTTP | `codigo` | Cuándo |
 |---|---|---|
@@ -511,30 +514,55 @@ Con sesión de root. Devuelve `200 AdministradorSalida[]`, del más reciente al 
 
 ### `POST /api/v1/administradores`
 
-Con sesión de root. Crea un administrador con una contraseña temporal y responde
-`201 AdministradorSalida`.
+Con sesión de root. Invita a un administrador por correo y responde `201 AdministradorSalida`.
+No se define ninguna contraseña temporal: el administrador elige la suya al completar el
+registro.
 
 ```json
-{ "nombre_usuario": "jtorres", "contrasena_temporal": "Temporal123" }
+{ "nombre_usuario": "jtorres", "email": "jorge.torres@avianco.test" }
 ```
 
-- El administrador nace activo y con `estado: "registro_incompleto"`: no tiene datos personales
-  ni correo hasta que complete su registro (HU-12). Su primer ingreso solo le permite completar
-  los datos y cambiar la contraseña.
+- El administrador nace activo, con `estado: "invitacion_pendiente"` y una invitación de un solo
+  uso que vence en 72 horas (SUP-17). El correo lleva a `/completar-registro?token=…`.
 - `nombre_usuario`: 3 a 50 caracteres entre letras, números, punto, guion y guion bajo; es
   único en todo el sistema sin distinguir mayúsculas, así que tampoco puede repetir el del root
   ni el de un cliente (SUP-18).
-- `contrasena_temporal`: cumple la política de RNF-08 (8 caracteres o más, con al menos una
-  letra y un número, sin espacios) y se guarda con Argon2id.
-- El cuerpo no tiene campo `rol` y el rol se fija en el servidor: no existe forma de crear un
-  segundo root (RF-01).
-- La creación queda en la auditoría como `administrador.crear` con el nombre de usuario, el rol
-  y el estado; la contraseña nunca se registra (RF-26, RNF-08).
+- `email`: se guarda en minúscula y es único entre administradores. La misma persona puede
+  tener además una cuenta de cliente con ese correo (SUP-18).
+- El cuerpo no tiene campo `rol` ni contraseña; el rol se fija en el servidor: no existe forma
+  de crear un segundo root (RF-01).
+- La creación y su auditoría son atómicas. El correo sale después del commit; si el SMTP falla,
+  la cuenta queda creada con `invitacion_pendiente` y el root puede reenviarla.
+- La creación queda en la auditoría como `administrador.crear` con el nombre de usuario, el
+  correo, el rol y el estado; nunca se registran contraseñas ni tokens (RF-26, RNF-08).
 
 | HTTP | `codigo` | Cuándo |
 |---|---|---|
-| 409 | `datos_duplicados` | `campos.nombre_usuario`: ya pertenece a otra cuenta. |
-| 422 | `datos_invalidos` | `campos.contrasena_temporal` (política) o `campos.nombre_usuario` (formato). |
+| 409 | `datos_duplicados` | `campos.nombre_usuario` o `campos.email`: ya pertenece a otra cuenta del mismo rol. |
+| 422 | `datos_invalidos` | `campos.nombre_usuario` o `campos.email` con formato inválido. |
+| 401 | `no_autenticado` | Sin sesión o sesión vencida. |
+| 403 | `sin_permiso` | El rol no es root. |
+
+### `POST /api/v1/administradores/{admin_id}/invitacion`
+
+Con sesión de root. Invalida la invitación anterior y envía una nueva por 72 horas. Responde
+`200 AdministradorSalida` con `estado: "invitacion_pendiente"`.
+
+```json
+{ "email": "jorge.torres@avianco.test" }
+```
+
+- El cuerpo es opcional. `email` solo hace falta para completar cuentas antiguas que quedaron
+  sin correo; si la cuenta ya tiene uno, se reutiliza.
+- El enlace anterior deja de servir de inmediato.
+- Queda en la auditoría como `administrador.reenviar_invitacion`.
+
+| HTTP | `codigo` | Cuándo |
+|---|---|---|
+| 404 | `no_encontrado` | El id no es de un administrador (no existe, es un cliente o es el root). |
+| 409 | `estado_invalido` | El administrador está inactivo o ya completó su registro. |
+| 409 | `datos_duplicados` | `campos.email`: ya pertenece a otro administrador. |
+| 422 | `datos_invalidos` | `campos.email`: falta en una cuenta sin correo o tiene formato inválido. |
 | 401 | `no_autenticado` | Sin sesión o sesión vencida. |
 | 403 | `sin_permiso` | El rol no es root. |
 
@@ -546,10 +574,9 @@ AdministradorSalida` con `estado: "inactivo"`.
 - Conserva los datos y las acciones pasadas del administrador (RF-02, RF-26).
 - Cierra todas sus sesiones abiertas: la siguiente petición con esa cookie responde `401
   no_autenticado` y el siguiente inicio de sesión `403 cuenta_inactiva`.
-- La bandera `registro_completo` no cambia: al reactivarlo vuelve al estado que tenía, `activo`
-  o `registro_incompleto`.
-- Queda en la auditoría como `administrador.desactivar` con el estado anterior (`activo` o
-  `registro_incompleto`) y el nuevo (`inactivo`).
+- Si tenía una invitación pendiente, el enlace deja de servir. La bandera `registro_completo` no
+  cambia.
+- Queda en la auditoría como `administrador.desactivar` con el estado anterior y el nuevo.
 
 | HTTP | `codigo` | Cuándo |
 |---|---|---|
@@ -561,8 +588,10 @@ AdministradorSalida` con `estado: "inactivo"`.
 ### `POST /api/v1/administradores/{admin_id}/reactivar`
 
 Con sesión de root. Reactiva un administrador desactivado y responde `200 AdministradorSalida`
-con su estado anterior: `activo` o `registro_incompleto`.
+con `activo` o, si no había completado su registro, `invitacion_vencida`.
 
+- La invitación que tenía quedó invalidada al desactivarlo. Para que el administrador pueda
+  entrar, el root debe reenviarla con `POST /{admin_id}/invitacion`.
 - Queda en la auditoría como `administrador.reactivar` con `inactivo` como estado anterior y el
   estado recuperado como nuevo (RF-26).
 - La reactivación no reabre las sesiones que se cerraron al desactivarlo: el administrador debe
@@ -571,24 +600,39 @@ con su estado anterior: `activo` o `registro_incompleto`.
 | HTTP | `codigo` | Cuándo |
 |---|---|---|
 | 404 | `no_encontrado` | El id no es de un administrador (no existe, es un cliente o es el root). |
-| 409 | `estado_invalido` | El administrador sigue activo (incluido `registro_incompleto`). |
+| 409 | `estado_invalido` | El administrador sigue activo. |
 | 401 | `no_autenticado` | Sin sesión o sesión vencida. |
 | 403 | `sin_permiso` | El rol no es root. |
 
-## Primer ingreso del administrador
+## Registro por invitación
 
-### `POST /api/v1/administradores/me/registro`
+### `POST /api/v1/administradores/invitacion/validar`
 
-Con sesión de un administrador que todavía no completó su registro (HU-12, RF-02 a RF-04).
-Completa sus datos personales, cambia la contraseña temporal y responde `200 UsuarioSalida`
-con `registro_completo: true`. Mientras no lo complete, cualquier otro endpoint responde
-`403 registro_incompleto` (lo aplica `core`).
-
-Entrada (`RegistroAdministradorEntrada`): los datos personales de HU-01 sin `nombre_usuario`,
-`contrasena` ni `acepta_politica`, más el cambio de contraseña.
+Público. Comprueba el enlace sin consumirlo y devuelve `200 InvitacionSalida`:
 
 ```json
 {
+  "nombre_usuario": "jtorres",
+  "email": "jorge.torres@avianco.test",
+  "expira_en": "2026-10-02T21:40:00Z"
+}
+```
+
+| HTTP | `codigo` | Cuándo |
+|---|---|---|
+| 400 | `enlace_invalido` | El token no existe, venció, ya se usó o la cuenta está inactiva o completa. |
+
+### `POST /api/v1/administradores/invitacion/completar`
+
+Público. Completa los datos personales, define la contraseña y responde `200 UsuarioSalida` con
+`registro_completo: true`. La respuesta deja abierta la sesión del administrador.
+
+Entrada (`CompletarInvitacionEntrada`): el token y los datos personales de HU-01 sin
+`nombre_usuario`, `email` ni `acepta_politica`, más la contraseña nueva.
+
+```json
+{
+  "token": "…",
   "tipo_documento": "CC",
   "numero_documento": "10234567",
   "nombres": "Jorge",
@@ -597,51 +641,31 @@ Entrada (`RegistroAdministradorEntrada`): los datos personales de HU-01 sin `nom
   "lugar_nacimiento": "Cali, Valle del Cauca",
   "direccion_facturacion": "Cl. 5 # 38-14, Cali",
   "genero": "masculino",
-  "email": "jorge.torres@avianco.test",
   "telefono": null,
-  "contrasena_temporal": "Temporal123",
-  "contrasena_nueva": "MiClave2026",
+  "contrasena": "MiClave2026",
   "confirmacion": "MiClave2026"
 }
 ```
 
-```json
-{
-  "id": 5,
-  "nombre_usuario": "jtorres",
-  "email": "jorge.torres@avianco.test",
-  "rol": "admin",
-  "email_verificado": true,
-  "registro_completo": true,
-  "nombres": "Jorge",
-  "apellidos": "Torres"
-}
-```
-
-- `contrasena_temporal` se comprueba contra la contraseña que puso el root al crear la cuenta.
-  Si no coincide, la respuesta es `422 contrasena_actual_incorrecta` con
-  `campos.contrasena_temporal` y no se guarda nada.
-- `contrasena_nueva` cumple RNF-08 (8 caracteres o más, con al menos una letra y un número, sin
-  espacios) y coincide con `confirmacion`; se guarda con Argon2id, nunca en claro. La temporal deja de
-  funcionar.
+- El correo se toma de la invitación, se guarda en minúscula y queda `email_verificado: true`:
+  abrir el enlace prueba que el correo es del administrador, así que no pasa por HU-02.
+- `contrasena` cumple RNF-08 (8 caracteres o más, con al menos una letra y un número, sin
+  espacios) y coincide con `confirmacion`; se guarda con Argon2id, nunca en claro.
 - `fecha_nacimiento` sigue la regla del registro: ni futura ni de hace más de 120 años (SUP-43).
 - El documento (tipo y número) y el correo son únicos entre administradores (RF-04, SUP-18).
-  La misma persona puede tener además una cuenta de cliente: esos datos no chocan con las
-  cuentas de cliente. Un correo que otro administrador tenga pendiente de verificar (HU-07)
-  también se rechaza.
-- El correo se guarda en minúscula y queda con `email_verificado: true`: en esta iteración no
-  pasa por la verificación de HU-02.
-- La sesión actual sigue abierta; completar el registro no cierra sesiones.
-- Completarlo dos veces responde `409 registro_ya_completo`.
+  La misma persona puede tener además una cuenta de cliente. Un correo que otro administrador
+  tenga pendiente de verificar (HU-07) también se rechaza.
+- El token es de un solo uso. Completar de nuevo, o usar un token vencido o reemplazado,
+  responde `400 enlace_invalido` con «El enlace no es válido o venció. Pide al root una
+  invitación nueva.».
+- Un administrador invitado no tiene contraseña: no puede iniciar sesión antes de completar y
+  `POST /auth/restablecimiento` no le envía ningún correo.
 
 | HTTP | `codigo` | `campos` | Cuándo |
 |---|---|---|---|
-| 409 | `registro_ya_completo` | | El administrador ya completó su registro. |
+| 400 | `enlace_invalido` | | El token no existe, venció, ya se usó o la cuenta está inactiva o completa. |
 | 409 | `datos_duplicados` | `numero_documento` o `email` | El dato ya pertenece a otro administrador. |
-| 422 | `contrasena_actual_incorrecta` | `contrasena_temporal` | La contraseña temporal no coincide. |
-| 422 | `datos_invalidos` | `contrasena_nueva`, `confirmacion`, `fecha_nacimiento`, `nombres`, `apellidos` o `telefono` | Política de contraseña (sin espacios), confirmación o datos personales (`fecha_nacimiento` futura o de hace más de 120 años; `nombres` y `apellidos` solo con letras; `telefono` con al menos 7 dígitos). |
-| 401 | `no_autenticado` | | Sin sesión o sesión vencida. |
-| 403 | `sin_permiso` | | El rol no es administrador. |
+| 422 | `datos_invalidos` | `contrasena`, `confirmacion`, `fecha_nacimiento`, `nombres`, `apellidos` o `telefono` | Política de contraseña (sin espacios), confirmación o datos personales (`fecha_nacimiento` futura o de hace más de 120 años; `nombres` y `apellidos` solo con letras; `telefono` con al menos 7 dígitos). |
 
 ## Usuario root
 
