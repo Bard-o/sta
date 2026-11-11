@@ -33,14 +33,21 @@ from app.core.security import (
 )
 from app.modules.auditoria import service as auditoria_service
 from app.modules.reservas import service as reservas_service
-from app.modules.usuarios.models import TokenRestablecimiento, TokenVerificacion, Usuario
+from app.modules.usuarios.models import (
+    TokenInvitacion,
+    TokenRestablecimiento,
+    TokenVerificacion,
+    Usuario,
+)
 from app.modules.usuarios.schemas import (
     AdministradorEntrada,
     AdministradorSalida,
+    CompletarInvitacionEntrada,
     EstadoAdministrador,
+    InvitacionSalida,
     PerfilEntrada,
     PerfilSalida,
-    RegistroAdministradorEntrada,
+    ReenviarInvitacionEntrada,
     RegistroClienteEntrada,
 )
 
@@ -48,6 +55,8 @@ logger = logging.getLogger(__name__)
 
 # SUP-19: el enlace de verificación de correo vence en 24 horas.
 HORAS_VERIFICACION = 24
+# SUP-17: la invitación de un administrador vence en 72 horas.
+HORAS_INVITACION = 72
 # SUP-19: el enlace de restablecimiento de contraseña vence en 30 minutos.
 MINUTOS_RESTABLECIMIENTO = 30
 # RF-07: la solicitud responde lo mismo exista o no el correo.
@@ -110,6 +119,12 @@ class EnlaceInvalido(AppError):
     mensaje = "El enlace no es válido o venció. Pide uno nuevo."
 
 
+class EnlaceInvitacionInvalido(EnlaceInvalido):
+    """HU-12: el enlace de invitación no sirve; el root debe enviar uno nuevo."""
+
+    mensaje = "El enlace no es válido o venció. Pide al root una invitación nueva."
+
+
 class CorreoYaVerificado(AppError):
     """HU-02: se pidió un enlace nuevo sin un correo pendiente de verificar."""
 
@@ -140,14 +155,6 @@ class EstadoInvalido(AppError):
     status_code = 409
     codigo = "estado_invalido"
     mensaje = "El administrador no está en el estado necesario para esta acción."
-
-
-class RegistroYaCompleto(AppError):
-    """HU-12: el administrador ya completó su registro."""
-
-    status_code = 409
-    codigo = "registro_ya_completo"
-    mensaje = "Tu registro ya está completo."
 
 
 MENSAJES_DUPLICADO = {
@@ -273,10 +280,12 @@ def cerrar_sesiones(db: Session, usuario_id: int) -> None:
     db.commit()
 
 
-def _validar_contrasena_nueva(contrasena_nueva: str, confirmacion: str) -> None:
-    """RNF-08 y confirmación (HU-06, HU-05): lanza DatosInvalidos con el campo que falla."""
+def _validar_contrasena_nueva(
+    contrasena_nueva: str, confirmacion: str, *, campo: str = "contrasena_nueva"
+) -> None:
+    """RNF-08 y confirmación (HU-06, HU-05, HU-12): lanza DatosInvalidos con el campo que falla."""
     if not cumple_politica_contrasena(contrasena_nueva):
-        raise DatosInvalidos(campos={"contrasena_nueva": MENSAJE_POLITICA_CONTRASENA})
+        raise DatosInvalidos(campos={campo: MENSAJE_POLITICA_CONTRASENA})
     if contrasena_nueva != confirmacion:
         raise DatosInvalidos(campos={"confirmacion": "Las contraseñas no coinciden."})
 
@@ -854,6 +863,10 @@ def solicitar_restablecimiento(db: Session, email: str) -> None:
             Usuario.email == destinatario,
             Usuario.rol.in_((Rol.CLIENTE, Rol.ADMIN)),
             Usuario.activo.is_(True),
+            # HU-12: un administrador invitado aún no tiene contraseña ni registro completo.
+            # No puede usar «olvidé mi contraseña» para saltarse la invitación.
+            Usuario.password_hash.is_not(None),
+            Usuario.registro_completo.is_(True),
         )
         .order_by(Usuario.id)
     ).all()
@@ -1025,94 +1038,196 @@ def asegurar_root(db: Session, nombre_usuario: str, contrasena: str) -> bool:
 # ---------- Administradores (HU-10, HU-11) ----------
 
 
-def _estado_administrador(usuario: Usuario) -> EstadoAdministrador:
-    """Estado que ve el root (HU-11).
+def _ultima_invitacion(db: Session, usuario_id: int) -> TokenInvitacion | None:
+    """Invitación más reciente del administrador, usada o no (HU-10, HU-12)."""
+    return db.scalar(
+        select(TokenInvitacion)
+        .where(TokenInvitacion.usuario_id == usuario_id)
+        .order_by(TokenInvitacion.creado_en.desc(), TokenInvitacion.id.desc())
+        .limit(1)
+    )
 
-    Una cuenta desactivada se muestra como inactiva y guarda en sus banderas el estado al que
-    vuelve cuando se reactive: activo o registro incompleto (HU-11, HU-12).
+
+def _estado_administrador(
+    usuario: Usuario,
+    invitacion: TokenInvitacion | None,
+    ahora: datetime,
+) -> EstadoAdministrador:
+    """Estado que ve el root (HU-10, HU-11, HU-12).
+
+    El vencimiento se calcula al leer: no hace falta una tarea programada. Una cuenta
+    desactivada manda sobre cualquier invitación. Si el registro está incompleto, el estado
+    depende de que la última invitación siga vigente y sin usar.
     """
     if not usuario.activo:
         return "inactivo"
-    if not usuario.registro_completo:
-        return "registro_incompleto"
-    return "activo"
+    if usuario.registro_completo:
+        return "activo"
+    if invitacion is not None and invitacion.usado_en is None and invitacion.expira_en > ahora:
+        return "invitacion_pendiente"
+    return "invitacion_vencida"
 
 
-def _administrador_salida(usuario: Usuario) -> AdministradorSalida:
+def _administrador_salida(
+    usuario: Usuario,
+    invitacion: TokenInvitacion | None = None,
+    ahora: datetime | None = None,
+) -> AdministradorSalida:
+    ahora = ahora or _ahora_utc()
     return AdministradorSalida(
         id=usuario.id,
         nombre_usuario=usuario.nombre_usuario,
+        email=usuario.email,
         nombres=usuario.nombres,
         apellidos=usuario.apellidos,
-        estado=_estado_administrador(usuario),
+        estado=_estado_administrador(usuario, invitacion, ahora),
+        invitacion_expira_en=(
+            invitacion.expira_en
+            if invitacion is not None and not usuario.registro_completo
+            else None
+        ),
         creado_en=usuario.creado_en,
     )
 
 
-def _detalle_administrador(usuario: Usuario) -> dict[str, object]:
-    """Copia para la auditoría, sin la contraseña (RF-26, RNF-08)."""
+def _detalle_administrador(
+    usuario: Usuario,
+    invitacion: TokenInvitacion | None = None,
+    ahora: datetime | None = None,
+) -> dict[str, object]:
+    """Copia para la auditoría, sin la contraseña ni el token (RF-26, RNF-08)."""
     return {
         "nombre_usuario": usuario.nombre_usuario,
+        "email": usuario.email,
         "rol": usuario.rol.value,
-        "estado": _estado_administrador(usuario),
+        "estado": _estado_administrador(usuario, invitacion, ahora or _ahora_utc()),
     }
+
+
+def _crear_token_invitacion(
+    db: Session, usuario_id: int, email: str, ahora: datetime
+) -> tuple[str, TokenInvitacion]:
+    """Crea una invitación de un solo uso y devuelve el token en claro y la fila (SUP-17)."""
+    token = secrets.token_urlsafe(32)
+    fila = TokenInvitacion(
+        usuario_id=usuario_id,
+        token_hash=hash_token(token),
+        email=email,
+        expira_en=ahora + timedelta(hours=HORAS_INVITACION),
+    )
+    db.add(fila)
+    db.flush()
+    return token, fila
+
+
+def _invalidar_invitaciones(db: Session, usuario_id: int, ahora: datetime) -> None:
+    """Marca como usadas las invitaciones vigentes de la cuenta."""
+    db.execute(
+        update(TokenInvitacion)
+        .where(
+            TokenInvitacion.usuario_id == usuario_id,
+            TokenInvitacion.usado_en.is_(None),
+        )
+        .values(usado_en=ahora)
+    )
+
+
+def enviar_invitacion(usuario: Usuario, email: str, token: str) -> None:
+    """Envía el enlace `/completar-registro?token=…` (HU-10).
+
+    Un fallo de SMTP no deshace la creación: queda en el log y el root puede reenviar.
+    """
+    enlace = f"{get_settings().frontend_url}/completar-registro?token={token}"
+    nombre = escape(usuario.nombres or usuario.nombre_usuario)
+    nombre_usuario = escape(usuario.nombre_usuario)
+    texto = (
+        f"Hola {usuario.nombres or usuario.nombre_usuario},\n\n"
+        "El root te invitó a administrar AVIANCO. Completa tu registro y define tu contraseña "
+        f"con este enlace; vence en {HORAS_INVITACION} horas y sirve una sola vez:\n\n"
+        f"{enlace}\n\n"
+        f"Tu nombre de usuario es «{usuario.nombre_usuario}».\n\n"
+        "Si no esperabas esta invitación, ignora este mensaje.\n"
+    )
+    html = (
+        f"<p>Hola {nombre},</p>"
+        "<p>El root te invitó a administrar AVIANCO. Completa tu registro y define tu "
+        f"contraseña con este enlace; vence en {HORAS_INVITACION} horas y sirve una sola vez.</p>"
+        f'<p><a href="{enlace}">Completar mi registro</a></p>'
+        f"<p>Tu nombre de usuario es «{nombre_usuario}».</p>"
+        "<p>Si no esperabas esta invitación, ignora este mensaje.</p>"
+    )
+    try:
+        enviar_correo(email, "Completa tu registro de administrador en AVIANCO", texto, html)
+    except Exception:
+        # Sin el correo en el log: es un dato personal (Ley 1581 de 2012).
+        logger.exception("No se pudo enviar la invitación al administrador %s", usuario.id)
 
 
 def crear_administrador(
     db: Session, datos: AdministradorEntrada, *, usuario_id: int
 ) -> AdministradorSalida:
-    """HU-10, RF-02: el root crea un administrador con una contraseña temporal.
+    """HU-10, RF-02: el root invita a un administrador por correo, sin contraseña.
 
-    Nace activo y con el registro incompleto: en su primer ingreso solo puede completar sus
-    datos y cambiar la contraseña (HU-12). La creación y la auditoría entran en la misma
-    transacción (RF-26, RNF-17). Lanza DatosInvalidos o DatosDuplicados.
+    Nace activo, con el registro incompleto y una invitación de 72 horas. La creación, la
+    invitación y la auditoría entran en la misma transacción (RF-26, RNF-17). Lanza
+    DatosDuplicados. El correo sale después del commit.
     """
     nombre_usuario = datos.nombre_usuario.strip()
-    if not cumple_politica_contrasena(datos.contrasena_temporal):
-        raise DatosInvalidos(campos={"contrasena_temporal": MENSAJE_POLITICA_CONTRASENA})
+    email = datos.email.strip().lower()
+    campos: dict[str, str] = {}
     if _nombre_usuario_en_uso(db, nombre_usuario):
-        raise DatosDuplicados(campos={"nombre_usuario": MENSAJES_DUPLICADO["nombre_usuario"]})
+        campos["nombre_usuario"] = MENSAJES_DUPLICADO["nombre_usuario"]
+    if _email_en_uso(db, email, Rol.ADMIN, 0):
+        campos["email"] = MENSAJES_DUPLICADO_ADMIN["email"]
+    if campos:
+        raise DatosDuplicados(campos=campos)
 
+    ahora = _ahora_utc()
     # RF-01: el rol no se elige en el cuerpo; este endpoint nunca crea otro root.
     administrador = Usuario(
         nombre_usuario=nombre_usuario,
-        email=None,
+        email=email,
         email_verificado=False,
-        password_hash=hash_contrasena(datos.contrasena_temporal),
+        password_hash=None,
         rol=Rol.ADMIN,
         registro_completo=False,
         activo=True,
     )
     db.add(administrador)
     try:
-        db.flush()  # asigna el id antes de auditar
+        db.flush()  # asigna el id antes de la invitación y la auditoría
+        token, invitacion = _crear_token_invitacion(db, administrador.id, email, ahora)
         auditoria_service.registrar(
             db,
             usuario_id=usuario_id,
             accion="administrador.crear",
             entidad="usuario",
             entidad_id=administrador.id,
-            despues=_detalle_administrador(administrador),
+            despues=_detalle_administrador(administrador, invitacion, ahora),
         )
         db.commit()
     except IntegrityError as exc:
         # Carrera entre la verificación anterior y el commit: la restricción única decide.
         db.rollback()
+        campos = {}
         if _nombre_usuario_en_uso(db, nombre_usuario):
-            raise DatosDuplicados(
-                campos={"nombre_usuario": MENSAJES_DUPLICADO["nombre_usuario"]}
-            ) from exc
-        raise
+            campos["nombre_usuario"] = MENSAJES_DUPLICADO["nombre_usuario"]
+        if _email_en_uso(db, email, Rol.ADMIN, 0):
+            campos["email"] = MENSAJES_DUPLICADO_ADMIN["email"]
+        raise DatosDuplicados(
+            campos=campos or _campo_por_restriccion(exc, MENSAJES_DUPLICADO_ADMIN) or None
+        ) from exc
     except Exception:
         # RNF-17: si falla la auditoría no queda el administrador.
         db.rollback()
         raise
 
-    return _administrador_salida(administrador)
+    enviar_invitacion(administrador, email, token)
+    return _administrador_salida(administrador, invitacion, ahora)
 
 
 def _administrador_para_cambio(db: Session, admin_id: int) -> Usuario:
-    """Administrador que el root va a desactivar o reactivar (HU-11).
+    """Administrador que el root va a desactivar, reactivar o invitar de nuevo (HU-10, HU-11).
 
     Bloquea la fila hasta el commit para que dos peticiones simultáneas no cambien el estado
     dos veces ni dejen dos registros de auditoría. Un id que no es de un administrador
@@ -1126,18 +1241,169 @@ def _administrador_para_cambio(db: Session, admin_id: int) -> Usuario:
     return administrador
 
 
+def reenviar_invitacion(
+    db: Session,
+    admin_id: int,
+    datos: ReenviarInvitacionEntrada | None,
+    *,
+    usuario_id: int,
+) -> AdministradorSalida:
+    """HU-10: invalida la invitación anterior y envía una nueva por 72 horas.
+
+    Las cuentas antiguas que quedaron sin correo pueden recibirlo en `datos.email`. La
+    operación y su auditoría entran en la misma transacción (RF-26, RNF-17).
+    """
+    administrador = _administrador_para_cambio(db, admin_id)
+    if administrador.registro_completo:
+        raise EstadoInvalido("El registro del administrador ya está completo.")
+    if not administrador.activo:
+        raise EstadoInvalido("El administrador está inactivo.")
+
+    ultima = _ultima_invitacion(db, administrador.id)
+    email = datos.email.strip().lower() if datos is not None and datos.email else None
+    email = email or administrador.email or (ultima.email if ultima is not None else None)
+    if email is None:
+        raise DatosInvalidos(campos={"email": "Escribe el correo al que se enviará la invitación."})
+    if _email_en_uso(db, email, Rol.ADMIN, administrador.id):
+        raise DatosDuplicados(campos={"email": MENSAJES_DUPLICADO_ADMIN["email"]})
+
+    ahora = _ahora_utc()
+    _invalidar_invitaciones(db, administrador.id, ahora)
+    administrador.email = email
+    token, invitacion = _crear_token_invitacion(db, administrador.id, email, ahora)
+    try:
+        auditoria_service.registrar(
+            db,
+            usuario_id=usuario_id,
+            accion="administrador.reenviar_invitacion",
+            entidad="usuario",
+            entidad_id=administrador.id,
+            despues=_detalle_administrador(administrador, invitacion, ahora),
+        )
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise DatosDuplicados(campos={"email": MENSAJES_DUPLICADO_ADMIN["email"]}) from exc
+    except Exception:
+        db.rollback()
+        raise
+
+    enviar_invitacion(administrador, email, token)
+    return _administrador_salida(administrador, invitacion, ahora)
+
+
+def validar_invitacion(db: Session, token: str) -> InvitacionSalida:
+    """HU-12: comprueba el enlace sin consumirlo y muestra el usuario y el correo."""
+    ahora = _ahora_utc()
+    fila = db.scalar(select(TokenInvitacion).where(TokenInvitacion.token_hash == hash_token(token)))
+    if fila is None or fila.usado_en is not None or fila.expira_en <= ahora:
+        raise EnlaceInvitacionInvalido()
+
+    usuario = db.get(Usuario, fila.usuario_id)
+    if (
+        usuario is None
+        or usuario.rol != Rol.ADMIN
+        or usuario.registro_completo
+        or not usuario.activo
+    ):
+        raise EnlaceInvitacionInvalido()
+
+    return InvitacionSalida(
+        nombre_usuario=usuario.nombre_usuario,
+        email=fila.email,
+        expira_en=fila.expira_en,
+    )
+
+
+def completar_invitacion(db: Session, datos: CompletarInvitacionEntrada) -> Usuario:
+    """HU-12, RF-02 a RF-04: completa el registro con el enlace de la invitación.
+
+    El correo ya viene de la invitación: abrir el enlace prueba que es del administrador, así
+    que queda verificado. El token es de un solo uso y se invalida en la misma transacción.
+    Lanza EnlaceInvitacionInvalido, DatosInvalidos o DatosDuplicados.
+    """
+    ahora = _ahora_utc()
+    fila = db.scalar(
+        select(TokenInvitacion)
+        .where(TokenInvitacion.token_hash == hash_token(datos.token))
+        .with_for_update()
+    )
+    if fila is None or fila.usado_en is not None or fila.expira_en <= ahora:
+        raise EnlaceInvitacionInvalido()
+
+    usuario = db.scalar(select(Usuario).where(Usuario.id == fila.usuario_id).with_for_update())
+    if (
+        usuario is None
+        or usuario.rol != Rol.ADMIN
+        or usuario.registro_completo
+        or not usuario.activo
+    ):
+        raise EnlaceInvitacionInvalido()
+
+    validar_fecha_nacimiento(datos.fecha_nacimiento, _hoy())
+    _validar_contrasena_nueva(datos.contrasena, datos.confirmacion, campo="contrasena")
+
+    email = fila.email.strip().lower()
+    campos = _campos_duplicados_administrador(
+        db,
+        email=email,
+        tipo_documento=datos.tipo_documento,
+        numero_documento=datos.numero_documento,
+        excluir_id=usuario.id,
+    )
+    if campos:
+        raise DatosDuplicados(campos=campos)
+
+    usuario.email = email
+    usuario.email_pendiente = None
+    usuario.email_verificado = True
+    usuario.tipo_documento = datos.tipo_documento
+    usuario.numero_documento = datos.numero_documento
+    usuario.nombres = datos.nombres.strip()
+    usuario.apellidos = datos.apellidos.strip()
+    usuario.fecha_nacimiento = datos.fecha_nacimiento
+    usuario.lugar_nacimiento = datos.lugar_nacimiento.strip()
+    usuario.direccion_facturacion = datos.direccion_facturacion.strip()
+    usuario.genero = datos.genero
+    usuario.telefono = datos.telefono.strip() if datos.telefono else None
+    usuario.password_hash = hash_contrasena(datos.contrasena)
+    usuario.registro_completo = True
+    _reiniciar_intentos(usuario)
+
+    fila.usado_en = ahora
+    _invalidar_invitaciones(db, usuario.id, ahora)
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        # Carrera entre la verificación anterior y el commit: la restricción única decide.
+        db.rollback()
+        campos = _campos_duplicados_administrador(
+            db,
+            email=email,
+            tipo_documento=datos.tipo_documento,
+            numero_documento=datos.numero_documento,
+            excluir_id=usuario.id,
+        ) or _campo_por_restriccion(exc, MENSAJES_DUPLICADO_ADMIN)
+        raise DatosDuplicados(campos=campos or None) from exc
+
+    return usuario
+
+
 def desactivar_administrador(db: Session, admin_id: int, *, usuario_id: int) -> AdministradorSalida:
     """HU-11, RF-02: desactiva un administrador (borrado lógico) y cierra sus sesiones.
 
-    Conserva los datos y el estado al que vuelve cuando se reactive (`registro_completo` decide
-    si vuelve como activo o como registro incompleto). La desactivación y su auditoría entran
-    en la misma transacción (RF-26, RNF-17). Lanza NoEncontrado o EstadoInvalido.
+    Si tenía una invitación pendiente, el enlace deja de servir. Al reactivarlo queda como
+    «invitación vencida» y el root debe reenviarla. La desactivación y su auditoría entran en
+    la misma transacción (RF-26, RNF-17). Lanza NoEncontrado o EstadoInvalido.
     """
     administrador = _administrador_para_cambio(db, admin_id)
     if not administrador.activo:
         raise EstadoInvalido("El administrador ya está inactivo.")
 
-    antes = _detalle_administrador(administrador)
+    ahora = _ahora_utc()
+    antes = _detalle_administrador(administrador, _ultima_invitacion(db, administrador.id), ahora)
+    if not administrador.registro_completo:
+        _invalidar_invitaciones(db, administrador.id, ahora)
     administrador.activo = False
     # Cierra todas las sesiones abiertas del administrador en cualquier dispositivo.
     administrador.version_sesion = (administrador.version_sesion or 0) + 1
@@ -1149,28 +1415,29 @@ def desactivar_administrador(db: Session, admin_id: int, *, usuario_id: int) -> 
             entidad="usuario",
             entidad_id=administrador.id,
             antes=antes,
-            despues=_detalle_administrador(administrador),
+            despues=_detalle_administrador(administrador, None, ahora),
         )
         db.commit()
     except Exception:
         db.rollback()
         raise
 
-    return _administrador_salida(administrador)
+    return _administrador_salida(administrador, _ultima_invitacion(db, administrador.id), ahora)
 
 
 def reactivar_administrador(db: Session, admin_id: int, *, usuario_id: int) -> AdministradorSalida:
-    """HU-11, RF-02: reactiva un administrador desactivado con su estado anterior.
+    """HU-11, RF-02: reactiva un administrador desactivado.
 
-    `registro_completo` se conservó al desactivar, así que vuelve como `activo` o como
-    `registro_incompleto`. La reactivación y su auditoría entran en la misma transacción
-    (RF-26, RNF-17). Lanza NoEncontrado o EstadoInvalido.
+    Si no había completado su registro, la invitación anterior ya fue invalidada: queda como
+    «invitación vencida» hasta que el root la reenvíe. La reactivación y su auditoría entran en
+    la misma transacción (RF-26, RNF-17). Lanza NoEncontrado o EstadoInvalido.
     """
     administrador = _administrador_para_cambio(db, admin_id)
     if administrador.activo:
         raise EstadoInvalido("El administrador ya está activo.")
 
-    antes = _detalle_administrador(administrador)
+    ahora = _ahora_utc()
+    antes = _detalle_administrador(administrador, _ultima_invitacion(db, administrador.id), ahora)
     administrador.activo = True
     try:
         auditoria_service.registrar(
@@ -1180,14 +1447,16 @@ def reactivar_administrador(db: Session, admin_id: int, *, usuario_id: int) -> A
             entidad="usuario",
             entidad_id=administrador.id,
             antes=antes,
-            despues=_detalle_administrador(administrador),
+            despues=_detalle_administrador(
+                administrador, _ultima_invitacion(db, administrador.id), ahora
+            ),
         )
         db.commit()
     except Exception:
         db.rollback()
         raise
 
-    return _administrador_salida(administrador)
+    return _administrador_salida(administrador, _ultima_invitacion(db, administrador.id), ahora)
 
 
 def _campos_duplicados_administrador(
@@ -1219,84 +1488,30 @@ def _campos_duplicados_administrador(
     return campos
 
 
-def completar_registro_administrador(
-    db: Session, datos: RegistroAdministradorEntrada, *, usuario_id: int
-) -> Usuario:
-    """HU-12, RF-02 a RF-04: completa los datos del administrador y cambia la temporal.
-
-    Mientras `registro_completo` sea falso, `core` solo deja llegar a este endpoint. El correo
-    no pasa por la verificación de HU-02: queda verificado. La sesión actual sigue abierta, así
-    que no se incrementa `version_sesion`. Las reglas sin estado se validan antes de comprobar
-    la contraseña temporal, igual que en HU-06. Lanza RegistroYaCompleto, DatosInvalidos,
-    ContrasenaActualIncorrecta o DatosDuplicados.
-    """
-    usuario = db.scalar(select(Usuario).where(Usuario.id == usuario_id).with_for_update())
-    if usuario is None:
-        raise NoAutenticado()
-
-    # HU-12: completar dos veces responde 409 aunque el cuerpo sea válido.
-    if usuario.registro_completo:
-        raise RegistroYaCompleto()
-
-    validar_fecha_nacimiento(datos.fecha_nacimiento, _hoy())
-    _validar_contrasena_nueva(datos.contrasena_nueva, datos.confirmacion)
-
-    if not verificar_contrasena(datos.contrasena_temporal, usuario.password_hash):
-        mensaje = "La contraseña temporal no es correcta."
-        raise ContrasenaActualIncorrecta(mensaje, campos={"contrasena_temporal": mensaje})
-
-    email = datos.email.strip().lower()
-    campos = _campos_duplicados_administrador(
-        db,
-        email=email,
-        tipo_documento=datos.tipo_documento,
-        numero_documento=datos.numero_documento,
-        excluir_id=usuario.id,
-    )
-    if campos:
-        raise DatosDuplicados(campos=campos)
-
-    usuario.email = email
-    usuario.email_pendiente = None
-    # El correo del administrador no se verifica en la iteración 1 (HU-12).
-    usuario.email_verificado = True
-    usuario.tipo_documento = datos.tipo_documento
-    usuario.numero_documento = datos.numero_documento
-    usuario.nombres = datos.nombres.strip()
-    usuario.apellidos = datos.apellidos.strip()
-    usuario.fecha_nacimiento = datos.fecha_nacimiento
-    usuario.lugar_nacimiento = datos.lugar_nacimiento.strip()
-    usuario.direccion_facturacion = datos.direccion_facturacion.strip()
-    usuario.genero = datos.genero
-    usuario.telefono = datos.telefono.strip() if datos.telefono else None
-    usuario.password_hash = hash_contrasena(datos.contrasena_nueva)
-    usuario.registro_completo = True
-
-    try:
-        db.commit()
-    except IntegrityError as exc:
-        # Carrera entre la verificación anterior y el commit: la restricción única decide.
-        db.rollback()
-        campos = _campos_duplicados_administrador(
-            db,
-            email=email,
-            tipo_documento=datos.tipo_documento,
-            numero_documento=datos.numero_documento,
-            excluir_id=usuario_id,
-        ) or _campo_por_restriccion(exc, MENSAJES_DUPLICADO_ADMIN)
-        raise DatosDuplicados(campos=campos or None) from exc
-
-    return usuario
-
-
 def listar_administradores(db: Session) -> list[AdministradorSalida]:
     """Administradores con su estado, del más reciente al más antiguo (HU-10, HU-11)."""
     administradores = db.scalars(
         select(Usuario)
         .where(Usuario.rol == Rol.ADMIN)
         .order_by(Usuario.creado_en.desc(), Usuario.id.desc())
-    )
-    return [_administrador_salida(administrador) for administrador in administradores]
+    ).all()
+    if not administradores:
+        return []
+
+    invitaciones = db.scalars(
+        select(TokenInvitacion)
+        .where(TokenInvitacion.usuario_id.in_([a.id for a in administradores]))
+        .order_by(TokenInvitacion.creado_en.desc(), TokenInvitacion.id.desc())
+    ).all()
+    ultimas: dict[int, TokenInvitacion] = {}
+    for invitacion in invitaciones:
+        ultimas.setdefault(invitacion.usuario_id, invitacion)
+
+    ahora = _ahora_utc()
+    return [
+        _administrador_salida(administrador, ultimas.get(administrador.id), ahora)
+        for administrador in administradores
+    ]
 
 
 @dataclass(frozen=True)

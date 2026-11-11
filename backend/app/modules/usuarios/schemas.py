@@ -12,7 +12,7 @@ from app.core.security import Rol
 # CE: cédula de extranjería · PA: pasaporte (RF-03).
 TipoDocumento = Literal["CC", "TI", "RC", "CE", "PA"]
 Genero = Literal["femenino", "masculino", "otro"]
-EstadoAdministrador = Literal["activo", "inactivo", "registro_incompleto"]
+EstadoAdministrador = Literal["activo", "inactivo", "invitacion_pendiente", "invitacion_vencida"]
 
 PATRON_EMAIL = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
 PATRON_NOMBRE_USUARIO = r"^[A-Za-z0-9._-]{3,50}$"
@@ -85,8 +85,8 @@ class UsuarioSalida(BaseModel):
 # ---------- Datos personales (HU-01, HU-07, HU-12) ----------
 
 
-class DatosEditables(BaseModel):
-    """Datos que el titular puede cambiar desde su perfil (RF-08)."""
+class DatosPersonalesBase(BaseModel):
+    """Datos personales sin el correo: en una invitación, el correo viene del enlace (HU-12)."""
 
     nombres: NombrePropio
     apellidos: NombrePropio
@@ -96,8 +96,13 @@ class DatosEditables(BaseModel):
     lugar_nacimiento: LugarNacimiento
     direccion_facturacion: DireccionFacturacion
     genero: Genero
-    email: str = Field(max_length=254, pattern=PATRON_EMAIL)
     telefono: Telefono | None = None
+
+
+class DatosEditables(DatosPersonalesBase):
+    """Datos que el titular puede cambiar desde su perfil (RF-08)."""
+
+    email: str = Field(max_length=254, pattern=PATRON_EMAIL)
 
 
 class DatosPersonalesEntrada(DatosEditables):
@@ -200,22 +205,46 @@ class DesactivacionSalida(BaseModel):
 
 
 class AdministradorEntrada(BaseModel):
+    """HU-10: el root escribe el usuario y el correo; nadie define una contraseña."""
+
     nombre_usuario: str = Field(pattern=PATRON_NOMBRE_USUARIO)
-    contrasena_temporal: Contrasena
+    email: str = Field(max_length=254, pattern=PATRON_EMAIL)
 
 
 class AdministradorSalida(BaseModel):
     id: int
     nombre_usuario: str
+    email: str | None = Field(description="Correo de la invitación o de la cuenta.")
     nombres: str | None = Field(description="null mientras el registro esté incompleto.")
     apellidos: str | None
     estado: EstadoAdministrador
+    invitacion_expira_en: datetime | None = Field(
+        description="Vencimiento de la invitación más reciente; null si no hay."
+    )
     creado_en: datetime
 
 
-class RegistroAdministradorEntrada(DatosPersonalesEntrada):
-    """HU-12: mismos datos del cliente más el cambio de la contraseña temporal."""
+class ReenviarInvitacionEntrada(BaseModel):
+    """Correo para completar cuentas antiguas que quedaron sin uno (HU-10)."""
 
-    contrasena_temporal: Contrasena
-    contrasena_nueva: Contrasena
+    email: str | None = Field(default=None, max_length=254, pattern=PATRON_EMAIL)
+
+
+class ValidarInvitacionEntrada(BaseModel):
+    token: str = Field(min_length=1, max_length=512)
+
+
+class InvitacionSalida(BaseModel):
+    nombre_usuario: str
+    email: str
+    expira_en: datetime
+
+
+class CompletarInvitacionEntrada(DatosPersonalesBase):
+    """HU-12: datos personales sin correo, token y contraseña nueva."""
+
+    token: str = Field(min_length=1, max_length=512)
+    tipo_documento: TipoDocumento
+    numero_documento: str = Field(pattern=PATRON_DOCUMENTO)
+    contrasena: Contrasena
     confirmacion: Contrasena

@@ -42,7 +42,8 @@ class Usuario(TimestampMixin, Base):
     email: Mapped[str | None] = mapped_column(String(254))
     # HU-07: correo nuevo que espera verificación; `email` sigue siendo el de la cuenta.
     email_pendiente: Mapped[str | None] = mapped_column(String(254))
-    password_hash: Mapped[str] = mapped_column(String(255))
+    # HU-10, HU-12: un administrador invitado nace sin contraseña; la define al completar.
+    password_hash: Mapped[str | None] = mapped_column(String(255))
     rol: Mapped[Rol] = mapped_column(
         Enum(
             Rol,
@@ -141,5 +142,25 @@ class TokenRestablecimiento(TimestampMixin, Base):
     )
     token_hash: Mapped[str] = mapped_column(String(64), unique=True)
     # SUP-19: vence en 30 minutos y es de un solo uso.
+    expira_en: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    usado_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class TokenInvitacion(TimestampMixin, Base):
+    """Enlace para que un administrador complete su registro (HU-10, HU-12).
+
+    Se guarda solo el hash del token: el valor en claro viaja únicamente en el correo.
+    """
+
+    __tablename__ = "tokens_invitacion"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    usuario_id: Mapped[int] = mapped_column(
+        ForeignKey("usuarios.id", ondelete="CASCADE"), index=True
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    # Correo al que se envió esta invitación; queda como historial si el root lo corrige.
+    email: Mapped[str] = mapped_column(String(254))
+    # SUP-17: vence en 72 horas y es de un solo uso.
     expira_en: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     usado_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
