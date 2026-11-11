@@ -96,10 +96,10 @@ def test_administrador_reactivado_puede_iniciar_sesion(
 # ---------- Criterio: la lista muestra el estado de cada uno ----------
 
 
-def test_la_lista_muestra_activo_inactivo_y_registro_incompleto(
+def test_la_lista_muestra_los_estados_y_se_actualiza_al_desactivar(
     client: TestClient, crear_usuario: Callable[..., Any]
 ) -> None:
-    """HU-11 CA-3: la lista de administradores muestra activo, inactivo o registro incompleto."""
+    """HU-11 CA-3 · HU-12: la lista muestra los cuatro estados del contrato."""
     crear_usuario(Rol.ROOT, nombre_usuario="root_test")
     _login(client, "root_test")
     activo = crear_usuario(Rol.ADMIN, nombre_usuario="activo")
@@ -112,7 +112,7 @@ def test_la_lista_muestra_activo_inactivo_y_registro_incompleto(
     }
     assert estados == {
         "activo": "activo",
-        "incompleto": "registro_incompleto",
+        "incompleto": "invitacion_vencida",
         "inactivo": "inactivo",
     }
 
@@ -163,8 +163,8 @@ def test_desactivar_cierra_la_sesion_abierta_del_administrador(
 
 @pytest.mark.parametrize(
     ("registro_completo", "estado"),
-    [(True, "activo"), (False, "registro_incompleto")],
-    ids=["activo", "registro-incompleto"],
+    [(True, "activo"), (False, "invitacion_vencida")],
+    ids=["activo", "invitacion-vencida"],
 )
 def test_reactivar_devuelve_el_estado_anterior(
     registro_completo: bool,
@@ -173,7 +173,7 @@ def test_reactivar_devuelve_el_estado_anterior(
     crear_usuario: Callable[..., Any],
     db: Session,
 ) -> None:
-    """HU-11 CA-4: reactivar devuelve el estado anterior, activo o registro incompleto."""
+    """HU-11 CA-4 · HU-12: reactivar devuelve activo o invitación vencida."""
     crear_usuario(Rol.ROOT, nombre_usuario="root_test")
     _login(client, "root_test")
     administrador = crear_usuario(
@@ -243,11 +243,13 @@ def test_desactivar_audita_el_estado_anterior_y_el_nuevo(
     assert registro.entidad_id == administrador.id
     assert registro.antes == {
         "nombre_usuario": "jtorres",
+        "email": None,
         "rol": "admin",
         "estado": "activo",
     }
     assert registro.despues == {
         "nombre_usuario": "jtorres",
+        "email": None,
         "rol": "admin",
         "estado": "inactivo",
     }
@@ -275,13 +277,15 @@ def test_reactivar_audita_el_estado_anterior_y_el_nuevo(
     assert registro.entidad_id == administrador.id
     assert registro.antes == {
         "nombre_usuario": "jtorres",
+        "email": None,
         "rol": "admin",
         "estado": "inactivo",
     }
     assert registro.despues == {
         "nombre_usuario": "jtorres",
+        "email": None,
         "rol": "admin",
-        "estado": "registro_incompleto",
+        "estado": "invitacion_vencida",
     }
 
 
@@ -370,7 +374,7 @@ def test_desactivar_un_administrador_inactivo_responde_409(
     assert administrador.activo is False
 
 
-@pytest.mark.parametrize("registro_completo", [True, False], ids=["activo", "registro-incompleto"])
+@pytest.mark.parametrize("registro_completo", [True, False], ids=["activo", "invitacion-vencida"])
 def test_reactivar_un_administrador_activo_responde_409(
     registro_completo: bool,
     client: TestClient,

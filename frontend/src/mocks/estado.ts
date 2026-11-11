@@ -2,12 +2,28 @@
 // (la sesión sí sobrevive a la recarga, en sessionStorage).
 import { HttpResponse } from "msw";
 import type { Schemas } from "@/api/client";
-import { ADMINISTRADORES, CUENTAS, ciudad, precioConDescuento, PROMOCIONES, VUELOS } from "./datos";
+import {
+  ADMINISTRADORES,
+  CUENTAS,
+  ciudad,
+  precioConDescuento,
+  PROMOCIONES,
+  TOKEN_INVITACION_MOCK,
+  VUELOS,
+} from "./datos";
 
 type Usuario = Schemas["UsuarioSalida"];
 type Rol = Usuario["rol"];
 type Noticia = Schemas["Noticia"];
 type VueloAdmin = Schemas["VueloAdmin"];
+
+export type InvitacionMock = {
+  token: string;
+  admin_id: number;
+  email: string;
+  expira_en: string;
+  usado: boolean;
+};
 
 type NoticiaGuardada = {
   id: number;
@@ -20,6 +36,15 @@ type NoticiaGuardada = {
 export const db = {
   cuentas: structuredClone(CUENTAS),
   administradores: structuredClone(ADMINISTRADORES),
+  invitaciones: [
+    {
+      token: TOKEN_INVITACION_MOCK,
+      admin_id: 5,
+      email: "jorge.torres@avianco.test",
+      expira_en: "2099-12-31T23:59:00Z",
+      usado: false,
+    },
+  ] as InvitacionMock[],
   vuelos: structuredClone(VUELOS),
   promociones: structuredClone(PROMOCIONES),
   noticias: [
@@ -96,16 +121,12 @@ export function error(
   );
 }
 
-/** Igual que require_role del backend: 401 sin sesión y 403 con otro rol. Un administrador
- *  con el registro incompleto solo pasa donde `registroIncompleto` lo permite (HU-12). */
-export function exigirRol(roles: Rol[], { registroIncompleto = false } = {}) {
+/** Igual que require_role del backend: 401 sin sesión y 403 con otro rol. */
+export function exigirRol(roles: Rol[]) {
   const usuario = sesion.get();
   if (!usuario) return error(401, "no_autenticado", "Inicia sesión para continuar.");
   if (!roles.includes(usuario.rol)) {
     return error(403, "sin_permiso", "Tu rol no tiene permiso para esta acción.");
-  }
-  if (!usuario.registro_completo && !registroIncompleto) {
-    return error(403, "registro_incompleto", "Completa tu registro para continuar.");
   }
   return undefined;
 }

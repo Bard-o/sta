@@ -337,9 +337,69 @@ export interface paths {
     put?: never;
     /**
      * Crear Administrador
-     * @description Crea un administrador con contraseña temporal (HU-10, RF-02).
+     * @description Invita por correo a un administrador; nadie define su contraseña (HU-10, RF-02).
      */
     post: operations["crear_administrador"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/administradores/invitacion/validar": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Validar Invitacion
+     * @description Valida el enlace de la invitación sin consumirlo (HU-12).
+     */
+    post: operations["validar_invitacion"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/administradores/invitacion/completar": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Completar Invitacion
+     * @description Completa el registro del administrador y define su contraseña (HU-12).
+     */
+    post: operations["completar_invitacion"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/administradores/{admin_id}/invitacion": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Reenviar Invitacion
+     * @description Invalida la invitación anterior y envía una nueva por 72 horas (HU-10).
+     */
+    post: operations["reenviar_invitacion"];
     delete?: never;
     options?: never;
     head?: never;
@@ -380,26 +440,6 @@ export interface paths {
      * @description Reactiva un administrador desactivado (HU-11).
      */
     post: operations["reactivar_administrador"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/administradores/me/registro": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * Completar Registro Administrador
-     * @description Completa los datos del administrador y cambia la contraseña temporal (HU-12).
-     */
-    post: operations["completar_registro_administrador"];
     delete?: never;
     options?: never;
     head?: never;
@@ -680,12 +720,15 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
   schemas: {
-    /** AdministradorEntrada */
+    /**
+     * AdministradorEntrada
+     * @description HU-10: el root escribe el usuario y el correo; nadie define una contraseña.
+     */
     AdministradorEntrada: {
       /** Nombre Usuario */
       nombre_usuario: string;
-      /** Contrasena Temporal */
-      contrasena_temporal: string;
+      /** Email */
+      email: string;
     };
     /** AdministradorSalida */
     AdministradorSalida: {
@@ -693,6 +736,11 @@ export interface components {
       id: number;
       /** Nombre Usuario */
       nombre_usuario: string;
+      /**
+       * Email
+       * @description Correo de la invitación o de la cuenta.
+       */
+      email: string | null;
       /**
        * Nombres
        * @description null mientras el registro esté incompleto.
@@ -704,7 +752,12 @@ export interface components {
        * Estado
        * @enum {string}
        */
-      estado: "activo" | "inactivo" | "registro_incompleto";
+      estado: "activo" | "inactivo" | "invitacion_pendiente" | "invitacion_vencida";
+      /**
+       * Invitacion Expira En
+       * @description Vencimiento de la invitación más reciente; null si no hay.
+       */
+      invitacion_expira_en: string | null;
       /**
        * Creado En
        * Format: date-time
@@ -831,6 +884,46 @@ export interface components {
       /** Agotada */
       agotada: boolean;
     };
+    /**
+     * CompletarInvitacionEntrada
+     * @description HU-12: datos personales sin correo, token y contraseña nueva.
+     */
+    CompletarInvitacionEntrada: {
+      /** Nombres */
+      nombres: string;
+      /** Apellidos */
+      apellidos: string;
+      /**
+       * Fecha Nacimiento
+       * Format: date
+       * @description No puede ser futura ni de hace más de 120 años (SUP-43).
+       */
+      fecha_nacimiento: string;
+      /** Lugar Nacimiento */
+      lugar_nacimiento: string;
+      /** Direccion Facturacion */
+      direccion_facturacion: string;
+      /**
+       * Genero
+       * @enum {string}
+       */
+      genero: "femenino" | "masculino" | "otro";
+      /** Telefono */
+      telefono?: string | null;
+      /** Token */
+      token: string;
+      /**
+       * Tipo Documento
+       * @enum {string}
+       */
+      tipo_documento: "CC" | "TI" | "RC" | "CE" | "PA";
+      /** Numero Documento */
+      numero_documento: string;
+      /** Contrasena */
+      contrasena: string;
+      /** Confirmacion */
+      confirmacion: string;
+    };
     /** DesactivacionSalida */
     DesactivacionSalida: {
       /** Puede Desactivar */
@@ -883,6 +976,18 @@ export interface components {
        * @constant
        */
       base_de_datos: "ok";
+    };
+    /** InvitacionSalida */
+    InvitacionSalida: {
+      /** Nombre Usuario */
+      nombre_usuario: string;
+      /** Email */
+      email: string;
+      /**
+       * Expira En
+       * Format: date-time
+       */
+      expira_en: string;
     };
     /** LoginEntrada */
     LoginEntrada: {
@@ -1057,10 +1162,10 @@ export interface components {
        * @enum {string}
        */
       genero: "femenino" | "masculino" | "otro";
-      /** Email */
-      email: string;
       /** Telefono */
       telefono?: string | null;
+      /** Email */
+      email: string;
     };
     /** PerfilSalida */
     PerfilSalida: {
@@ -1234,46 +1339,12 @@ export interface components {
       estado: "programada" | "vigente" | "vencida" | "agotada" | "cancelada";
     };
     /**
-     * RegistroAdministradorEntrada
-     * @description HU-12: mismos datos del cliente más el cambio de la contraseña temporal.
+     * ReenviarInvitacionEntrada
+     * @description Correo para completar cuentas antiguas que quedaron sin uno (HU-10).
      */
-    RegistroAdministradorEntrada: {
-      /** Nombres */
-      nombres: string;
-      /** Apellidos */
-      apellidos: string;
-      /**
-       * Fecha Nacimiento
-       * Format: date
-       * @description No puede ser futura ni de hace más de 120 años (SUP-43).
-       */
-      fecha_nacimiento: string;
-      /** Lugar Nacimiento */
-      lugar_nacimiento: string;
-      /** Direccion Facturacion */
-      direccion_facturacion: string;
-      /**
-       * Genero
-       * @enum {string}
-       */
-      genero: "femenino" | "masculino" | "otro";
+    ReenviarInvitacionEntrada: {
       /** Email */
-      email: string;
-      /** Telefono */
-      telefono?: string | null;
-      /**
-       * Tipo Documento
-       * @enum {string}
-       */
-      tipo_documento: "CC" | "TI" | "RC" | "CE" | "PA";
-      /** Numero Documento */
-      numero_documento: string;
-      /** Contrasena Temporal */
-      contrasena_temporal: string;
-      /** Contrasena Nueva */
-      contrasena_nueva: string;
-      /** Confirmacion */
-      confirmacion: string;
+      email?: string | null;
     };
     /**
      * RegistroClienteEntrada
@@ -1299,10 +1370,10 @@ export interface components {
        * @enum {string}
        */
       genero: "femenino" | "masculino" | "otro";
-      /** Email */
-      email: string;
       /** Telefono */
       telefono?: string | null;
+      /** Email */
+      email: string;
       /**
        * Tipo Documento
        * @enum {string}
@@ -1447,6 +1518,11 @@ export interface components {
       nombres: string | null;
       /** Apellidos */
       apellidos: string | null;
+    };
+    /** ValidarInvitacionEntrada */
+    ValidarInvitacionEntrada: {
+      /** Token */
+      token: string;
     };
     /** Vuelo */
     Vuelo: {
@@ -2959,6 +3035,215 @@ export interface operations {
       };
     };
   };
+  validar_invitacion: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ValidarInvitacionEntrada"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["InvitacionSalida"];
+        };
+      };
+      /** @description Error */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  completar_invitacion: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CompletarInvitacionEntrada"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["UsuarioSalida"];
+        };
+      };
+      /** @description Error */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Choca con el estado actual */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  reenviar_invitacion: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        admin_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["ReenviarInvitacionEntrada"] | null;
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministradorSalida"];
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description No existe */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Choca con el estado actual */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
   desactivar_administrador: {
     parameters: {
       query?: never;
@@ -3084,75 +3369,6 @@ export interface operations {
       };
       /** @description No existe */
       404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorRespuesta"];
-        };
-      };
-      /** @description Choca con el estado actual */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorRespuesta"];
-        };
-      };
-      /** @description Datos inválidos */
-      422: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorRespuesta"];
-        };
-      };
-    };
-  };
-  completar_registro_administrador: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["RegistroAdministradorEntrada"];
-      };
-    };
-    responses: {
-      /** @description Successful Response */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["UsuarioSalida"];
-        };
-      };
-      /** @description Solicitud inválida */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorRespuesta"];
-        };
-      };
-      /** @description Sin sesión o sesión vencida */
-      401: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorRespuesta"];
-        };
-      };
-      /** @description El rol no tiene permiso */
-      403: {
         headers: {
           [name: string]: unknown;
         };

@@ -21,12 +21,14 @@ from app.modules.usuarios.schemas import (
     AdministradorSalida,
     BloqueoDesactivacion,
     CambioContrasenaEntrada,
+    CompletarInvitacionEntrada,
     DesactivacionSalida,
+    InvitacionSalida,
     LoginEntrada,
     MensajeSalida,
     PerfilEntrada,
     PerfilSalida,
-    RegistroAdministradorEntrada,
+    ReenviarInvitacionEntrada,
     RegistroClienteEntrada,
     RestablecimientoConfirmacion,
     RestablecimientoSolicitud,
@@ -34,11 +36,11 @@ from app.modules.usuarios.schemas import (
     SuscripcionSalida,
     TokenEntrada,
     UsuarioSalida,
+    ValidarInvitacionEntrada,
 )
 
 Cliente = Annotated[UsuarioActual, Depends(require_role(Rol.CLIENTE))]
 ClienteOAdmin = Annotated[UsuarioActual, Depends(require_role(Rol.CLIENTE, Rol.ADMIN))]
-Admin = Annotated[UsuarioActual, Depends(require_role(Rol.ADMIN))]
 Root = Annotated[UsuarioActual, Depends(require_role(Rol.ROOT))]
 
 
@@ -258,8 +260,47 @@ def listar_administradores(usuario: Root, db: DbSession) -> list[AdministradorSa
 def crear_administrador(
     datos: AdministradorEntrada, usuario: Root, db: DbSession
 ) -> AdministradorSalida:
-    """Crea un administrador con contraseña temporal (HU-10, RF-02)."""
+    """Invita por correo a un administrador; nadie define su contraseña (HU-10, RF-02)."""
     return service.crear_administrador(db, datos, usuario_id=usuario.id)
+
+
+@administradores.post(
+    "/invitacion/validar",
+    response_model=InvitacionSalida,
+    responses=respuestas_error(400),
+)
+def validar_invitacion(datos: ValidarInvitacionEntrada, db: DbSession) -> InvitacionSalida:
+    """Valida el enlace de la invitación sin consumirlo (HU-12)."""
+    return service.validar_invitacion(db, datos.token)
+
+
+@administradores.post(
+    "/invitacion/completar",
+    response_model=UsuarioSalida,
+    responses=respuestas_error(400, 409, 422),
+)
+def completar_invitacion(
+    datos: CompletarInvitacionEntrada, response: Response, db: DbSession
+) -> UsuarioSalida:
+    """Completa el registro del administrador y define su contraseña (HU-12)."""
+    usuario = service.completar_invitacion(db, datos)
+    poner_cookie_sesion(response, usuario.id, usuario.rol, usuario.version_sesion)
+    return UsuarioSalida.model_validate(usuario)
+
+
+@administradores.post(
+    "/{admin_id}/invitacion",
+    response_model=AdministradorSalida,
+    responses=respuestas_error(404, 409, 422),
+)
+def reenviar_invitacion(
+    admin_id: int,
+    usuario: Root,
+    db: DbSession,
+    datos: ReenviarInvitacionEntrada | None = None,
+) -> AdministradorSalida:
+    """Invalida la invitación anterior y envía una nueva por 72 horas (HU-10)."""
+    return service.reenviar_invitacion(db, admin_id, datos, usuario_id=usuario.id)
 
 
 @administradores.post(
@@ -280,16 +321,6 @@ def desactivar_administrador(admin_id: int, usuario: Root, db: DbSession) -> Adm
 def reactivar_administrador(admin_id: int, usuario: Root, db: DbSession) -> AdministradorSalida:
     """Reactiva un administrador desactivado (HU-11)."""
     return service.reactivar_administrador(db, admin_id, usuario_id=usuario.id)
-
-
-@administradores.post("/me/registro", response_model=UsuarioSalida, responses=respuestas_error(409))
-def completar_registro_administrador(
-    datos: RegistroAdministradorEntrada, usuario: Admin, db: DbSession
-) -> UsuarioSalida:
-    """Completa los datos del administrador y cambia la contraseña temporal (HU-12)."""
-    return UsuarioSalida.model_validate(
-        service.completar_registro_administrador(db, datos, usuario_id=usuario.id)
-    )
 
 
 router = APIRouter()

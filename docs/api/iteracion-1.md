@@ -30,7 +30,7 @@ Además de los de [`README.md`](README.md):
 
 | HTTP | `codigo` | Cuándo |
 |---|---|---|
-| 403 | `registro_incompleto` | Un administrador sin registro completo llama a cualquier endpoint que no sea `/auth/*` ni `POST /administradores/me/registro` (HU-12). |
+| 403 | `registro_incompleto` | Un administrador con el registro incompleto llama a un endpoint que no sea `/auth/*` (HU-12). Una cuenta invitada no tiene contraseña, así que en la práctica no puede abrir sesión. |
 | 403 | `correo_no_verificado` | Un cliente con el correo sin verificar intenta suscribirse (HU-08). En la iteración 2 aplica también a reservar y comprar (HU-02). |
 | 400 | `enlace_invalido` | El token de un enlace de correo no existe, venció o ya se usó (HU-02, HU-05, HU-08). |
 | 409 | `datos_duplicados` | Un dato único ya pertenece a otra cuenta; `campos` dice cuál (RF-04). |
@@ -105,7 +105,7 @@ Reglas:
 
 `POST /api/v1/auth/login` (público), ya implementado; contrato en [`usuarios.md`](usuarios.md). Lo que agrega esta iteración:
 
-- `UsuarioSalida` trae tres campos nuevos: `registro_completo` (false para un administrador que no ha completado HU-12), `nombres` y `apellidos` (null para el root y para el administrador con el registro incompleto). El frontend decide con ellos a dónde llevar al usuario y qué nombre mostrar en el menú.
+- `UsuarioSalida` trae tres campos nuevos: `registro_completo` (siempre `true` en una sesión: un administrador invitado no tiene contraseña hasta completar la invitación), `nombres` y `apellidos` (null para el root). El frontend usa `nombres` y `apellidos` para el nombre del menú.
 - Bloqueo por intentos (RNF-13): tras 5 intentos fallidos consecutivos, la cuenta queda bloqueada 15 minutos; el sexto intento responde `429 demasiados_intentos` aunque la contraseña sea correcta, con el encabezado `Retry-After` en segundos y el tiempo de espera en `mensaje`.
 
 ```json
@@ -269,37 +269,45 @@ Reglas:
 |---|---|---|
 | 409 | `tiquetes_activos` | Hay compras o reservas activas en vuelos futuros. |
 
-#### HU-10 Crear administrador
+#### HU-10 Invitar y listar administradores
 
 | Método | Ruta | Rol | Respuesta |
 |---|---|---|---|
 | GET | `/api/v1/administradores` | Root | `200 AdministradorSalida[]` |
 | POST | `/api/v1/administradores` | Root | `201 AdministradorSalida` |
+| POST | `/api/v1/administradores/{admin_id}/invitacion` | Root | `200 AdministradorSalida` |
 
 ```json
-{ "nombre_usuario": "jtorres", "contrasena_temporal": "Temporal123" }
+{ "nombre_usuario": "jtorres", "email": "jorge.torres@avianco.test" }
 ```
 
 ```json
 {
   "id": 5,
   "nombre_usuario": "jtorres",
+  "email": "jorge.torres@avianco.test",
   "nombres": null,
   "apellidos": null,
-  "estado": "registro_incompleto",
+  "estado": "invitacion_pendiente",
+  "invitacion_expira_en": "2026-10-02T21:40:00Z",
   "creado_en": "2026-09-29T21:40:00Z"
 }
 ```
 
-- `estado`: `activo`, `inactivo` o `registro_incompleto`. El listado va del más reciente al más antiguo.
-- `nombre_usuario` único en todo el sistema; la contraseña temporal cumple RNF-08 (8 o más caracteres, letra y número, sin espacios).
+- `estado`: `activo`, `inactivo`, `invitacion_pendiente` o `invitacion_vencida`. El listado va del más reciente al más antiguo.
+- El root no define ninguna contraseña: el administrador la crea al completar su registro con el enlace que recibe por correo (HU-12).
+- La invitación es de un solo uso y vence en 72 horas (SUP-17). El correo lleva a `/completar-registro?token=…`.
+- `nombre_usuario` es único en todo el sistema; `email` es único entre administradores (SUP-18).
 - No existe ningún endpoint para crear un root (RF-01).
-- Se audita: `auditoria.registrar(accion="administrador.crear", …)`, sin la contraseña.
+- `POST /{admin_id}/invitacion` invalida la invitación anterior y envía una nueva. El cuerpo es opcional; `{ "email": "…" }` completa cuentas antiguas que quedaron sin correo.
+- Se audita `administrador.crear` y `administrador.reenviar_invitacion`, sin contraseñas ni tokens.
 
 | HTTP | `codigo` | Cuándo |
 |---|---|---|
-| 409 | `datos_duplicados` | `campos.nombre_usuario`. |
-| 422 | `datos_invalidos` | `campos.contrasena_temporal` (política) o formato del nombre de usuario. |
+| 409 | `datos_duplicados` | `campos.nombre_usuario` o `campos.email`. |
+| 409 | `estado_invalido` | Reenviar a un administrador inactivo o con el registro completo. |
+| 422 | `datos_invalidos` | Formato de `nombre_usuario` o `email`; al reenviar, una cuenta antigua sin correo y sin `email` en el cuerpo. |
+| 404 | `no_encontrado` | Al reenviar, el id no es de un administrador. |
 
 #### HU-11 Desactivar o reactivar administrador
 
@@ -309,7 +317,8 @@ Reglas:
 | POST | `/api/v1/administradores/{admin_id}/reactivar` | Root | `200 AdministradorSalida` |
 
 - Borrado lógico. Desactivar cierra todas las sesiones del administrador; su siguiente login responde `cuenta_inactiva`.
-- Reactivar devuelve el estado anterior: `activo` o `registro_incompleto`.
+- Si tenía una invitación pendiente, el enlace deja de servir. Al reactivarlo, un registro incompleto queda como `invitacion_vencida` hasta que el root reenvíe la invitación.
+- Reactivar devuelve `activo` o `invitacion_vencida`.
 - Se audita cada cambio (`administrador.desactivar`, `administrador.reactivar`) con el estado anterior y el nuevo.
 
 | HTTP | `codigo` | Cuándo |
@@ -319,12 +328,18 @@ Reglas:
 
 #### HU-12 Completar registro de administrador
 
-`POST /api/v1/administradores/me/registro` · Admin con el registro incompleto · `200 UsuarioSalida` (con `registro_completo: true`).
+| Método | Ruta | Rol | Respuesta |
+|---|---|---|---|
+| POST | `/api/v1/administradores/invitacion/validar` | Público | `200 InvitacionSalida` |
+| POST | `/api/v1/administradores/invitacion/completar` | Público | `200 UsuarioSalida` (con `registro_completo: true`) |
 
-Entrada (`RegistroAdministradorEntrada`): los datos personales de HU-01 (sin `nombre_usuario`, `contrasena` ni `acepta_politica`) más el cambio de contraseña:
+Validar no consume el token y devuelve `{ "nombre_usuario": "jtorres", "email": "jorge.torres@avianco.test", "expira_en": "…" }`.
+
+Completar recibe el token y los datos personales de HU-01 (sin `nombre_usuario`, `email`, `acepta_politica` ni contraseña temporal) más la contraseña nueva:
 
 ```json
 {
+  "token": "…",
   "tipo_documento": "CC",
   "numero_documento": "10234567",
   "nombres": "Jorge",
@@ -333,26 +348,24 @@ Entrada (`RegistroAdministradorEntrada`): los datos personales de HU-01 (sin `no
   "lugar_nacimiento": "Cali, Valle del Cauca",
   "direccion_facturacion": "Cl. 5 # 38-14, Cali",
   "genero": "masculino",
-  "email": "jorge.torres@avianco.test",
   "telefono": null,
-  "contrasena_temporal": "Temporal123",
-  "contrasena_nueva": "MiClave2026",
+  "contrasena": "MiClave2026",
   "confirmacion": "MiClave2026"
 }
 ```
 
+- El correo se toma de la invitación, se guarda en minúscula y queda `email_verificado: true`; no pasa por la verificación de HU-02.
 - `fecha_nacimiento` sigue la regla de HU-01: ni futura ni de hace más de 120 años (SUP-43).
-- Mientras el registro esté incompleto, cualquier otro endpoint responde `403 registro_incompleto` (lo aplica `core`, ver [Pendientes de infraestructura](#pendientes-de-infraestructura)).
 - El documento y el correo son únicos entre administradores; la misma persona puede tener además una cuenta de cliente (RF-04).
-- La contraseña temporal deja de funcionar. La sesión actual sigue abierta.
-- El correo del administrador no pasa por la verificación de HU-02 en esta iteración: queda `email_verificado: true`.
+- El token es de un solo uso: completar de nuevo, o usar uno vencido o reemplazado, responde `400 enlace_invalido` con el mensaje «El enlace no es válido o venció. Pide al root una invitación nueva.».
+- La respuesta abre la sesión del administrador; ya puede usar el resto de la API.
+- Un administrador invitado no tiene contraseña, así que `POST /auth/restablecimiento` no le envía nada. Tampoco puede iniciar sesión antes de completar.
 
 | HTTP | `codigo` | Cuándo |
 |---|---|---|
-| 409 | `registro_ya_completo` | El administrador ya completó su registro. |
+| 400 | `enlace_invalido` | El token no existe, venció, ya se usó o la cuenta está inactiva. |
 | 409 | `datos_duplicados` | `campos.numero_documento` o `campos.email` entre administradores. |
-| 422 | `contrasena_actual_incorrecta` | `campos.contrasena_temporal`. |
-| 422 | `datos_invalidos` | `campos.contrasena_nueva` (política de RNF-08, sin espacios), `campos.confirmacion`, `campos.fecha_nacimiento` (futura o de hace más de 120 años), `campos.nombres` / `campos.apellidos` (caracteres no permitidos) o `campos.telefono` (formato o menos de 7 dígitos). |
+| 422 | `datos_invalidos` | `campos.contrasena` (política de RNF-08, sin espacios), `campos.confirmacion`, `campos.fecha_nacimiento` (futura o de hace más de 120 años), `campos.nombres` / `campos.apellidos` (caracteres no permitidos) o `campos.telefono` (formato o menos de 7 dígitos). |
 
 ### Módulo vuelos · dueño: Backend B
 
@@ -648,7 +661,7 @@ Cuando un módulo necesita a otro, llama a estas funciones públicas del `servic
 
 | Función | Para qué |
 |---|---|
-| `registrar(db, *, usuario_id, accion, entidad, entidad_id, antes=None, despues=None)` | RF-26. `accion`: `vuelo.crear`, `vuelo.editar`, `vuelo.cancelar`, `promocion.crear`, `administrador.crear`, `administrador.desactivar`, `administrador.reactivar`. `antes` y `despues`, solo con valores serializables en JSON y nunca con contraseñas. |
+| `registrar(db, *, usuario_id, accion, entidad, entidad_id, antes=None, despues=None)` | RF-26. `accion`: `vuelo.crear`, `vuelo.editar`, `vuelo.cancelar`, `promocion.crear`, `administrador.crear`, `administrador.reenviar_invitacion`, `administrador.desactivar`, `administrador.reactivar`. `antes` y `despues`, solo con valores serializables en JSON y nunca con contraseñas ni tokens. |
 
 La consulta de la auditoría (HU-50) llega en la iteración 4.
 
@@ -667,7 +680,7 @@ Hasta la iteración 2 no existen reservas ni compras: estas funciones ya respond
 
 Necesitan un issue del líder porque tocan `core/`, Docker o recursos compartidos:
 
-1. **Registro incompleto en `core/auth.py`.** `require_role` debe responder `403 registro_incompleto` a un administrador sin registro completo (HU-12), salvo en `/auth/*` y `POST /administradores/me/registro`. Depende del campo que agregue usuarios en su modelo.
+1. **Registro incompleto en `core/auth.py`.** `require_role` responde `403 registro_incompleto` a un administrador sin registro completo (HU-12), salvo en `/auth/*`. La invitación eliminó la excepción de ruta porque una cuenta sin contraseña no puede abrir sesión; queda retirar la referencia al endpoint viejo en `core`.
 2. **Procesos programados.** Un planificador en el backend para pasar vuelos a realizado y vencer promociones como máximo 2 minutos después de su hora, que también procese al arrancar lo que venció con el servidor apagado (RF-21, RNF-18). Resuelto en #4: `app/core/planificador.py`; cómo registrar una tarea en `AGENTS.md` (Procesos programados).
 3. **Cola de correos.** `core/mail.py` envía de forma síncrona. Las noticias a los suscritos deben salir por una cola que reintente si SMTP falla (RNF-05, RNF-21).
 4. **Archivos.** Dónde se guardan las imágenes de perfil (un volumen de Docker) y el banco de imágenes por ciudad (SUP-30), que el contrato sirve en `/imagenes/ciudades/<CODIGO>.jpg` desde `frontend/public/`. Las imágenes deben tener una licencia que permita usarlas en un repositorio público.
@@ -681,7 +694,8 @@ Puntos que el SRS y las HU dejan abiertos y que este contrato fija. Si alguno ca
 - `telefono` es opcional en el registro y en el perfil: aparece en el wireframe S05, pero no en HU-01.
 - `genero` admite `femenino`, `masculino` y `otro`.
 - El registro inicia la sesión del cliente nuevo (el wireframe S02 lo muestra con sesión).
-- El correo del administrador no se verifica en HU-12.
+- El correo del administrador se verifica al abrir la invitación de HU-12, sin pasar por HU-02.
+- Un administrador invitado no tiene contraseña temporal: la define al completar la invitación.
 - Cambiar la contraseña con HU-06 no cierra la sesión actual; restablecerla con HU-05 cierra todas.
 - Las promociones tienen el estado `cancelada` además de los del SRS, y una promoción cuyo `inicio` ya pasó queda vigente de inmediato.
 - El precio con descuento se redondea hacia abajo al peso.
@@ -703,14 +717,15 @@ docker compose up -d frontend
 - Lo que crees o cambies dura hasta recargar la página; la sesión simulada sobrevive a la recarga.
 - Las peticiones sin handler pasan al backend real.
 
-Usuarios de prueba (contraseña de todos: `Clave1234`):
+Usuarios de prueba (los que tienen contraseña usan `Clave1234`):
 
 | Usuario | Para probar |
 |---|---|
 | `lauragomez` | Cliente verificado y suscrito; tiene una compra activa, así que no puede desactivar la cuenta. |
 | `pedrorios` | Cliente con el correo sin verificar. |
 | `cruiz` | Administrador. |
-| `jtorres` | Administrador con el registro incompleto (HU-12). |
+| `jtorres` | Administrador invitado, sin contraseña. Su enlace es `/completar-registro?token=invitacion-jtorres-2026`. |
+| `pgomez` | Administrador con la invitación vencida (HU-10). |
 | `root` | Root. |
 | `amejia` | Administrador inactivo: `cuenta_inactiva`. |
 | `bloqueado` | Cualquier contraseña: `429 demasiados_intentos`. |

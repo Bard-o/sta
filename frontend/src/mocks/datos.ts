@@ -4,8 +4,9 @@
 // Usuarios de prueba (contraseña de todos: CONTRASENA_MOCK):
 //   lauragomez  cliente con el correo verificado y una compra activa (no puede desactivarse)
 //   pedrorios   cliente con el correo sin verificar
-//   cruiz       administrador          jtorres   administrador con el registro incompleto
-//   root        root                   amejia    administrador inactivo («cuenta inactiva»)
+//   cruiz       administrador          root      root
+//   amejia      administrador inactivo («cuenta inactiva»)
+//   jtorres     administrador invitado, sin contraseña hasta completar la invitación
 //   bloqueado   cualquier contraseña responde 429 (HU-03, 5 intentos fallidos)
 import type { Schemas } from "@/api/client";
 import { aIso, sumarMinutos } from "./tiempo";
@@ -399,42 +400,62 @@ export const CUENTAS: CuentaMock[] = [
   { usuario: usuarioDe(laura), perfil: laura, activo: true },
   { usuario: usuarioDe(pedro), perfil: pedro, activo: true },
   { usuario: usuarioDe(carlos), perfil: carlos, activo: true },
-  { usuario: sinPerfil(5, "jtorres", "admin"), activo: true },
   { usuario: sinPerfil(1, "root", "root"), activo: true },
   { usuario: { ...sinPerfil(2, "amejia", "admin"), registro_completo: true }, activo: false },
 ];
+
+/** Token fijo del enlace de jtorres para probar la pantalla pública de HU-12. */
+export const TOKEN_INVITACION_MOCK = "invitacion-jtorres-2026";
 
 export const ADMINISTRADORES: Schemas["AdministradorSalida"][] = [
   {
     id: 3,
     nombre_usuario: "cruiz",
+    email: "carlos.ruiz@avianco.test",
     nombres: "Carlos",
     apellidos: "Ruiz",
     estado: "activo",
+    invitacion_expira_en: null,
     creado_en: "2026-09-02T15:20:00Z",
   },
   {
     id: 4,
     nombre_usuario: "mlopez",
+    email: "maria.lopez@avianco.test",
     nombres: "María",
     apellidos: "López",
     estado: "activo",
+    invitacion_expira_en: null,
     creado_en: "2026-09-05T13:05:00Z",
   },
   {
     id: 5,
     nombre_usuario: "jtorres",
+    email: "jorge.torres@avianco.test",
     nombres: null,
     apellidos: null,
-    estado: "registro_incompleto",
+    estado: "invitacion_pendiente",
+    invitacion_expira_en: "2099-12-31T23:59:00Z",
     creado_en: "2026-09-29T21:40:00Z",
+  },
+  {
+    id: 6,
+    nombre_usuario: "pgomez",
+    email: "paula.gomez@avianco.test",
+    nombres: null,
+    apellidos: null,
+    estado: "invitacion_vencida",
+    invitacion_expira_en: "2026-10-01T14:00:00Z",
+    creado_en: "2026-09-27T14:00:00Z",
   },
   {
     id: 2,
     nombre_usuario: "amejia",
+    email: "andres.mejia@avianco.test",
     nombres: "Andrés",
     apellidos: "Mejía",
     estado: "inactivo",
+    invitacion_expira_en: null,
     creado_en: "2026-08-12T14:00:00Z",
   },
 ];

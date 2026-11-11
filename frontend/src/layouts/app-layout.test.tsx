@@ -1,17 +1,9 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { RequireRole, SoloVisitantes } from "@/auth/require-role";
 import { AppLayout } from "@/layouts/app-layout";
 import { LoginPage } from "@/pages/login";
-import {
-  ADMIN,
-  ADMIN_INCOMPLETO,
-  CLIENTE,
-  responderApi,
-  ROOT,
-  SIN_SESION,
-  sesionDe,
-} from "@/test/api";
+import { ADMIN, CLIENTE, responderApi, ROOT, SIN_SESION, sesionDe } from "@/test/api";
 import { renderRutas } from "@/test/render";
 
 const rutas = [
@@ -27,10 +19,7 @@ const rutas = [
       },
       {
         element: <RequireRole roles={["admin"]} />,
-        children: [
-          { path: "/admin", element: <p>Inicio del administrador</p> },
-          { path: "/admin/primer-ingreso", element: <p>Primer ingreso del administrador</p> },
-        ],
+        children: [{ path: "/admin", element: <p>Inicio del administrador</p> }],
       },
       {
         element: <RequireRole roles={["root"]} />,
@@ -155,28 +144,6 @@ describe("Menú de cada rol (HU-03)", () => {
     expect(within(nav).queryByRole("link", { name: "Check-in" })).not.toBeInTheDocument();
   });
 
-  // HU-12: con el registro incompleto el administrador solo ve el formulario de registro.
-  it("lleva al administrador con el registro incompleto a su primer ingreso desde cualquier ruta", async () => {
-    responderApi({ "GET /api/v1/auth/me": sesionDe(ADMIN_INCOMPLETO) });
-    const { router } = renderRutas(rutas, "/");
-
-    expect(await screen.findByText("Primer ingreso del administrador")).toBeVisible();
-    expect(router.state.location.pathname).toBe("/admin/primer-ingreso");
-
-    await router.navigate("/admin");
-    await waitFor(() => expect(router.state.location.pathname).toBe("/admin/primer-ingreso"));
-    expect(await screen.findByText("Primer ingreso del administrador")).toBeVisible();
-  });
-
-  it("el administrador con el registro incompleto no ve el menú de funciones, pero puede cerrar sesión", async () => {
-    responderApi({ "GET /api/v1/auth/me": sesionDe(ADMIN_INCOMPLETO) });
-    renderRutas(rutas, "/admin/primer-ingreso");
-
-    expect(await screen.findByRole("button", { name: "Cerrar sesión" })).toBeVisible();
-    expect(screen.getByText("jtorres")).toBeVisible();
-    const nav = screen.getByRole("navigation", { name: "Principal" });
-    expect(within(nav).queryAllByRole("link")).toHaveLength(0);
-  });
 });
 
 describe("Enlace a Mi perfil (HU-07)", () => {
@@ -190,14 +157,6 @@ describe("Enlace a Mi perfil (HU-07)", () => {
 
     const enlace = await screen.findByRole("link", { name: /^Mi perfil/ });
     expect(enlace).toHaveAttribute("href", "/perfil");
-  });
-
-  it("el administrador con el registro pendiente no tiene enlace al perfil", async () => {
-    responderApi({ "GET /api/v1/auth/me": sesionDe(ADMIN_INCOMPLETO) });
-    renderRutas(rutas, "/admin/primer-ingreso");
-
-    await screen.findByRole("button", { name: "Cerrar sesión" });
-    expect(screen.queryByRole("link", { name: /^Mi perfil/ })).not.toBeInTheDocument();
   });
 });
 
