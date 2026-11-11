@@ -1,4 +1,4 @@
-import { Link, Navigate, Outlet, useLocation, useNavigate } from "react-router";
+import { Link, Outlet, useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
 import {
   inicioDe,
@@ -6,8 +6,6 @@ import {
   NAV_VISITANTE,
   nombreVisible,
   NOMBRE_ROL,
-  registroPendiente,
-  RUTA_PRIMER_INGRESO,
 } from "@/auth/roles";
 import { usePerfil } from "@/auth/perfil";
 import { useLogout, useSesion } from "@/auth/sesion";
@@ -37,12 +35,6 @@ export function AppLayout() {
       onError: (e) => toast.error(e.message),
     });
 
-  // HU-12: con el registro pendiente el administrador solo ve S07, aunque intente ir a otra ruta.
-  const pendiente = usuario ? registroPendiente(usuario) : false;
-  if (pendiente && location.pathname !== RUTA_PRIMER_INGRESO) {
-    return <Navigate to={RUTA_PRIMER_INGRESO} replace />;
-  }
-
   // Mientras se resuelve la sesión la barra queda neutra: así quien ya entró no ve un instante el
   // menú de visitante antes del de su rol.
   const nav = isPending ? (
@@ -50,14 +42,13 @@ export function AppLayout() {
   ) : usuario ? (
     <TopNav
       homeHref={inicioDe(usuario)}
-      items={pendiente ? [] : NAV_ROL[usuario.rol]}
+      items={NAV_ROL[usuario.rol]}
       user={{
         name: nombreVisible(usuario),
         role: NOMBRE_ROL[usuario.rol],
         imageUrl: perfil?.imagen_url,
-        // El administrador con el registro pendiente solo ve S07. El root entra a /perfil solo para
-        // cambiar su contraseña (HU-06).
-        href: pendiente ? undefined : "/perfil",
+        // El root entra a /perfil solo para cambiar su contraseña (HU-06).
+        href: "/perfil",
       }}
       right={
         <Button variant="ghost" size="sm" onClick={cerrarSesion} disabled={logout.isPending}>

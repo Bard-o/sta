@@ -1,9 +1,12 @@
 import { useForm, type FieldPath } from "react-hook-form";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { z } from "zod";
 import { ApiError, type Schemas } from "@/api/client";
+import {
+  useCompletarInvitacion,
+  useValidarInvitacion,
+} from "@/auth/invitacion-administrador";
 import { INICIO_ROL } from "@/auth/roles";
-import { useCompletarPrimerIngreso } from "@/auth/sesion";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -20,6 +23,9 @@ import { Input } from "@/components/ui/input";
 import { Notice } from "@/components/ui/notice";
 import { esquemaContrasena } from "@/lib/contrasena";
 import { fechaMinimaNacimiento, hoy, MENSAJE_EDAD_MAXIMA } from "@/lib/persona";
+
+const MENSAJE_ENLACE_INVALIDO =
+  "El enlace no es válido o venció. Pide al root una invitación nueva.";
 
 const TIPOS_DOCUMENTO = [
   { value: "CC", label: "Cédula de ciudadanía" },
@@ -71,19 +77,12 @@ const esquema = z
     genero: z
       .union([z.literal(""), z.enum(["femenino", "masculino", "otro"])])
       .refine((valor) => valor !== "", "Elige tu género."),
-    email: z
-      .string()
-      .trim()
-      .regex(/^[^@\s]+@[^@\s]+\.[^@\s]+$/, "Escribe un correo válido."),
-    contrasena_temporal: z
-      .string()
-      .refine((v) => v.trim() !== "", "Escribe la contraseña temporal."),
-    contrasena_nueva: esquemaContrasena,
-    confirmacion: z.string().min(1, "Repite la contraseña nueva."),
+    contrasena: esquemaContrasena,
+    confirmacion: z.string().min(1, "Repite la contraseña."),
   })
-  .refine((datos) => datos.contrasena_nueva === datos.confirmacion, {
+  .refine((datos) => datos.contrasena === datos.confirmacion, {
     path: ["confirmacion"],
-    message: "No coincide con la contraseña nueva.",
+    message: "No coincide con la contraseña.",
   });
 
 type Datos = z.input<typeof esquema>;
@@ -97,15 +96,30 @@ const CAMPOS: FieldPath<Datos>[] = [
   "lugar_nacimiento",
   "direccion_facturacion",
   "genero",
-  "email",
-  "contrasena_temporal",
-  "contrasena_nueva",
+  "contrasena",
   "confirmacion",
 ];
 
-/** S07 · Primer ingreso del administrador (HU-12, RF-02 a RF-04). */
-export function PrimerIngresoPage() {
-  const completar = useCompletarPrimerIngreso();
+function EnlaceInvalido() {
+  return (
+    <Glass as="div" title="Enlace no válido">
+      <p className="mb-4 flex items-start gap-2">
+        <Icon name="alert" className="text-danger" />
+        <span>{MENSAJE_ENLACE_INVALIDO}</span>
+      </p>
+      <Button variant="primary" href="/login">
+        Ir a iniciar sesión
+      </Button>
+    </Glass>
+  );
+}
+
+/** Pantalla pública del enlace de invitación (HU-10, HU-12). */
+export function CompletarRegistroPage() {
+  const [params] = useSearchParams();
+  const token = params.get("token");
+  const validacion = useValidarInvitacion(token);
+  const completar = useCompletarInvitacion();
   const navegar = useNavigate();
   const form = useForm<Datos>({
     defaultValues: {
@@ -117,14 +131,13 @@ export function PrimerIngresoPage() {
       lugar_nacimiento: "",
       direccion_facturacion: "",
       genero: "",
-      email: "",
-      contrasena_temporal: "",
-      contrasena_nueva: "",
+      contrasena: "",
       confirmacion: "",
     },
   });
 
   const enviar = form.handleSubmit((datos) => {
+    if (!token || !validacion.data) return;
     const resultado = esquema.safeParse(datos);
     if (!resultado.success) {
       for (const problema of resultado.error.issues) {
@@ -135,17 +148,18 @@ export function PrimerIngresoPage() {
       }
       return;
     }
-    const cuerpo: Schemas["RegistroAdministradorEntrada"] = {
+    const cuerpo: Schemas["CompletarInvitacionEntrada"] = {
       ...resultado.data,
-      // El wireframe S07 no pide teléfono; el contrato lo deja opcional.
+      token,
+      // El wireframe no pide teléfono; el contrato lo deja opcional.
       telefono: null,
-      genero: resultado.data.genero as Schemas["RegistroAdministradorEntrada"]["genero"],
+      genero: resultado.data.genero as Schemas["CompletarInvitacionEntrada"]["genero"],
     };
     completar.mutate(cuerpo, {
       onSuccess: () => navegar(INICIO_ROL.admin, { replace: true }),
       onError: (error) => {
         if (!(error instanceof ApiError)) return;
-        // IU-07: el error de cada campo se muestra junto al campo.
+        // IU-07: el error de cada campo se muestra junto a ese campo.
         for (const [campo, mensaje] of Object.entries(error.campos)) {
           if (CAMPOS.includes(campo as FieldPath<Datos>)) {
             form.setError(campo as FieldPath<Datos>, { message: mensaje });
@@ -155,33 +169,62 @@ export function PrimerIngresoPage() {
     });
   });
 
+  if (
+    !token ||
+    validacion.isError ||
+    (completar.error instanceof ApiError && completar.error.codigo === "enlace_invalido")
+  ) {
+    return <EnlaceInvalido />;
+  }
+
+  if (validacion.isPending || !validacion.data) {
+    return (
+      <Glass as="div" title="Comprobando la invitación">
+        <p className="body sta-muted">Estamos revisando tu enlace…</p>
+      </Glass>
+    );
+  }
+
+  const invitacion = validacion.data;
   const errorGeneral = (() => {
     const error = completar.error;
     if (!error) return null;
     if (!(error instanceof ApiError)) return error.message;
-    // Si el error trae campos, cada mensaje va junto a su campo (IU-07); no se repite arriba.
     if (error.codigo === "datos_invalidos" || Object.keys(error.campos).length > 0) return null;
     return error.message;
   })();
 
   return (
     <div className="flex flex-col gap-6">
-      <Notice>Completa tu registro para continuar. El menú se habilita cuando termines.</Notice>
+      <Notice tone="info">
+        Invitación para <strong>{invitacion.nombre_usuario}</strong>. El correo{" "}
+        <strong>{invitacion.email}</strong> ya está verificado.
+      </Notice>
 
       <div>
-        <h1 className="sta-h1">Tus datos de administrador</h1>
+        <h1 className="sta-h1">Completa tu registro</h1>
         <p className="sta-sub">
-          Son los mismos datos del registro de clientes. Tu documento y tu correo no pueden
-          repetirse entre administradores.
+          Estos son tus datos personales. Tu documento y tu correo no pueden repetirse entre
+          administradores.
         </p>
       </div>
 
-      <Glass as="div">
+      <Glass as="div" title="Tus datos">
         <Form {...form}>
           <form onSubmit={enviar} noValidate className="flex flex-col gap-6">
             {errorGeneral && <Notice tone="danger">{errorGeneral}</Notice>}
 
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <div className="sta-field">
+                <span className="sta-field__label">Nombre de usuario</span>
+                <p className="body-strong">{invitacion.nombre_usuario}</p>
+              </div>
+
+              <div className="sta-field">
+                <span className="sta-field__label">Correo</span>
+                <p className="body">{invitacion.email}</p>
+              </div>
+
               <FormField
                 control={form.control}
                 name="tipo_documento"
@@ -319,45 +362,17 @@ export function PrimerIngresoPage() {
                   </FormItem>
                 )}
               />
-
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Correo</FormLabel>
-                    <FormControl>
-                      <Input type="email" autoComplete="email" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
             </div>
 
             <div>
-              <h2 className="sta-panel-title">Cambia tu contraseña temporal</h2>
+              <h2 className="sta-panel-title">Define tu contraseña</h2>
               <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 <FormField
                   control={form.control}
-                  name="contrasena_temporal"
+                  name="contrasena"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Contraseña temporal</FormLabel>
-                      <FormControl>
-                        <Input type="password" autoComplete="current-password" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="contrasena_nueva"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Contraseña nueva</FormLabel>
+                      <FormLabel>Contraseña</FormLabel>
                       <FormControl>
                         <Input type="password" autoComplete="new-password" {...field} />
                       </FormControl>
@@ -371,7 +386,7 @@ export function PrimerIngresoPage() {
                   name="confirmacion"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Repite la nueva</FormLabel>
+                      <FormLabel>Repite la contraseña</FormLabel>
                       <FormControl>
                         <Input type="password" autoComplete="new-password" {...field} />
                       </FormControl>

@@ -1,6 +1,7 @@
 import { getResponse } from "msw";
 import { handlers } from "./handlers";
 import { CONTRASENA_MOCK } from "./datos";
+import { db } from "./estado";
 
 /** Resuelve la petición con los handlers de MSW, sin red ni service worker. */
 async function api(metodo: string, ruta: string, cuerpo?: unknown) {
@@ -17,6 +18,20 @@ async function api(metodo: string, ruta: string, cuerpo?: unknown) {
 
 const entrar = (usuario: string) =>
   api("POST", "/api/v1/auth/login", { usuario, contrasena: CONTRASENA_MOCK });
+
+/** El root invita a un administrador y devuelve el token de su correo. */
+async function invitar(nombre: string) {
+  await entrar("root");
+  const alta = await api("POST", "/api/v1/administradores", {
+    nombre_usuario: nombre,
+    email: `${nombre}@avianco.test`,
+  });
+  const invitacion = db.invitaciones.find(
+    (i) => i.admin_id === alta.body.id && !i.usado,
+  );
+  if (!invitacion) throw new Error("La invitación no quedó guardada.");
+  return { admin: alta.body, token: invitacion.token };
+}
 
 const bogotaMadrid = (fecha_salida: string) => ({
   origen: "BOG",
@@ -39,12 +54,69 @@ describe("API simulada (MSW)", () => {
     expect((await entrar("bloqueado")).status).toBe(429);
   });
 
-  it("aplica los roles como el backend (RNF-10) y bloquea al administrador sin registro (HU-12)", async () => {
+  it("aplica los roles como el backend y un administrador invitado no puede entrar (RNF-10, HU-12)", async () => {
     expect((await api("GET", "/api/v1/vuelos")).status).toBe(401);
     await entrar("lauragomez");
     expect((await api("GET", "/api/v1/vuelos")).status).toBe(403);
-    await entrar("jtorres");
-    expect((await api("GET", "/api/v1/vuelos")).body.error.codigo).toBe("registro_incompleto");
+    // jtorres está invitado: todavía no tiene contraseña.
+    expect((await entrar("jtorres")).status).toBe(401);
+    await api("POST", "/api/v1/auth/logout");
+    expect((await api("GET", "/api/v1/vuelos")).status).toBe(401);
+  });
+
+  it("invita, valida y completa el registro desde el enlace (HU-10, HU-12)", async () => {
+    const { admin, token } = await invitar("nuevoadmin");
+    expect(admin.estado).toBe("invitacion_pendiente");
+
+    const validacion = await api("POST", "/api/v1/administradores/invitacion/validar", { token });
+    expect(validacion.status).toBe(200);
+    expect(validacion.body).toMatchObject({
+      nombre_usuario: "nuevoadmin",
+      email: "nuevoadmin@avianco.test",
+    });
+
+    const completa = await api("POST", "/api/v1/administradores/invitacion/completar", {
+      token,
+      tipo_documento: "CC",
+      numero_documento: "1088000111",
+      nombres: "Nuevo",
+      apellidos: "Administrador",
+      fecha_nacimiento: "1992-04-12",
+      lugar_nacimiento: "Bogotá",
+      direccion_facturacion: "Calle 10 # 20-30",
+      genero: "masculino",
+      contrasena: "Nueva1234",
+      confirmacion: "Nueva1234",
+    });
+    expect(completa.status).toBe(200);
+    expect(completa.body).toMatchObject({
+      nombre_usuario: "nuevoadmin",
+      registro_completo: true,
+      email_verificado: true,
+    });
+    const repetida = await api("POST", "/api/v1/administradores/invitacion/validar", { token });
+    expect(repetida.status).toBe(400);
+    expect(repetida.body.error.mensaje).toBe(
+      "El enlace no es válido o venció. Pide al root una invitación nueva.",
+    );
+  });
+
+  it("reenviar invalida el enlace anterior y deja vigente el nuevo (HU-10)", async () => {
+    const { admin, token } = await invitar("otroadmin");
+    const reenvio = await api("POST", `/api/v1/administradores/${admin.id}/invitacion`);
+    expect(reenvio.status).toBe(200);
+    expect((await api("POST", "/api/v1/administradores/invitacion/validar", { token })).status).toBe(
+      400,
+    );
+    const nueva = db.invitaciones.find((i) => i.admin_id === admin.id && !i.usado);
+    expect(nueva).toBeDefined();
+    expect(
+      (
+        await api("POST", "/api/v1/administradores/invitacion/validar", {
+          token: nueva!.token,
+        })
+      ).status,
+    ).toBe(200);
   });
 
   it("calcula la llegada en UTC con el horario de verano del destino (RF-15)", async () => {
@@ -174,8 +246,9 @@ describe("API simulada (MSW)", () => {
   });
 
   it("valida los datos personales del registro del administrador antes de sus reglas de negocio (HU-12, RF-03)", async () => {
-    await entrar("jtorres");
+    const { token } = await invitar("juanadmin");
     const registro = {
+      token,
       tipo_documento: "CC",
       numero_documento: "1088000222",
       nombres: "Juan",
@@ -184,30 +257,29 @@ describe("API simulada (MSW)", () => {
       lugar_nacimiento: "Cali",
       direccion_facturacion: "Carrera 5 # 6-7",
       genero: "masculino",
-      email: "jtorres@avianca.test",
-      contrasena_temporal: CONTRASENA_MOCK,
-      contrasena_nueva: "Nueva1234",
+      contrasena: "Nueva1234",
       confirmacion: "Nueva1234",
     };
-    const invalido = await api("POST", "/api/v1/administradores/me/registro", {
+    const invalido = await api("POST", "/api/v1/administradores/invitacion/completar", {
       ...registro,
       nombres: "1234",
-      contrasena_temporal: "otra",
     });
     expect(invalido.status).toBe(422);
     expect(invalido.body.error.codigo).toBe("datos_invalidos");
     expect(invalido.body.error.campos.nombres).toBe("El formato no es válido.");
 
-    const espacios = await api("POST", "/api/v1/administradores/me/registro", {
+    const espacios = await api("POST", "/api/v1/administradores/invitacion/completar", {
       ...registro,
-      contrasena_nueva: "Nueva 1234",
+      contrasena: "Nueva 1234",
       confirmacion: "Nueva 1234",
     });
-    expect(espacios.body.error.campos.contrasena_nueva).toBe(
+    expect(espacios.body.error.campos.contrasena).toBe(
       "Mínimo 8 caracteres, con al menos una letra y un número, sin espacios.",
     );
 
-    expect((await api("POST", "/api/v1/administradores/me/registro", registro)).status).toBe(200);
+    const completo = await api("POST", "/api/v1/administradores/invitacion/completar", registro);
+    expect(completo.status).toBe(200);
+    expect(completo.body.registro_completo).toBe(true);
   });
 
   // RF-03, SUP-43: «hoy» es 03/11/2026, así que el 02/11/1906 pasa de 120 años y el 03/11/1906 no.
@@ -274,8 +346,9 @@ describe("API simulada (MSW)", () => {
     });
 
     it("rechaza en el registro del administrador una fecha de hace más de 120 años", async () => {
-      await entrar("jtorres");
+      const { token } = await invitar("edadadmin");
       const registro = {
+        token,
         tipo_documento: "CC",
         numero_documento: "1088000444",
         nombres: "Juan",
@@ -284,21 +357,18 @@ describe("API simulada (MSW)", () => {
         lugar_nacimiento: "Cali",
         direccion_facturacion: "Carrera 5 # 6-7",
         genero: "masculino",
-        email: "jtorres@avianca.test",
-        contrasena_temporal: CONTRASENA_MOCK,
-        contrasena_nueva: "Nueva1234",
+        contrasena: "Nueva1234",
         confirmacion: "Nueva1234",
       };
-      const antigua = await api("POST", "/api/v1/administradores/me/registro", registro);
+      const antigua = await api("POST", "/api/v1/administradores/invitacion/completar", registro);
       expect(antigua.status).toBe(422);
       expect(antigua.body.error.campos.fecha_nacimiento).toBe(EDAD_MAXIMA);
 
-      const limite = await api("POST", "/api/v1/administradores/me/registro", {
+      const limite = await api("POST", "/api/v1/administradores/invitacion/completar", {
         ...registro,
         fecha_nacimiento: "1906-11-03",
       });
-      // Otro test ya completó este registro: pasar la validación de la fecha basta (no es 422).
-      expect(limite.status).not.toBe(422);
+      expect(limite.status).toBe(200);
     });
   });
 });

@@ -10,6 +10,13 @@ const MENSAJE_POLITICA = "Mínimo 8 caracteres, con al menos una letra y un núm
 const enlaceInvalido = () =>
   error(400, "enlace_invalido", "Este enlace venció o ya fue usado. Pide uno nuevo.");
 
+const enlaceInvitacionInvalido = () =>
+  error(
+    400,
+    "enlace_invalido",
+    "El enlace no es válido o venció. Pide al root una invitación nueva.",
+  );
+
 type Perfil = Schemas["PerfilSalida"];
 
 function cuentaDeSesion() {
@@ -25,6 +32,12 @@ type DatosPersona = {
   direccion_facturacion: string;
   email: string;
   telefono?: string | null;
+};
+
+type DatosPerfil = Omit<DatosPersona, "email"> & {
+  tipo_documento: Perfil["tipo_documento"];
+  numero_documento: string;
+  genero: Perfil["genero"];
 };
 
 /** Longitud y formato de un texto ya recortado, con los mensajes del backend (RF-03). */
@@ -81,8 +94,9 @@ const rechazoDeCampos = (campos: Record<string, string>) =>
 function camposContrasenaNueva(
   nueva: string,
   confirmacion: string,
+  campo = "contrasena_nueva",
 ): Record<string, string> | undefined {
-  if (!POLITICA.test(nueva)) return { contrasena_nueva: MENSAJE_POLITICA };
+  if (!POLITICA.test(nueva)) return { [campo]: MENSAJE_POLITICA };
   if (nueva !== confirmacion) return { confirmacion: "No coincide con la contraseña nueva." };
   return undefined;
 }
@@ -91,7 +105,9 @@ function perfilNuevo(
   id: number,
   nombre_usuario: string,
   rol: Perfil["rol"],
-  datos: Schemas["RegistroClienteEntrada"] | Schemas["RegistroAdministradorEntrada"],
+  datos: DatosPerfil,
+  email: string,
+  emailVerificado = false,
 ): Perfil {
   return {
     id,
@@ -105,13 +121,55 @@ function perfilNuevo(
     lugar_nacimiento: datos.lugar_nacimiento,
     direccion_facturacion: datos.direccion_facturacion,
     genero: datos.genero,
-    email: datos.email.toLowerCase(),
-    email_verificado: false,
+    email: email.toLowerCase(),
+    email_verificado: emailVerificado,
     email_pendiente: null,
     telefono: datos.telefono ?? null,
     imagen_url: null,
     suscrito_noticias: false,
   };
+}
+
+type Administrador = Schemas["AdministradorSalida"];
+
+/** Deja una sola invitación vigente por administrador (HU-10). */
+function crearInvitacion(admin: Administrador): void {
+  for (const invitacion of db.invitaciones) {
+    if (invitacion.admin_id === admin.id) invitacion.usado = true;
+  }
+  const expira = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString();
+  db.invitaciones.push({
+    token: `invitacion-${admin.id}-${nuevoId()}`,
+    admin_id: admin.id,
+    email: admin.email ?? "",
+    expira_en: expira,
+    usado: false,
+  });
+  admin.estado = "invitacion_pendiente";
+  admin.invitacion_expira_en = expira;
+}
+
+function invitacionValida(token: string) {
+  const invitacion = db.invitaciones.find((i) => i.token === token && !i.usado);
+  if (!invitacion || new Date(invitacion.expira_en).getTime() <= Date.now()) return undefined;
+  const admin = db.administradores.find((a) => a.id === invitacion.admin_id);
+  if (!admin || admin.estado === "inactivo" || admin.nombres) return undefined;
+  return { invitacion, admin };
+}
+
+function correoEnUso(email: string, excluirId: number): boolean {
+  return (
+    db.administradores.some(
+      (admin) => admin.id !== excluirId && admin.email?.toLowerCase() === email,
+    ) ||
+    db.cuentas.some(
+      (cuenta) =>
+        cuenta.usuario.id !== excluirId &&
+        cuenta.usuario.rol === "admin" &&
+        (cuenta.perfil?.email.toLowerCase() === email ||
+          cuenta.perfil?.email_pendiente?.toLowerCase() === email),
+    )
+  );
 }
 
 export const usuariosHandlers = [
@@ -203,7 +261,13 @@ export const usuariosHandlers = [
         error(409, "datos_duplicados", "Ya existe una cuenta con estos datos.", duplicados),
       );
     }
-    const perfil = perfilNuevo(nuevoId(), datos.nombre_usuario.toLowerCase(), "cliente", datos);
+    const perfil = perfilNuevo(
+      nuevoId(),
+      datos.nombre_usuario.toLowerCase(),
+      "cliente",
+      datos,
+      datos.email,
+    );
     const usuario = usuarioDe(perfil);
     db.cuentas.push({ usuario, perfil, activo: true });
     sesion.set(usuario);
@@ -368,34 +432,154 @@ export const usuariosHandlers = [
     const bloqueo = exigirRol(["root"]);
     if (bloqueo) return response.untyped(bloqueo);
     const datos = await request.json();
-    const nombre = datos.nombre_usuario.toLowerCase();
-    const existe =
+    const nombre = datos.nombre_usuario.trim().toLowerCase();
+    const email = datos.email.trim().toLowerCase();
+    const campos: Record<string, string> = {};
+    if (!/^[A-Za-z0-9._-]{3,50}$/.test(datos.nombre_usuario.trim())) {
+      campos.nombre_usuario = "Usa de 3 a 50 letras, números, punto, guion o guion bajo.";
+    }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(datos.email.trim())) {
+      campos.email = "Escribe un correo válido.";
+    }
+    if (
       db.cuentas.some((c) => c.usuario.nombre_usuario === nombre) ||
-      db.administradores.some((a) => a.nombre_usuario === nombre);
-    if (existe) {
+      db.administradores.some((a) => a.nombre_usuario === nombre)
+    ) {
+      campos.nombre_usuario = "Ese nombre de usuario ya existe.";
+    }
+    if (correoEnUso(email, 0)) {
+      campos.email = "Ya existe un administrador con este correo.";
+    }
+    if (Object.keys(campos).length) {
+      const duplicado = campos.nombre_usuario?.startsWith("Ese") || campos.email?.startsWith("Ya ");
       return response.untyped(
-        error(409, "datos_duplicados", "Ya existe una cuenta con estos datos.", {
-          nombre_usuario: "Ese nombre de usuario ya existe.",
-        }),
+        error(
+          duplicado ? 409 : 422,
+          duplicado ? "datos_duplicados" : "datos_invalidos",
+          "Revisa los campos marcados.",
+          campos,
+        ),
       );
     }
-    if (!POLITICA.test(datos.contrasena_temporal)) {
-      return response.untyped(
-        error(422, "datos_invalidos", "Revisa los campos marcados.", {
-          contrasena_temporal: MENSAJE_POLITICA,
-        }),
-      );
-    }
-    const admin = {
+    const admin: Administrador = {
       id: nuevoId(),
       nombre_usuario: nombre,
+      email,
       nombres: null,
       apellidos: null,
-      estado: "registro_incompleto" as const,
+      estado: "invitacion_pendiente",
+      invitacion_expira_en: null,
       creado_en: new Date().toISOString(),
     };
     db.administradores.unshift(admin);
+    crearInvitacion(admin);
     return response(201).json(admin);
+  }),
+
+  // Público: valida el enlace sin consumirlo.
+  http.post("/api/v1/administradores/invitacion/validar", async ({ request, response }) => {
+    const { token } = await request.json();
+    const encontrada = invitacionValida(token);
+    if (!encontrada) return response.untyped(enlaceInvitacionInvalido());
+    return response(200).json({
+      nombre_usuario: encontrada.admin.nombre_usuario,
+      email: encontrada.invitacion.email,
+      expira_en: encontrada.invitacion.expira_en,
+    });
+  }),
+
+  // Público: completa los datos, define la contraseña y abre la sesión.
+  http.post("/api/v1/administradores/invitacion/completar", async ({ request, response }) => {
+    const datos = await request.json();
+    const encontrada = invitacionValida(datos.token);
+    if (!encontrada) return response.untyped(enlaceInvitacionInvalido());
+    const { admin, invitacion } = encontrada;
+    const persona = { ...datos, email: invitacion.email };
+    const campos: Record<string, string> = camposDePersona(persona);
+    Object.assign(campos, camposContrasenaNueva(datos.contrasena, datos.confirmacion, "contrasena"));
+    if (Object.keys(campos).length) return response.untyped(rechazoDeCampos(campos));
+    const duplicados: Record<string, string> = {};
+    if (
+      db.cuentas.some(
+        (cuenta) =>
+          cuenta.usuario.id !== admin.id &&
+          cuenta.usuario.rol === "admin" &&
+          cuenta.perfil?.numero_documento === datos.numero_documento,
+      )
+    ) {
+      duplicados.numero_documento = "Ya existe un administrador con este documento.";
+    }
+    if (correoEnUso(invitacion.email, admin.id)) {
+      duplicados.email = "Ya existe un administrador con este correo.";
+    }
+    if (Object.keys(duplicados).length) {
+      return response.untyped(
+        error(409, "datos_duplicados", "Ya existe una cuenta con estos datos.", duplicados),
+      );
+    }
+    const perfil = perfilNuevo(
+      admin.id,
+      admin.nombre_usuario,
+      "admin",
+      datos,
+      invitacion.email,
+      true,
+    );
+    const completo = usuarioDe(perfil);
+    const cuenta = db.cuentas.find((c) => c.usuario.id === admin.id);
+    if (cuenta) Object.assign(cuenta, { usuario: completo, perfil, activo: true });
+    else db.cuentas.push({ usuario: completo, perfil, activo: true });
+    Object.assign(admin, {
+      email: invitacion.email.toLowerCase(),
+      nombres: datos.nombres,
+      apellidos: datos.apellidos,
+      estado: "activo",
+      invitacion_expira_en: null,
+    });
+    invitacion.usado = true;
+    sesion.set(completo);
+    return response(200).json(completo);
+  }),
+
+  http.post("/api/v1/administradores/{admin_id}/invitacion", async ({ params, request, response }) => {
+    const bloqueo = exigirRol(["root"]);
+    if (bloqueo) return response.untyped(bloqueo);
+    const admin = db.administradores.find((a) => a.id === Number(params.admin_id));
+    if (!admin) return response.untyped(error(404, "no_encontrado", "El administrador no existe."));
+    if (admin.estado === "inactivo") {
+      return response.untyped(error(409, "estado_invalido", "El administrador está inactivo."));
+    }
+    if (admin.nombres) {
+      return response.untyped(
+        error(409, "estado_invalido", "El registro del administrador ya está completo."),
+      );
+    }
+    const cuerpo = await request.json().catch(() => null);
+    const email = (cuerpo?.email as string | undefined)?.trim().toLowerCase() || admin.email;
+    if (!email) {
+      return response.untyped(
+        error(422, "datos_invalidos", "Revisa los campos marcados.", {
+          email: "Escribe el correo al que se enviará la invitación.",
+        }),
+      );
+    }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      return response.untyped(
+        error(422, "datos_invalidos", "Revisa los campos marcados.", {
+          email: "Escribe un correo válido.",
+        }),
+      );
+    }
+    if (correoEnUso(email, admin.id)) {
+      return response.untyped(
+        error(409, "datos_duplicados", "Ya existe una cuenta con estos datos.", {
+          email: "Ya existe un administrador con este correo.",
+        }),
+      );
+    }
+    admin.email = email;
+    crearInvitacion(admin);
+    return response(200).json(admin);
   }),
 
   http.post("/api/v1/administradores/{admin_id}/desactivar", ({ params, response }) => {
@@ -406,7 +590,12 @@ export const usuariosHandlers = [
     if (admin.estado === "inactivo") {
       return response.untyped(error(409, "estado_invalido", "El administrador ya está inactivo."));
     }
+    for (const invitacion of db.invitaciones) {
+      if (invitacion.admin_id === admin.id) invitacion.usado = true;
+    }
     admin.estado = "inactivo";
+    const cuenta = db.cuentas.find((c) => c.usuario.id === admin.id);
+    if (cuenta) cuenta.activo = false;
     return response(200).json(admin);
   }),
 
@@ -418,47 +607,9 @@ export const usuariosHandlers = [
     if (admin.estado !== "inactivo") {
       return response.untyped(error(409, "estado_invalido", "El administrador ya está activo."));
     }
-    admin.estado = admin.nombres ? "activo" : "registro_incompleto";
+    admin.estado = admin.nombres ? "activo" : "invitacion_vencida";
+    const cuenta = db.cuentas.find((c) => c.usuario.id === admin.id);
+    if (cuenta) cuenta.activo = true;
     return response(200).json(admin);
-  }),
-
-  http.post("/api/v1/administradores/me/registro", async ({ request, response }) => {
-    const bloqueo = exigirRol(["admin"], { registroIncompleto: true });
-    if (bloqueo) return response.untyped(bloqueo);
-    const datos = await request.json();
-    const usuario = sesion.get()!;
-    const invalidos = camposDePersona(datos);
-    if (Object.keys(invalidos).length) return response.untyped(rechazoDeCampos(invalidos));
-    if (usuario.registro_completo) {
-      return response.untyped(error(409, "registro_ya_completo", "Tu registro ya está completo."));
-    }
-    if (datos.contrasena_temporal !== CONTRASENA_MOCK) {
-      return response.untyped(
-        error(422, "contrasena_actual_incorrecta", "La contraseña temporal no es correcta.", {
-          contrasena_temporal: "La contraseña temporal no es correcta.",
-        }),
-      );
-    }
-    const campos = camposContrasenaNueva(datos.contrasena_nueva, datos.confirmacion);
-    if (campos) {
-      return response.untyped(error(422, "datos_invalidos", "Revisa los campos marcados.", campos));
-    }
-    // El correo del administrador no pasa por verificación en la iteración 1.
-    const perfil = {
-      ...perfilNuevo(usuario.id, usuario.nombre_usuario, "admin", datos),
-      email_verificado: true,
-    };
-    const completo = usuarioDe(perfil);
-    const cuenta = db.cuentas.find((c) => c.usuario.id === usuario.id);
-    if (cuenta) Object.assign(cuenta, { usuario: completo, perfil });
-    const admin = db.administradores.find((a) => a.id === usuario.id);
-    if (admin)
-      Object.assign(admin, {
-        nombres: datos.nombres,
-        apellidos: datos.apellidos,
-        estado: "activo",
-      });
-    sesion.set(completo);
-    return response(200).json(completo);
   }),
 ];

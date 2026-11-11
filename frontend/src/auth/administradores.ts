@@ -11,13 +11,30 @@ export function useAdministradores() {
   });
 }
 
-/** Crea un administrador con usuario y contraseña temporal (HU-10). */
+/** Invita a un administrador con usuario y correo; la contraseña la define él (HU-10). */
 export function useCrearAdministrador() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (datos: Schemas["AdministradorEntrada"]) =>
       unwrap(api.POST("/api/v1/administradores", { body: datos })),
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ADMINISTRADORES_KEY });
+    },
+  });
+}
+
+/** Reenvía la invitación: invalida el enlace anterior y corre otras 72 horas (HU-10). */
+export function useReenviarInvitacion() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ adminId, email }: { adminId: number; email?: string }) =>
+      unwrap(
+        api.POST("/api/v1/administradores/{admin_id}/invitacion", {
+          params: { path: { admin_id: adminId } },
+          body: email ? { email } : null,
+        }),
+      ),
+    onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: ADMINISTRADORES_KEY });
     },
   });

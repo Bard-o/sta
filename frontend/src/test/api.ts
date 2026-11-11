@@ -57,16 +57,4 @@ export const ADMIN: Usuario = {
   apellidos: "Ruiz",
 };
 
-/** Administrador que aún no completó su registro (HU-12). */
-export const ADMIN_INCOMPLETO: Usuario = {
-  id: 5,
-  nombre_usuario: "jtorres",
-  email: null,
-  rol: "admin",
-  email_verificado: false,
-  registro_completo: false,
-  nombres: null,
-  apellidos: null,
-};
-
 export const sesionDe = (usuario: Usuario): Respuesta => ({ status: 200, body: usuario });
