@@ -1,13 +1,29 @@
+import { DEPARTAMENTOS, PAISES, municipiosDe } from "@/mocks/lugares";
+
 type Respuesta = { status: number; body?: unknown };
 /** Una respuesta fija, o una función de la URL pedida (para listados con parámetros). */
 type Rutas = Record<string, Respuesta | ((url: URL) => Respuesta)>;
 
+/** El catálogo de lugares lo piden los formularios de registro y perfil: va siempre, salvo que
+ *  el test lo reemplace. */
+const CATALOGO: Rutas = {
+  "GET /api/v1/lugares/paises": { status: 200, body: PAISES },
+  "GET /api/v1/lugares/departamentos": { status: 200, body: DEPARTAMENTOS },
+  ...Object.fromEntries(
+    DEPARTAMENTOS.map((departamento) => [
+      `GET /api/v1/lugares/departamentos/${departamento.codigo}/municipios`,
+      { status: 200, body: municipiosDe(departamento.codigo) },
+    ]),
+  ),
+};
+
 /** Simula la API: las llaves son "MÉTODO /ruta", p. ej. "POST /api/v1/auth/login". */
 export function responderApi(rutas: Rutas) {
+  const respuestas = { ...CATALOGO, ...rutas };
   vi.mocked(fetch).mockImplementation(async (input) => {
     const req = input as Request;
     const llave = `${req.method} ${new URL(req.url).pathname}`;
-    const entrada = rutas[llave];
+    const entrada = respuestas[llave];
     if (!entrada) throw new Error(`Petición no simulada: ${llave}`);
     const r = typeof entrada === "function" ? entrada(new URL(req.url)) : entrada;
     return new Response(r.body === undefined ? null : JSON.stringify(r.body), {

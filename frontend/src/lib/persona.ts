@@ -65,6 +65,62 @@ export const telefono = z
     message: "Escribe un teléfono válido, con al menos 7 números.",
   });
 
+const PAIS_COLOMBIA = "CO";
+
+/** Lugar de nacimiento del catálogo (HU-01, HU-07, HU-12): con Colombia, municipio de la
+ *  DIVIPOLA; con otro país, ciudad libre. El departamento se deriva del código del municipio. */
+export const lugarNacimiento = z
+  .object({
+    pais: z.string().trim().min(1, "Elige el país de nacimiento."),
+    municipio: z.string().nullable(),
+    ciudad: z.string().nullable(),
+  })
+  .superRefine((lugar, ctx) => {
+    if (lugar.pais === PAIS_COLOMBIA) {
+      if (!lugar.municipio) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["municipio"],
+          message: "Elige el municipio de nacimiento.",
+        });
+      }
+      if (lugar.ciudad?.trim()) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["ciudad"],
+          message: "Si naciste en Colombia, elige el municipio y deja la ciudad vacía.",
+        });
+      }
+      return;
+    }
+    if (lugar.municipio) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["municipio"],
+        message: "El municipio solo aplica si el país es Colombia.",
+      });
+    }
+    const ciudad = lugar.ciudad?.trim() ?? "";
+    if (!ciudad) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["ciudad"],
+        message: "Escribe la ciudad de nacimiento.",
+      });
+    } else if (ciudad.length > 120) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["ciudad"],
+        message: "Usa como máximo 120 caracteres.",
+      });
+    }
+  })
+  .transform((lugar) => ({
+    pais: lugar.pais,
+    municipio: lugar.pais === PAIS_COLOMBIA ? lugar.municipio : null,
+    ciudad: lugar.pais === PAIS_COLOMBIA ? null : (lugar.ciudad?.trim() ?? null),
+  }));
+
 /** Campos que comparten el registro (HU-01) y el perfil (HU-07), con sus mensajes (IU-07). */
 export const camposPersona = {
   genero: z.string().refine((v): v is Genero => GENEROS.some((g) => g.value === v), {
@@ -77,7 +133,7 @@ export const camposPersona = {
       message: "La fecha de nacimiento no puede ser futura.",
     })
     .refine((v) => v === "" || v >= fechaMinimaNacimiento(), { message: MENSAJE_EDAD_MAXIMA }),
-  lugar_nacimiento: requerido("Escribe tu lugar de nacimiento.", 120),
+  lugar_nacimiento: lugarNacimiento,
   direccion_facturacion: requerido("Escribe tu dirección de facturación."),
   email: z
     .string()

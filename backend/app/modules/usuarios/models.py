@@ -80,7 +80,13 @@ class Usuario(TimestampMixin, Base):
     nombres: Mapped[str | None] = mapped_column(String(100))
     apellidos: Mapped[str | None] = mapped_column(String(100))
     fecha_nacimiento: Mapped[date | None] = mapped_column(Date)
-    lugar_nacimiento: Mapped[str | None] = mapped_column(String(120))
+    # Texto para mostrar («Santa Rosa de Cabal, Risaralda, Colombia»), calculado por el backend.
+    lugar_nacimiento: Mapped[str | None] = mapped_column(String(200))
+    # HU-01: lugar de nacimiento estructurado. Quedan nulos en las cuentas anteriores al cambio,
+    # que conservan su texto en `lugar_nacimiento`.
+    pais_nacimiento: Mapped[str | None] = mapped_column(String(2))
+    municipio_nacimiento: Mapped[str | None] = mapped_column(String(5))
+    ciudad_nacimiento: Mapped[str | None] = mapped_column(String(120))
     direccion_facturacion: Mapped[str | None] = mapped_column(String(200))
     genero: Mapped[str | None] = mapped_column(
         Enum(

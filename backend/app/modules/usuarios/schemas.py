@@ -34,9 +34,6 @@ NombrePropio = Annotated[
         strip_whitespace=True, min_length=1, max_length=100, pattern=PATRON_NOMBRE_PROPIO
     ),
 ]
-LugarNacimiento = Annotated[
-    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)
-]
 DireccionFacturacion = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)
 ]
@@ -85,6 +82,62 @@ class UsuarioSalida(BaseModel):
 # ---------- Datos personales (HU-01, HU-07, HU-12) ----------
 
 
+class LugarNacimientoEntrada(BaseModel):
+    """País y, según el caso, municipio de la DIVIPOLA o ciudad libre (HU-01).
+
+    Con `pais = "CO"` el municipio es obligatorio y la ciudad va en `null`; con otro país, al
+    revés. La combinación se valida contra el catálogo en `service.py`.
+    """
+
+    pais: str = Field(
+        min_length=2,
+        max_length=2,
+        pattern=r"^[A-Z]{2}$",
+        description="Código ISO 3166-1 alpha-2 en mayúsculas.",
+    )
+    municipio: str | None = Field(
+        default=None,
+        pattern=r"^\d{5}$",
+        description="Código DIVIPOLA del municipio; obligatorio si el país es Colombia.",
+    )
+    ciudad: str | None = Field(
+        default=None,
+        max_length=120,
+        description="Ciudad de nacimiento; obligatoria si el país no es Colombia.",
+    )
+
+
+class LugarNacimientoSalida(BaseModel):
+    """Lugar de nacimiento con códigos y nombres (HU-07).
+
+    En una cuenta anterior a este cambio es `null` y el texto queda en
+    `PerfilSalida.lugar_nacimiento_texto`.
+    """
+
+    pais: str
+    pais_nombre: str
+    departamento: str | None
+    departamento_nombre: str | None
+    municipio: str | None
+    municipio_nombre: str | None
+    ciudad: str | None
+
+
+class PaisSalida(BaseModel):
+    codigo: str
+    nombre: str
+
+
+class DepartamentoSalida(BaseModel):
+    codigo: str
+    nombre: str
+
+
+class MunicipioSalida(BaseModel):
+    codigo: str
+    nombre: str
+
+
 class DatosEditables(BaseModel):
     """Datos que el titular puede cambiar desde su perfil (RF-08)."""
 
@@ -93,7 +146,7 @@ class DatosEditables(BaseModel):
     fecha_nacimiento: date = Field(
         description="No puede ser futura ni de hace más de 120 años (SUP-43)."
     )
-    lugar_nacimiento: LugarNacimiento
+    lugar_nacimiento: LugarNacimientoEntrada
     direccion_facturacion: DireccionFacturacion
     genero: Genero
     email: str = Field(max_length=254, pattern=PATRON_EMAIL)
@@ -126,7 +179,10 @@ class PerfilSalida(BaseModel):
     nombres: str
     apellidos: str
     fecha_nacimiento: date
-    lugar_nacimiento: str
+    lugar_nacimiento: LugarNacimientoSalida | None = Field(
+        description="null en las cuentas anteriores al catálogo de lugares."
+    )
+    lugar_nacimiento_texto: str = Field(description="Texto para mostrar, calculado por el backend.")
     direccion_facturacion: str
     genero: Genero
     email: str = Field(description="Correo vigente de la cuenta.")

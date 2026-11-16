@@ -2,6 +2,42 @@
 
 Dueño: Backend A. Requisitos: RF-01 a RF-11 y RF-56. Este archivo cubre el registro de clientes (RF-03, RF-04, HU-01), la verificación de correo (RF-05, HU-02), la sesión (RF-06, HU-03, HU-04), el restablecimiento de contraseña (RF-07, HU-05), el cambio de contraseña (HU-06), el perfil (HU-07), la suscripción a noticias (RF-09, HU-08), la desactivación de la cuenta (RF-10, HU-09), la creación y el listado de administradores (RF-02, HU-10), el primer ingreso del administrador (HU-12) y los destinatarios del correo de noticias (RF-56); el resto de endpoints del módulo se agregan aquí con sus issues. El contrato acordado de todo el módulo está en [iteracion-1.md](iteracion-1.md).
 
+## Lugares de nacimiento
+
+### `GET /api/v1/lugares/paises`
+
+### `GET /api/v1/lugares/departamentos`
+
+### `GET /api/v1/lugares/departamentos/{codigo}/municipios`
+
+Públicos. Devuelven el catálogo estático con el que se elige el lugar de nacimiento en el
+registro (HU-01), el perfil (HU-07) y el registro del administrador (HU-12):
+
+```json
+[{ "codigo": "CO", "nombre": "Colombia" }]
+```
+
+```json
+[{ "codigo": "66", "nombre": "Risaralda" }]
+```
+
+```json
+[{ "codigo": "66682", "nombre": "Santa Rosa de Cabal" }]
+```
+
+- Los países son la lista ISO 3166-1 (249, con nombres en español) y los departamentos y
+  municipios son la DIVIPOLA del DANE (33 departamentos, 1.122 municipios y áreas no
+  municipalizadas). La fuente y la fecha de descarga están en
+  `backend/app/modules/usuarios/datos/README.md`.
+- Responden `Cache-Control: public, max-age=86400`: el catálogo solo cambia con un despliegue.
+- `GET /departamentos/{codigo}/municipios` responde `404 no_encontrado` si el departamento no
+  existe. Los municipios salen ordenados por nombre y su código ya incluye el departamento en
+  los dos primeros dígitos.
+- En las entradas de registro y perfil, `lugar_nacimiento` es
+  `{ "pais": "CO", "municipio": "66682", "ciudad": null }`: con Colombia el municipio es
+  obligatorio y la ciudad va en `null`; con otro país, al revés. Los errores van en
+  `campos.lugar_nacimiento.pais`, `.municipio` o `.ciudad`.
+
 ## Registro de clientes
 
 ### `POST /api/v1/usuarios/registro`
@@ -19,7 +55,7 @@ Entrada (`RegistroClienteEntrada`):
   "nombres": "Laura",
   "apellidos": "Gómez Ríos",
   "fecha_nacimiento": "1995-03-14",
-  "lugar_nacimiento": "Pereira, Risaralda",
+  "lugar_nacimiento": { "pais": "CO", "municipio": "66682", "ciudad": null },
   "direccion_facturacion": "Cra. 7 # 19-28, Pereira",
   "genero": "femenino",
   "email": "laura.gomez@correo.co",
@@ -37,6 +73,10 @@ Entrada (`RegistroClienteEntrada`):
   «La fecha de nacimiento no puede ser futura.» o «Revisa la fecha: la edad máxima es 120 años.».
   No hay edad mínima de registro: un menor de edad puede registrarse (la restricción de edad
   aplica al volar).
+- `lugar_nacimiento` se elige del catálogo (ver [Lugares de nacimiento](#lugares-de-nacimiento)):
+  país y, si es Colombia, departamento y municipio; con otro país, una ciudad de 1 a 120
+  caracteres. El backend guarda además el texto para mostrar («Santa Rosa de Cabal,
+  Risaralda, Colombia» o «Madrid, España»).
 - `contrasena`: 8 caracteres o más, con al menos una letra y un número y sin espacios
   (RNF-08); se guarda con Argon2id, nunca en claro.
 - `nombre_usuario` es único en todo el sistema, sin distinguir mayúsculas. El correo y el
@@ -67,7 +107,7 @@ Entrada (`RegistroClienteEntrada`):
 | HTTP | `codigo` | Cuándo |
 |---|---|---|
 | 409 | `datos_duplicados` | `campos` con `nombre_usuario`, `numero_documento` o `email` que ya pertenece a otra cuenta (RF-04). |
-| 422 | `datos_invalidos` | `campos` con `acepta_politica`, `fecha_nacimiento` (futura o de hace más de 120 años), `email`, `nombres` o `apellidos` (caracteres no permitidos), `telefono` (formato o menos de 7 dígitos), `contrasena` (política, incluidos los espacios) o el campo con formato inválido. |
+| 422 | `datos_invalidos` | `campos` con `acepta_politica`, `fecha_nacimiento` (futura o de hace más de 120 años), `lugar_nacimiento.pais` / `.municipio` / `.ciudad` (combinación inválida), `email`, `nombres` o `apellidos` (caracteres no permitidos), `telefono` (formato o menos de 7 dígitos), `contrasena` (política, incluidos los espacios) o el campo con formato inválido. |
 | 403 | `sin_permiso` | Hay una sesión abierta (Apéndice B). |
 
 ## Verificación de correo
@@ -126,7 +166,16 @@ Con sesión de cliente o administrador. Devuelve `200 PerfilSalida`:
   "nombres": "Laura",
   "apellidos": "Gómez Ríos",
   "fecha_nacimiento": "1995-03-14",
-  "lugar_nacimiento": "Pereira, Risaralda",
+  "lugar_nacimiento": {
+    "pais": "CO",
+    "pais_nombre": "Colombia",
+    "departamento": "66",
+    "departamento_nombre": "Risaralda",
+    "municipio": "66682",
+    "municipio_nombre": "Santa Rosa de Cabal",
+    "ciudad": null
+  },
+  "lugar_nacimiento_texto": "Santa Rosa de Cabal, Risaralda, Colombia",
   "direccion_facturacion": "Cra. 7 # 19-28, Pereira",
   "genero": "femenino",
   "email": "laura.gomez@correo.co",
@@ -139,6 +188,10 @@ Con sesión de cliente o administrador. Devuelve `200 PerfilSalida`:
 ```
 
 - El root no tiene perfil (`403 sin_permiso`).
+- `lugar_nacimiento` trae los códigos y nombres de país, departamento y municipio, o `ciudad`
+  para otro país. `lugar_nacimiento_texto` es el texto para mostrar, calculado por el backend.
+  Una cuenta anterior a este cambio devuelve `lugar_nacimiento: null` y conserva su texto en
+  `lugar_nacimiento_texto`; al editar el perfil debe enviar el objeto completo.
 - `email` es el correo vigente de la cuenta; `email_pendiente` es el correo nuevo que espera verificación (HU-07).
 - `imagen_url` es `null` sin imagen y `suscrito_noticias` es `false` para un administrador.
 - Un administrador que todavía no completó su registro (HU-12) no tiene perfil: `404 no_encontrado`.
@@ -158,7 +211,7 @@ Con sesión de cliente o administrador. Actualiza los datos editables y devuelve
   "nombres": "Laura",
   "apellidos": "Gómez Ríos",
   "fecha_nacimiento": "1995-03-14",
-  "lugar_nacimiento": "Pereira, Risaralda",
+  "lugar_nacimiento": { "pais": "CO", "municipio": "66682", "ciudad": null },
   "direccion_facturacion": "Cra. 7 # 19-28, Pereira",
   "genero": "femenino",
   "email": "laura.gomez@correo.co",
@@ -179,7 +232,8 @@ Con sesión de cliente o administrador. Actualiza los datos editables y devuelve
 | 422 | `datos_invalidos` | `fecha_nacimiento` | La fecha es futura o de hace más de 120 años. |
 | 422 | `datos_invalidos` | `nombres`, `apellidos` | Caracteres no permitidos (solo letras, espacios, apóstrofo, punto y guion) o texto vacío o demasiado largo. |
 | 422 | `datos_invalidos` | `telefono` | Formato inválido o menos de 7 dígitos. |
-| 422 | `datos_invalidos` | otro campo | Formato inválido o longitud máxima superada (`email`, `lugar_nacimiento`, `direccion_facturacion`, `genero`, etc.); los textos obligatorios no pueden quedar solo en espacios. |
+| 422 | `datos_invalidos` | `lugar_nacimiento.pais`, `lugar_nacimiento.municipio`, `lugar_nacimiento.ciudad` | Combinación inválida: país fuera del catálogo, municipio inexistente o de otro país, o falta el municipio (Colombia) o la ciudad (otro país). |
+| 422 | `datos_invalidos` | otro campo | Formato inválido o longitud máxima superada (`email`, `direccion_facturacion`, `genero`, etc.); los textos obligatorios no pueden quedar solo en espacios. |
 | 401 | `no_autenticado` | | Sin sesión o sesión vencida. |
 | 403 | `sin_permiso` | | El rol es root. |
 | 404 | `no_encontrado` | | La cuenta aún no tiene sus datos personales. |
@@ -594,7 +648,7 @@ Entrada (`RegistroAdministradorEntrada`): los datos personales de HU-01 sin `nom
   "nombres": "Jorge",
   "apellidos": "Torres",
   "fecha_nacimiento": "1990-05-02",
-  "lugar_nacimiento": "Cali, Valle del Cauca",
+  "lugar_nacimiento": { "pais": "CO", "municipio": "76001", "ciudad": null },
   "direccion_facturacion": "Cl. 5 # 38-14, Cali",
   "genero": "masculino",
   "email": "jorge.torres@avianco.test",
@@ -625,6 +679,7 @@ Entrada (`RegistroAdministradorEntrada`): los datos personales de HU-01 sin `nom
   espacios) y coincide con `confirmacion`; se guarda con Argon2id, nunca en claro. La temporal deja de
   funcionar.
 - `fecha_nacimiento` sigue la regla del registro: ni futura ni de hace más de 120 años (SUP-43).
+- `lugar_nacimiento` usa el mismo objeto del registro (ver [Lugares de nacimiento](#lugares-de-nacimiento)).
 - El documento (tipo y número) y el correo son únicos entre administradores (RF-04, SUP-18).
   La misma persona puede tener además una cuenta de cliente: esos datos no chocan con las
   cuentas de cliente. Un correo que otro administrador tenga pendiente de verificar (HU-07)
@@ -639,7 +694,7 @@ Entrada (`RegistroAdministradorEntrada`): los datos personales de HU-01 sin `nom
 | 409 | `registro_ya_completo` | | El administrador ya completó su registro. |
 | 409 | `datos_duplicados` | `numero_documento` o `email` | El dato ya pertenece a otro administrador. |
 | 422 | `contrasena_actual_incorrecta` | `contrasena_temporal` | La contraseña temporal no coincide. |
-| 422 | `datos_invalidos` | `contrasena_nueva`, `confirmacion`, `fecha_nacimiento`, `nombres`, `apellidos` o `telefono` | Política de contraseña (sin espacios), confirmación o datos personales (`fecha_nacimiento` futura o de hace más de 120 años; `nombres` y `apellidos` solo con letras; `telefono` con al menos 7 dígitos). |
+| 422 | `datos_invalidos` | `contrasena_nueva`, `confirmacion`, `fecha_nacimiento`, `lugar_nacimiento.pais`, `lugar_nacimiento.municipio`, `lugar_nacimiento.ciudad`, `nombres`, `apellidos` o `telefono` | Política de contraseña (sin espacios), confirmación o datos personales (`fecha_nacimiento` futura o de hace más de 120 años; combinación inválida de lugar de nacimiento; `nombres` y `apellidos` solo con letras; `telefono` con al menos 7 dígitos). |
 | 401 | `no_autenticado` | | Sin sesión o sesión vencida. |
 | 403 | `sin_permiso` | | El rol no es administrador. |
 

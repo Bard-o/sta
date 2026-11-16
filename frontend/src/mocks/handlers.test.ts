@@ -113,7 +113,7 @@ describe("API simulada (MSW)", () => {
       nombres: "María José",
       apellidos: "O'Neill",
       fecha_nacimiento: "1999-05-10",
-      lugar_nacimiento: "Pereira",
+      lugar_nacimiento: { pais: "CO", municipio: "66001", ciudad: null },
       direccion_facturacion: "Calle 1 # 2-3",
       genero: "femenino",
       email: "maria.jose@correo.co",
@@ -166,9 +166,9 @@ describe("API simulada (MSW)", () => {
 
     const largo = await api("PUT", "/api/v1/usuarios/me/perfil", {
       ...edicion,
-      lugar_nacimiento: "x".repeat(121),
+      lugar_nacimiento: { pais: "ES", municipio: null, ciudad: "x".repeat(121) },
     });
-    expect(largo.body.error.campos.lugar_nacimiento).toBe("Es demasiado largo.");
+    expect(largo.body.error.campos["lugar_nacimiento.ciudad"]).toBe("Es demasiado largo.");
 
     expect((await api("PUT", "/api/v1/usuarios/me/perfil", edicion)).status).toBe(200);
   });
@@ -181,7 +181,7 @@ describe("API simulada (MSW)", () => {
       nombres: "Juan",
       apellidos: "Torres",
       fecha_nacimiento: "1990-03-02",
-      lugar_nacimiento: "Cali",
+      lugar_nacimiento: { pais: "CO", municipio: "76001", ciudad: null },
       direccion_facturacion: "Carrera 5 # 6-7",
       genero: "masculino",
       email: "jtorres@avianca.test",
@@ -227,7 +227,7 @@ describe("API simulada (MSW)", () => {
         nombres: "Ana",
         apellidos: "Ríos",
         fecha_nacimiento: "1906-11-02",
-        lugar_nacimiento: "Pereira",
+        lugar_nacimiento: { pais: "CO", municipio: "66001", ciudad: null },
         direccion_facturacion: "Calle 1 # 2-3",
         genero: "femenino",
         email: "ana.rios@correo.co",
@@ -281,7 +281,7 @@ describe("API simulada (MSW)", () => {
         nombres: "Juan",
         apellidos: "Torres",
         fecha_nacimiento: "1906-11-02",
-        lugar_nacimiento: "Cali",
+        lugar_nacimiento: { pais: "CO", municipio: "76001", ciudad: null },
         direccion_facturacion: "Carrera 5 # 6-7",
         genero: "masculino",
         email: "jtorres@avianca.test",

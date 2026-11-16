@@ -13,17 +13,20 @@ from app.core.auth import (
     require_role,
 )
 from app.core.db import DbSession
-from app.core.errors import SinPermiso, respuestas_error
+from app.core.errors import NoEncontrado, SinPermiso, respuestas_error
 from app.core.security import Rol
-from app.modules.usuarios import service
+from app.modules.usuarios import catalogos, service
 from app.modules.usuarios.schemas import (
     AdministradorEntrada,
     AdministradorSalida,
     BloqueoDesactivacion,
     CambioContrasenaEntrada,
+    DepartamentoSalida,
     DesactivacionSalida,
     LoginEntrada,
     MensajeSalida,
+    MunicipioSalida,
+    PaisSalida,
     PerfilEntrada,
     PerfilSalida,
     RegistroAdministradorEntrada,
@@ -292,7 +295,50 @@ def completar_registro_administrador(
     )
 
 
+# ---------- Catálogo de lugares de nacimiento: /lugares ----------
+
+# El catálogo es estático: solo cambia con un despliegue. Un día de caché basta para no pedirlo
+# en cada formulario y permite corregir un nombre sin invalidar nada a mano.
+CACHE_CATALOGO = "public, max-age=86400"
+
+lugares = APIRouter(prefix="/lugares", tags=["lugares"])
+
+
+@lugares.get("/paises", response_model=list[PaisSalida])
+def listar_paises(response: Response) -> list[PaisSalida]:
+    """Países ISO 3166-1 con nombres en español (HU-01, HU-07, HU-12)."""
+    response.headers["Cache-Control"] = CACHE_CATALOGO
+    return [PaisSalida(codigo=pais.codigo, nombre=pais.nombre) for pais in catalogos.PAISES]
+
+
+@lugares.get("/departamentos", response_model=list[DepartamentoSalida])
+def listar_departamentos(response: Response) -> list[DepartamentoSalida]:
+    """Departamentos de la DIVIPOLA, incluida Bogotá D. C. (HU-01, HU-07, HU-12)."""
+    response.headers["Cache-Control"] = CACHE_CATALOGO
+    return [
+        DepartamentoSalida(codigo=departamento.codigo, nombre=departamento.nombre)
+        for departamento in catalogos.DEPARTAMENTOS
+    ]
+
+
+@lugares.get(
+    "/departamentos/{codigo}/municipios",
+    response_model=list[MunicipioSalida],
+    responses=respuestas_error(404),
+)
+def listar_municipios(codigo: str, response: Response) -> list[MunicipioSalida]:
+    """Municipios de un departamento, ordenados por nombre (HU-01, HU-07, HU-12)."""
+    if catalogos.buscar_departamento(codigo) is None:
+        raise NoEncontrado()
+    response.headers["Cache-Control"] = CACHE_CATALOGO
+    return [
+        MunicipioSalida(codigo=municipio.codigo, nombre=municipio.nombre)
+        for municipio in catalogos.municipios_de(codigo)
+    ]
+
+
 router = APIRouter()
 router.include_router(auth)
 router.include_router(cuenta)
 router.include_router(administradores)
+router.include_router(lugares)

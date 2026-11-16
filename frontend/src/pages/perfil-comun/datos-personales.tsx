@@ -6,6 +6,7 @@ import { z } from "zod";
 import { ApiError, type Schemas } from "@/api/client";
 import { useGuardarPerfil } from "@/auth/perfil";
 import { Button } from "@/components/ui/button";
+import { CampoLugarNacimiento } from "@/components/ui/campo-lugar-nacimiento";
 import { CampoLista, CampoTexto } from "@/components/ui/campos";
 import { Form } from "@/components/ui/form";
 import { Glass } from "@/components/ui/glass";
@@ -18,6 +19,7 @@ import {
   nombreTipoDocumento,
   telefono,
 } from "@/lib/persona";
+import { LUGAR_VACIO } from "@/lib/lugares";
 
 type Perfil = Schemas["PerfilSalida"];
 
@@ -35,7 +37,13 @@ const valoresDe = (p: Perfil): Entrada => ({
   telefono: p.telefono ?? "",
   genero: p.genero,
   fecha_nacimiento: p.fecha_nacimiento,
-  lugar_nacimiento: p.lugar_nacimiento,
+  lugar_nacimiento: p.lugar_nacimiento
+    ? {
+        pais: p.lugar_nacimiento.pais,
+        municipio: p.lugar_nacimiento.municipio,
+        ciudad: p.lugar_nacimiento.ciudad,
+      }
+    : LUGAR_VACIO,
   direccion_facturacion: p.direccion_facturacion,
   email: p.email_pendiente ?? p.email,
 });
@@ -99,7 +107,7 @@ export function DatosPersonales({ perfil }: { perfil: Perfil }) {
           if (!(error instanceof ApiError)) return;
           // IU-07: cada error se muestra junto a su campo.
           for (const [campo, mensaje] of Object.entries(error.campos)) {
-            if (CAMPOS.includes(campo as keyof Entrada)) {
+            if (CAMPOS.includes(campo as keyof Entrada) || campo.startsWith("lugar_nacimiento.")) {
               form.setError(campo as keyof Entrada, { message: mensaje });
             }
           }
@@ -145,7 +153,10 @@ export function DatosPersonales({ perfil }: { perfil: Perfil }) {
               max={hoy()}
               autoComplete="bday"
             />
-            <CampoTexto<Entrada> name="lugar_nacimiento" label="Lugar de nacimiento" />
+            <CampoLugarNacimiento<Entrada>
+              name="lugar_nacimiento"
+              className="sm:col-span-2 lg:col-span-3"
+            />
             <CampoLista<Entrada> name="genero" label="Género" opciones={GENEROS} />
             <CampoTexto<Entrada>
               name="email"

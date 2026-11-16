@@ -5,6 +5,7 @@ import { ApiError, type Schemas } from "@/api/client";
 import { INICIO_ROL } from "@/auth/roles";
 import { useCompletarPrimerIngreso } from "@/auth/sesion";
 import { Button } from "@/components/ui/button";
+import { CampoLugarNacimiento } from "@/components/ui/campo-lugar-nacimiento";
 import {
   Form,
   FormControl,
@@ -19,7 +20,8 @@ import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { Notice } from "@/components/ui/notice";
 import { esquemaContrasena } from "@/lib/contrasena";
-import { fechaMinimaNacimiento, hoy, MENSAJE_EDAD_MAXIMA } from "@/lib/persona";
+import { fechaMinimaNacimiento, hoy, lugarNacimiento, MENSAJE_EDAD_MAXIMA } from "@/lib/persona";
+import { LUGAR_VACIO } from "@/lib/lugares";
 
 const TIPOS_DOCUMENTO = [
   { value: "CC", label: "Cédula de ciudadanía" },
@@ -62,7 +64,7 @@ const esquema = z
       .min(1, "Elige tu fecha de nacimiento.")
       .refine((valor) => !valor || valor <= hoy(), "La fecha de nacimiento no puede ser futura.")
       .refine((valor) => !valor || valor >= fechaMinimaNacimiento(), MENSAJE_EDAD_MAXIMA),
-    lugar_nacimiento: z.string().trim().min(1, "Escribe tu lugar de nacimiento.").max(120),
+    lugar_nacimiento: lugarNacimiento,
     direccion_facturacion: z
       .string()
       .trim()
@@ -114,7 +116,7 @@ export function PrimerIngresoPage() {
       nombres: "",
       apellidos: "",
       fecha_nacimiento: "",
-      lugar_nacimiento: "",
+      lugar_nacimiento: LUGAR_VACIO,
       direccion_facturacion: "",
       genero: "",
       email: "",
@@ -147,7 +149,7 @@ export function PrimerIngresoPage() {
         if (!(error instanceof ApiError)) return;
         // IU-07: el error de cada campo se muestra junto al campo.
         for (const [campo, mensaje] of Object.entries(error.campos)) {
-          if (CAMPOS.includes(campo as FieldPath<Datos>)) {
+          if (CAMPOS.includes(campo as FieldPath<Datos>) || campo.startsWith("lugar_nacimiento.")) {
             form.setError(campo as FieldPath<Datos>, { message: mensaje });
           }
         }
@@ -292,18 +294,9 @@ export function PrimerIngresoPage() {
                 )}
               />
 
-              <FormField
-                control={form.control}
+              <CampoLugarNacimiento<Datos>
                 name="lugar_nacimiento"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Lugar de nacimiento</FormLabel>
-                    <FormControl>
-                      <Input autoComplete="off" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                className="md:col-span-2 xl:col-span-3"
               />
 
               <FormField

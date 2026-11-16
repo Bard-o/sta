@@ -406,6 +406,66 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/lugares/paises": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Listar Paises
+     * @description Países ISO 3166-1 con nombres en español (HU-01, HU-07, HU-12).
+     */
+    get: operations["listar_paises"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/lugares/departamentos": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Listar Departamentos
+     * @description Departamentos de la DIVIPOLA, incluida Bogotá D. C. (HU-01, HU-07, HU-12).
+     */
+    get: operations["listar_departamentos"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/lugares/departamentos/{codigo}/municipios": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Listar Municipios
+     * @description Municipios de un departamento, ordenados por nombre (HU-01, HU-07, HU-12).
+     */
+    get: operations["listar_municipios"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/ciudades": {
     parameters: {
       query?: never;
@@ -831,6 +891,13 @@ export interface components {
       /** Agotada */
       agotada: boolean;
     };
+    /** DepartamentoSalida */
+    DepartamentoSalida: {
+      /** Codigo */
+      codigo: string;
+      /** Nombre */
+      nombre: string;
+    };
     /** DesactivacionSalida */
     DesactivacionSalida: {
       /** Puede Desactivar */
@@ -894,10 +961,64 @@ export interface components {
       /** Contrasena */
       contrasena: string;
     };
+    /**
+     * LugarNacimientoEntrada
+     * @description País y, según el caso, municipio de la DIVIPOLA o ciudad libre (HU-01).
+     *
+     *     Con `pais = "CO"` el municipio es obligatorio y la ciudad va en `null`; con otro país, al
+     *     revés. La combinación se valida contra el catálogo en `service.py`.
+     */
+    LugarNacimientoEntrada: {
+      /**
+       * Pais
+       * @description Código ISO 3166-1 alpha-2 en mayúsculas.
+       */
+      pais: string;
+      /**
+       * Municipio
+       * @description Código DIVIPOLA del municipio; obligatorio si el país es Colombia.
+       */
+      municipio?: string | null;
+      /**
+       * Ciudad
+       * @description Ciudad de nacimiento; obligatoria si el país no es Colombia.
+       */
+      ciudad?: string | null;
+    };
+    /**
+     * LugarNacimientoSalida
+     * @description Lugar de nacimiento con códigos y nombres (HU-07).
+     *
+     *     En una cuenta anterior a este cambio es `null` y el texto queda en
+     *     `PerfilSalida.lugar_nacimiento_texto`.
+     */
+    LugarNacimientoSalida: {
+      /** Pais */
+      pais: string;
+      /** Pais Nombre */
+      pais_nombre: string;
+      /** Departamento */
+      departamento: string | null;
+      /** Departamento Nombre */
+      departamento_nombre: string | null;
+      /** Municipio */
+      municipio: string | null;
+      /** Municipio Nombre */
+      municipio_nombre: string | null;
+      /** Ciudad */
+      ciudad: string | null;
+    };
     /** MensajeSalida */
     MensajeSalida: {
       /** Mensaje */
       mensaje: string;
+    };
+    /** MunicipioSalida */
+    MunicipioSalida: {
+      /** Codigo */
+      codigo: string;
+      /** Nombre */
+      nombre: string;
     };
     /** Noticia */
     Noticia: {
@@ -1007,6 +1128,13 @@ export interface components {
       /** Por Pagina */
       por_pagina: number;
     };
+    /** PaisSalida */
+    PaisSalida: {
+      /** Codigo */
+      codigo: string;
+      /** Nombre */
+      nombre: string;
+    };
     /** PasajeroVuelo */
     PasajeroVuelo: {
       /** Nombres */
@@ -1048,8 +1176,7 @@ export interface components {
        * @description No puede ser futura ni de hace más de 120 años (SUP-43).
        */
       fecha_nacimiento: string;
-      /** Lugar Nacimiento */
-      lugar_nacimiento: string;
+      lugar_nacimiento: components["schemas"]["LugarNacimientoEntrada"];
       /** Direccion Facturacion */
       direccion_facturacion: string;
       /**
@@ -1089,8 +1216,13 @@ export interface components {
        * Format: date
        */
       fecha_nacimiento: string;
-      /** Lugar Nacimiento */
-      lugar_nacimiento: string;
+      /** @description null en las cuentas anteriores al catálogo de lugares. */
+      lugar_nacimiento: components["schemas"]["LugarNacimientoSalida"] | null;
+      /**
+       * Lugar Nacimiento Texto
+       * @description Texto para mostrar, calculado por el backend.
+       */
+      lugar_nacimiento_texto: string;
       /** Direccion Facturacion */
       direccion_facturacion: string;
       /**
@@ -1248,8 +1380,7 @@ export interface components {
        * @description No puede ser futura ni de hace más de 120 años (SUP-43).
        */
       fecha_nacimiento: string;
-      /** Lugar Nacimiento */
-      lugar_nacimiento: string;
+      lugar_nacimiento: components["schemas"]["LugarNacimientoEntrada"];
       /** Direccion Facturacion */
       direccion_facturacion: string;
       /**
@@ -1290,8 +1421,7 @@ export interface components {
        * @description No puede ser futura ni de hace más de 120 años (SUP-43).
        */
       fecha_nacimiento: string;
-      /** Lugar Nacimiento */
-      lugar_nacimiento: string;
+      lugar_nacimiento: components["schemas"]["LugarNacimientoEntrada"];
       /** Direccion Facturacion */
       direccion_facturacion: string;
       /**
@@ -3162,6 +3292,185 @@ export interface operations {
       };
       /** @description Choca con el estado actual */
       409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  listar_paises: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PaisSalida"][];
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  listar_departamentos: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DepartamentoSalida"][];
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  listar_municipios: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        codigo: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MunicipioSalida"][];
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description No existe */
+      404: {
         headers: {
           [name: string]: unknown;
         };
