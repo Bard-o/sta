@@ -143,7 +143,6 @@ describe("Menú de cada rol (HU-03)", () => {
     expect(within(nav).queryByRole("link", { name: "Monedero" })).not.toBeInTheDocument();
     expect(within(nav).queryByRole("link", { name: "Check-in" })).not.toBeInTheDocument();
   });
-
 });
 
 describe("Enlace a Mi perfil (HU-07)", () => {

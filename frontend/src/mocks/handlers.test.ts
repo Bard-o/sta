@@ -26,9 +26,7 @@ async function invitar(nombre: string) {
     nombre_usuario: nombre,
     email: `${nombre}@avianco.test`,
   });
-  const invitacion = db.invitaciones.find(
-    (i) => i.admin_id === alta.body.id && !i.usado,
-  );
+  const invitacion = db.invitaciones.find((i) => i.admin_id === alta.body.id && !i.usado);
   if (!invitacion) throw new Error("La invitación no quedó guardada.");
   return { admin: alta.body, token: invitacion.token };
 }
@@ -105,9 +103,9 @@ describe("API simulada (MSW)", () => {
     const { admin, token } = await invitar("otroadmin");
     const reenvio = await api("POST", `/api/v1/administradores/${admin.id}/invitacion`);
     expect(reenvio.status).toBe(200);
-    expect((await api("POST", "/api/v1/administradores/invitacion/validar", { token })).status).toBe(
-      400,
-    );
+    expect(
+      (await api("POST", "/api/v1/administradores/invitacion/validar", { token })).status,
+    ).toBe(400);
     const nueva = db.invitaciones.find((i) => i.admin_id === admin.id && !i.usado);
     expect(nueva).toBeDefined();
     expect(

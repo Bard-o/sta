@@ -202,9 +202,7 @@ export function AdministradoresPage() {
 
   const camposCrear = crear.error instanceof ApiError ? crear.error.campos : {};
   const errorCrearGeneral =
-    crear.error && !camposCrear.nombre_usuario && !camposCrear.email
-      ? crear.error.message
-      : null;
+    crear.error && !camposCrear.nombre_usuario && !camposCrear.email ? crear.error.message : null;
 
   return (
     <div className="flex flex-col gap-6">

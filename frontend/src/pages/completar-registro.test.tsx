@@ -205,9 +205,7 @@ describe("HU-12 · Completar el registro de administrador", () => {
 
     await user.click(screen.getByRole("button", { name: "Guardar y entrar" }));
 
-    expect(
-      await screen.findByText("Ya existe un administrador con este documento."),
-    ).toBeVisible();
+    expect(await screen.findByText("Ya existe un administrador con este documento.")).toBeVisible();
     expect(screen.queryByText("Inicio del administrador")).not.toBeInTheDocument();
   });
 

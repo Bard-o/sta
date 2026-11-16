@@ -1,12 +1,6 @@
 import { Link, Outlet, useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
-import {
-  inicioDe,
-  NAV_ROL,
-  NAV_VISITANTE,
-  nombreVisible,
-  NOMBRE_ROL,
-} from "@/auth/roles";
+import { inicioDe, NAV_ROL, NAV_VISITANTE, nombreVisible, NOMBRE_ROL } from "@/auth/roles";
 import { usePerfil } from "@/auth/perfil";
 import { useLogout, useSesion } from "@/auth/sesion";
 import { RUTA_VERIFICACION } from "@/auth/verificacion";

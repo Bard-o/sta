@@ -502,7 +502,10 @@ export const usuariosHandlers = [
     const { admin, invitacion } = encontrada;
     const persona = { ...datos, email: invitacion.email };
     const campos: Record<string, string> = camposDePersona(persona);
-    Object.assign(campos, camposContrasenaNueva(datos.contrasena, datos.confirmacion, "contrasena"));
+    Object.assign(
+      campos,
+      camposContrasenaNueva(datos.contrasena, datos.confirmacion, "contrasena"),
+    );
     if (Object.keys(campos).length) return response.untyped(rechazoDeCampos(campos));
     const duplicados: Record<string, string> = {};
     if (
@@ -547,46 +550,50 @@ export const usuariosHandlers = [
     return response(200).json(completo);
   }),
 
-  http.post("/api/v1/administradores/{admin_id}/invitacion", async ({ params, request, response }) => {
-    const bloqueo = exigirRol(["root"]);
-    if (bloqueo) return response.untyped(bloqueo);
-    const admin = db.administradores.find((a) => a.id === Number(params.admin_id));
-    if (!admin) return response.untyped(error(404, "no_encontrado", "El administrador no existe."));
-    if (admin.estado === "inactivo") {
-      return response.untyped(error(409, "estado_invalido", "El administrador está inactivo."));
-    }
-    if (admin.nombres) {
-      return response.untyped(
-        error(409, "estado_invalido", "El registro del administrador ya está completo."),
-      );
-    }
-    const cuerpo = await request.json().catch(() => null);
-    const email = (cuerpo?.email as string | undefined)?.trim().toLowerCase() || admin.email;
-    if (!email) {
-      return response.untyped(
-        error(422, "datos_invalidos", "Revisa los campos marcados.", {
-          email: "Escribe el correo al que se enviará la invitación.",
-        }),
-      );
-    }
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-      return response.untyped(
-        error(422, "datos_invalidos", "Revisa los campos marcados.", {
-          email: "Escribe un correo válido.",
-        }),
-      );
-    }
-    if (correoEnUso(email, admin.id)) {
-      return response.untyped(
-        error(409, "datos_duplicados", "Ya existe una cuenta con estos datos.", {
-          email: "Ya existe un administrador con este correo.",
-        }),
-      );
-    }
-    admin.email = email;
-    crearInvitacion(admin);
-    return response(200).json(admin);
-  }),
+  http.post(
+    "/api/v1/administradores/{admin_id}/invitacion",
+    async ({ params, request, response }) => {
+      const bloqueo = exigirRol(["root"]);
+      if (bloqueo) return response.untyped(bloqueo);
+      const admin = db.administradores.find((a) => a.id === Number(params.admin_id));
+      if (!admin)
+        return response.untyped(error(404, "no_encontrado", "El administrador no existe."));
+      if (admin.estado === "inactivo") {
+        return response.untyped(error(409, "estado_invalido", "El administrador está inactivo."));
+      }
+      if (admin.nombres) {
+        return response.untyped(
+          error(409, "estado_invalido", "El registro del administrador ya está completo."),
+        );
+      }
+      const cuerpo = await request.json().catch(() => null);
+      const email = (cuerpo?.email as string | undefined)?.trim().toLowerCase() || admin.email;
+      if (!email) {
+        return response.untyped(
+          error(422, "datos_invalidos", "Revisa los campos marcados.", {
+            email: "Escribe el correo al que se enviará la invitación.",
+          }),
+        );
+      }
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+        return response.untyped(
+          error(422, "datos_invalidos", "Revisa los campos marcados.", {
+            email: "Escribe un correo válido.",
+          }),
+        );
+      }
+      if (correoEnUso(email, admin.id)) {
+        return response.untyped(
+          error(409, "datos_duplicados", "Ya existe una cuenta con estos datos.", {
+            email: "Ya existe un administrador con este correo.",
+          }),
+        );
+      }
+      admin.email = email;
+      crearInvitacion(admin);
+      return response(200).json(admin);
+    },
+  ),
 
   http.post("/api/v1/administradores/{admin_id}/desactivar", ({ params, response }) => {
     const bloqueo = exigirRol(["root"]);

@@ -2,10 +2,7 @@ import { useForm, type FieldPath } from "react-hook-form";
 import { useNavigate, useSearchParams } from "react-router";
 import { z } from "zod";
 import { ApiError, type Schemas } from "@/api/client";
-import {
-  useCompletarInvitacion,
-  useValidarInvitacion,
-} from "@/auth/invitacion-administrador";
+import { useCompletarInvitacion, useValidarInvitacion } from "@/auth/invitacion-administrador";
 import { INICIO_ROL } from "@/auth/roles";
 import { Button } from "@/components/ui/button";
 import { CampoLugarNacimiento } from "@/components/ui/campo-lugar-nacimiento";
