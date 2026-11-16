@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.core.security import Rol
 from app.modules.auditoria import service as auditoria_service
 from app.modules.auditoria.models import RegistroAuditoria
@@ -106,7 +107,8 @@ def test_el_correo_lleva_el_enlace_de_completar_registro(
     assert str(mensaje["To"]) == "jorge.torres@avianco.test"
     assert "Completa tu registro" in str(mensaje["Subject"])
     cuerpo = mensaje.get_body().get_content()
-    assert "http://localhost:5173/completar-registro?token=" in cuerpo
+    base = get_settings().frontend_url.rstrip("/")
+    assert f"{base}/completar-registro?token=" in cuerpo
     assert "jtorres" in cuerpo
 
 
