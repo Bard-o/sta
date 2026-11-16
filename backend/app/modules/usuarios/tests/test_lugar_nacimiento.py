@@ -3,6 +3,7 @@
 Cada test cita el criterio de aceptación o la regla del contrato que cubre.
 """
 
+from collections.abc import Callable
 from datetime import date
 
 import pytest
@@ -16,7 +17,8 @@ from app.modules.usuarios.models import Usuario
 REGISTRO = "/api/v1/usuarios/registro"
 PERFIL = "/api/v1/usuarios/me/perfil"
 LOGIN = "/api/v1/auth/login"
-REGISTRO_ADMIN = "/api/v1/administradores/me/registro"
+ADMINISTRADORES = "/api/v1/administradores"
+COMPLETAR_INVITACION = f"{ADMINISTRADORES}/invitacion/completar"
 CONTRASENA = "Clave1234"
 CONTRASENA_NUEVA = "MiClave2026"
 
@@ -58,8 +60,9 @@ def _entrada(**cambios: object) -> dict[str, object]:
     return datos
 
 
-def _datos_admin(**cambios: object) -> dict[str, object]:
+def _datos_admin(token: str, **cambios: object) -> dict[str, object]:
     datos: dict[str, object] = {
+        "token": token,
         "tipo_documento": "CC",
         "numero_documento": "10234567",
         "nombres": "Jorge",
@@ -68,10 +71,8 @@ def _datos_admin(**cambios: object) -> dict[str, object]:
         "lugar_nacimiento": {"pais": "CO", "municipio": "76001", "ciudad": None},
         "direccion_facturacion": "Cl. 5 # 38-14, Cali",
         "genero": "masculino",
-        "email": "jorge.torres@avianco.test",
         "telefono": None,
-        "contrasena_temporal": CONTRASENA,
-        "contrasena_nueva": CONTRASENA_NUEVA,
+        "contrasena": CONTRASENA_NUEVA,
         "confirmacion": CONTRASENA_NUEVA,
     }
     datos.update(cambios)
@@ -203,21 +204,36 @@ def test_perfil_rechaza_un_municipio_que_no_existe(client: TestClient):
     assert "lugar_nacimiento.municipio" in respuesta.json()["error"]["campos"]
 
 
-def test_registro_del_administrador_valida_el_lugar(client: TestClient, crear_usuario, db: Session):
+def test_registro_del_administrador_valida_el_lugar(
+    client_como: Callable[[Rol], TestClient], monkeypatch: pytest.MonkeyPatch, db: Session
+):
     """HU-12: completar el registro del administrador usa el mismo catálogo."""
-    crear_usuario(Rol.ADMIN, nombre_usuario="adminlugar", registro_completo=False)
-    _login(client, "adminlugar")
+    tokens: list[str] = []
+    monkeypatch.setattr(
+        "app.modules.usuarios.service.enviar_invitacion",
+        lambda _usuario, _email, token: tokens.append(token),
+    )
+    root = client_como(Rol.ROOT)
+    invitacion = root.post(
+        ADMINISTRADORES, json={"nombre_usuario": "adminlugar", "email": "jorge.torres@avianco.test"}
+    )
+    assert invitacion.status_code == 201
+    [token] = tokens
 
-    invalido = client.post(
-        REGISTRO_ADMIN,
-        json=_datos_admin(lugar_nacimiento={"pais": "CO", "municipio": "99999", "ciudad": None}),
+    invalido = root.post(
+        COMPLETAR_INVITACION,
+        json=_datos_admin(
+            token, lugar_nacimiento={"pais": "CO", "municipio": "99999", "ciudad": None}
+        ),
     )
     assert invalido.status_code == 422
     assert "lugar_nacimiento.municipio" in invalido.json()["error"]["campos"]
 
-    valido = client.post(
-        REGISTRO_ADMIN,
-        json=_datos_admin(lugar_nacimiento={"pais": "ES", "municipio": None, "ciudad": "Madrid"}),
+    valido = root.post(
+        COMPLETAR_INVITACION,
+        json=_datos_admin(
+            token, lugar_nacimiento={"pais": "ES", "municipio": None, "ciudad": "Madrid"}
+        ),
     )
     assert valido.status_code == 200
     usuario = _usuario(db, "adminlugar")

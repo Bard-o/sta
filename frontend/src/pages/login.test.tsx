@@ -4,15 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { api, unwrap } from "@/api/client";
 import { RequireRole, SoloVisitantes } from "@/auth/require-role";
 import { LoginPage } from "@/pages/login";
-import {
-  ADMIN,
-  ADMIN_INCOMPLETO,
-  CLIENTE,
-  responderApi,
-  ROOT,
-  SIN_SESION,
-  sesionDe,
-} from "@/test/api";
+import { ADMIN, CLIENTE, responderApi, ROOT, SIN_SESION, sesionDe } from "@/test/api";
 import { renderRutas } from "@/test/render";
 
 /** Hace una petición protegida, como cualquier pantalla de un cliente con sesión. */
@@ -32,10 +24,7 @@ const rutas = [
   },
   {
     element: <RequireRole roles={["admin"]} />,
-    children: [
-      { path: "/admin", element: <p>Inicio del administrador</p> },
-      { path: "/admin/primer-ingreso", element: <p>Primer ingreso del administrador</p> },
-    ],
+    children: [{ path: "/admin", element: <p>Inicio del administrador</p> }],
   },
   {
     element: <RequireRole roles={["cliente"]} />,
@@ -114,20 +103,6 @@ describe("Inicio de sesión (HU-03)", () => {
 
     expect(await screen.findByText("Inicio del root")).toBeVisible();
     expect(router.state.location.pathname).toBe("/root");
-  });
-
-  // HU-12: el administrador con el registro incompleto entra siempre a S07.
-  it("lleva al administrador con el registro incompleto al primer ingreso", async () => {
-    responderApi({
-      "GET /api/v1/auth/me": SIN_SESION,
-      "POST /api/v1/auth/login": sesionDe(ADMIN_INCOMPLETO),
-    });
-    const { router } = renderRutas(rutas, "/login?next=%2Fadmin");
-
-    await llenarYEnviar("jtorres", "Temporal123");
-
-    expect(await screen.findByText("Primer ingreso del administrador")).toBeVisible();
-    expect(router.state.location.pathname).toBe("/admin/primer-ingreso");
   });
 
   // HU-03: el mensaje no revela cuál de los dos datos falló.

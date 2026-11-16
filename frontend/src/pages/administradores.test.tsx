@@ -27,25 +27,41 @@ const ADMINISTRADORES: Schemas["AdministradorSalida"][] = [
   {
     id: 3,
     nombre_usuario: "cruiz",
+    email: "carlos.ruiz@avianco.test",
     nombres: "Carlos",
     apellidos: "Ruiz",
     estado: "activo",
+    invitacion_expira_en: null,
     creado_en: "2026-09-02T15:20:00Z",
   },
   {
     id: 5,
     nombre_usuario: "jtorres",
+    email: "jorge.torres@avianco.test",
     nombres: null,
     apellidos: null,
-    estado: "registro_incompleto",
+    estado: "invitacion_pendiente",
+    invitacion_expira_en: "2099-12-31T23:59:00Z",
     creado_en: "2026-09-29T21:40:00Z",
+  },
+  {
+    id: 6,
+    nombre_usuario: "pgomez",
+    email: "paula.gomez@avianco.test",
+    nombres: null,
+    apellidos: null,
+    estado: "invitacion_vencida",
+    invitacion_expira_en: "2026-10-01T14:00:00Z",
+    creado_en: "2026-09-27T14:00:00Z",
   },
   {
     id: 2,
     nombre_usuario: "amejia",
+    email: "andres.mejia@avianco.test",
     nombres: "Andrés",
     apellidos: "Mejía",
     estado: "inactivo",
+    invitacion_expira_en: null,
     creado_en: "2026-08-12T14:00:00Z",
   },
 ];
@@ -53,9 +69,11 @@ const ADMINISTRADORES: Schemas["AdministradorSalida"][] = [
 const NUEVO: Schemas["AdministradorSalida"] = {
   id: 1001,
   nombre_usuario: "nuevo.admin",
+  email: "nuevo.admin@avianco.test",
   nombres: null,
   apellidos: null,
-  estado: "registro_incompleto",
+  estado: "invitacion_pendiente",
+  invitacion_expira_en: "2099-12-31T23:59:00Z",
   creado_en: "2026-10-22T15:00:00Z",
 };
 
@@ -64,6 +82,7 @@ const LISTA = "GET /api/v1/administradores";
 const CREAR = "POST /api/v1/administradores";
 const desactivar = (id: number) => `POST /api/v1/administradores/${id}/desactivar`;
 const reactivar = (id: number) => `POST /api/v1/administradores/${id}/reactivar`;
+const reenviar = (id: number) => `POST /api/v1/administradores/${id}/invitacion`;
 
 function peticiones(llave: string) {
   return vi
@@ -86,8 +105,8 @@ const lista = (items: Schemas["AdministradorSalida"][] = ADMINISTRADORES) => ({
   body: items,
 });
 
-describe("S06 · Crear administrador (HU-10)", () => {
-  it("crea un administrador y lo muestra como registro incompleto", async () => {
+describe("S06 · Invitar administradores (HU-10)", () => {
+  it("envía usuario y correo, sin contraseña, y muestra la invitación pendiente", async () => {
     let creado = false;
     responderApi({
       [SESION]: sesionDe(ROOT),
@@ -101,36 +120,35 @@ describe("S06 · Crear administrador (HU-10)", () => {
     const user = userEvent.setup();
 
     await user.type(await screen.findByLabelText("Nombre de usuario"), "nuevo.admin");
-    await user.type(screen.getByLabelText("Contraseña temporal"), "Temporal123");
-    await user.click(screen.getByRole("button", { name: "Crear administrador" }));
+    await user.type(screen.getByLabelText("Correo"), "nuevo.admin@avianco.test");
+    await user.click(screen.getByRole("button", { name: "Enviar invitación" }));
 
-    expect(await screen.findByText(/Creamos la cuenta de nuevo\.admin/)).toBeVisible();
+    expect(await screen.findByText(/Invitamos a nuevo\.admin/)).toBeVisible();
     expect(await cuerpoEnviado(CREAR)).toEqual({
       nombre_usuario: "nuevo.admin",
-      contrasena_temporal: "Temporal123",
+      email: "nuevo.admin@avianco.test",
     });
     expect(await screen.findByRole("row", { name: /nuevo\.admin/ })).toBeVisible();
-    expect(fila("nuevo.admin").getByText("Registro incompleto")).toBeVisible();
+    expect(fila("nuevo.admin").getByText(/Invitación pendiente/)).toBeVisible();
     expect(fila("nuevo.admin").getByText("Sin completar")).toBeVisible();
     expect(screen.getByLabelText("Nombre de usuario")).toHaveValue("");
+    expect(screen.getByLabelText("Correo")).toHaveValue("");
   });
 
-  it("no envía una contraseña que no cumple la política", async () => {
+  it("no envía un correo con formato inválido", async () => {
     responderApi({ [SESION]: sesionDe(ROOT), [LISTA]: lista() });
     renderRutas(rutas, "/root/administradores");
     const user = userEvent.setup();
 
     await user.type(await screen.findByLabelText("Nombre de usuario"), "nuevo.admin");
-    await user.type(screen.getByLabelText("Contraseña temporal"), "corta");
-    await user.click(screen.getByRole("button", { name: "Crear administrador" }));
+    await user.type(screen.getByLabelText("Correo"), "sin-arroba");
+    await user.click(screen.getByRole("button", { name: "Enviar invitación" }));
 
-    expect(
-      await screen.findByText("La contraseña debe tener al menos 8 caracteres."),
-    ).toBeVisible();
+    expect(await screen.findByText("Escribe un correo válido.")).toBeVisible();
     expect(peticiones(CREAR)).toHaveLength(0);
   });
 
-  it("rechaza un nombre de usuario que ya existe junto al campo", async () => {
+  it("rechaza el nombre o el correo que ya existen junto a su campo", async () => {
     responderApi({
       [SESION]: sesionDe(ROOT),
       [LISTA]: lista(),
@@ -140,7 +158,10 @@ describe("S06 · Crear administrador (HU-10)", () => {
           error: {
             codigo: "datos_duplicados",
             mensaje: "Ya existe una cuenta con estos datos.",
-            campos: { nombre_usuario: "Ese nombre de usuario ya existe." },
+            campos: {
+              nombre_usuario: "Ese nombre de usuario ya existe.",
+              email: "Ya existe un administrador con este correo.",
+            },
           },
         },
       },
@@ -149,14 +170,14 @@ describe("S06 · Crear administrador (HU-10)", () => {
     const user = userEvent.setup();
 
     await user.type(await screen.findByLabelText("Nombre de usuario"), "cruiz");
-    await user.type(screen.getByLabelText("Contraseña temporal"), "Temporal123");
-    await user.click(screen.getByRole("button", { name: "Crear administrador" }));
+    await user.type(screen.getByLabelText("Correo"), "carlos.ruiz@avianco.test");
+    await user.click(screen.getByRole("button", { name: "Enviar invitación" }));
 
     expect(await screen.findByText("Ese nombre de usuario ya existe.")).toBeVisible();
-    expect(screen.queryByRole("row", { name: /nuevo\.admin/ })).not.toBeInTheDocument();
+    expect(screen.getByText("Ya existe un administrador con este correo.")).toBeVisible();
   });
 
-  it("el formulario solo crea administradores y no envía un rol", async () => {
+  it("el formulario solo envía los dos campos del contrato, sin rol ni contraseña", async () => {
     responderApi({
       [SESION]: sesionDe(ROOT),
       [LISTA]: lista(),
@@ -166,19 +187,17 @@ describe("S06 · Crear administrador (HU-10)", () => {
     const user = userEvent.setup();
 
     expect(await screen.findByLabelText("Nombre de usuario")).toBeVisible();
-    expect(screen.getByLabelText("Contraseña temporal")).toBeVisible();
+    expect(screen.getByLabelText("Correo")).toBeVisible();
+    expect(screen.queryByLabelText(/contraseña/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/rol/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
     expect(screen.queryByRole("row", { name: /root/ })).not.toBeInTheDocument();
 
     await user.type(screen.getByLabelText("Nombre de usuario"), "nuevo.admin");
-    await user.type(screen.getByLabelText("Contraseña temporal"), "Temporal123");
-    await user.click(screen.getByRole("button", { name: "Crear administrador" }));
+    await user.type(screen.getByLabelText("Correo"), "nuevo.admin@avianco.test");
+    await user.click(screen.getByRole("button", { name: "Enviar invitación" }));
 
-    expect(Object.keys(await cuerpoEnviado(CREAR)).sort()).toEqual([
-      "contrasena_temporal",
-      "nombre_usuario",
-    ]);
+    expect(Object.keys(await cuerpoEnviado(CREAR)).sort()).toEqual(["email", "nombre_usuario"]);
   });
 
   it.each([
@@ -194,26 +213,74 @@ describe("S06 · Crear administrador (HU-10)", () => {
   });
 });
 
-describe("S06 · Desactivar o reactivar administrador (HU-11)", () => {
-  it("una fila inactiva se muestra como inactiva y ofrece reactivar", async () => {
-    responderApi({ [SESION]: sesionDe(ROOT), [LISTA]: lista() });
-    renderRutas(rutas, "/root/administradores");
-
-    await screen.findByRole("row", { name: /amejia/ });
-    expect(fila("amejia").getByText("Inactivo")).toBeVisible();
-    expect(fila("amejia").getByRole("button", { name: "Reactivar a amejia" })).toBeVisible();
-    expect(fila("amejia").queryByRole("button", { name: /Desactivar/ })).not.toBeInTheDocument();
-  });
-
-  it("la lista muestra los tres estados y los nombres faltantes", async () => {
+describe("S06 · Listado, reenvío y estados (HU-10, HU-11)", () => {
+  it("muestra los cuatro estados y los nombres faltantes", async () => {
     responderApi({ [SESION]: sesionDe(ROOT), [LISTA]: lista() });
     renderRutas(rutas, "/root/administradores");
 
     await screen.findByRole("row", { name: /cruiz/ });
     expect(fila("cruiz").getByText("Activo")).toBeVisible();
     expect(fila("amejia").getByText("Inactivo")).toBeVisible();
-    expect(fila("jtorres").getByText("Registro incompleto")).toBeVisible();
+    expect(fila("jtorres").getByText(/Invitación pendiente/)).toBeVisible();
     expect(fila("jtorres").getByText("Sin completar")).toBeVisible();
+    expect(fila("pgomez").getByText("Invitación vencida")).toBeVisible();
+    expect(fila("jtorres").getByText("jorge.torres@avianco.test")).toBeVisible();
+  });
+
+  it("reenvía la invitación pendiente y avisa que el enlace anterior dejó de servir", async () => {
+    let reenviado = false;
+    const actualizado = {
+      ...ADMINISTRADORES[1],
+      invitacion_expira_en: "2099-12-31T23:59:00Z",
+    };
+    responderApi({
+      [SESION]: sesionDe(ROOT),
+      [LISTA]: lista(),
+      [reenviar(5)]: () => {
+        reenviado = true;
+        return { status: 200, body: actualizado };
+      },
+    });
+    renderRutas(rutas, "/root/administradores");
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole("button", { name: "Reenviar invitación a jtorres" }));
+
+    expect(await screen.findByText(/Reenviamos la invitación a jorge\.torres/)).toBeVisible();
+    expect(reenviado).toBe(true);
+    expect(peticiones(reenviar(5))).toHaveLength(1);
+  });
+
+  it("pide el correo para reenviar una cuenta antigua que no lo tiene", async () => {
+    const sinCorreo = { ...ADMINISTRADORES[2], email: null };
+    responderApi({
+      [SESION]: sesionDe(ROOT),
+      [LISTA]: lista([ADMINISTRADORES[0], sinCorreo]),
+      [reenviar(6)]: {
+        status: 200,
+        body: { ...sinCorreo, email: "paula.gomez@avianco.test" },
+      },
+    });
+    renderRutas(rutas, "/root/administradores");
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole("button", { name: "Reenviar invitación a pgomez" }));
+    const dialogo = await screen.findByRole("dialog");
+    expect(within(dialogo).getByText(/no tiene un correo guardado/)).toBeVisible();
+    await user.type(within(dialogo).getByLabelText("Correo"), "paula.gomez@avianco.test");
+    await user.click(within(dialogo).getByRole("button", { name: "Enviar invitación" }));
+
+    expect(await screen.findByText(/Reenviamos la invitación a paula\.gomez/)).toBeVisible();
+    expect(await cuerpoEnviado(reenviar(6))).toEqual({ email: "paula.gomez@avianco.test" });
+  });
+
+  it("una fila inactiva ofrece reactivar y no desactivar", async () => {
+    responderApi({ [SESION]: sesionDe(ROOT), [LISTA]: lista() });
+    renderRutas(rutas, "/root/administradores");
+
+    await screen.findByRole("row", { name: /amejia/ });
+    expect(fila("amejia").getByRole("button", { name: "Reactivar a amejia" })).toBeVisible();
+    expect(fila("amejia").queryByRole("button", { name: /Desactivar/ })).not.toBeInTheDocument();
   });
 
   it("pide confirmación antes de desactivar y no la envía si se vuelve", async () => {
@@ -247,39 +314,17 @@ describe("S06 · Desactivar o reactivar administrador (HU-11)", () => {
     await waitFor(() => expect(fila("cruiz").getByText("Inactivo")).toBeVisible());
   });
 
-  it("reactivar llama al endpoint correcto y actualiza la fila", async () => {
+  it("reactivar un registro incompleto lo deja con la invitación vencida", async () => {
     let reactivado = false;
-    const activo = { ...ADMINISTRADORES[2], estado: "activo" as const };
-    responderApi({
-      [SESION]: sesionDe(ROOT),
-      [LISTA]: () =>
-        lista(reactivado ? [ADMINISTRADORES[0], ADMINISTRADORES[1], activo] : ADMINISTRADORES),
-      [reactivar(2)]: () => {
-        reactivado = true;
-        return { status: 200, body: activo };
-      },
-    });
-    renderRutas(rutas, "/root/administradores");
-    const user = userEvent.setup();
-
-    await user.click(await screen.findByRole("button", { name: "Reactivar a amejia" }));
-
-    expect(await screen.findByText(/Reactivamos a amejia/)).toBeVisible();
-    expect(peticiones(reactivar(2))).toHaveLength(1);
-    await waitFor(() => expect(fila("amejia").getByText("Activo")).toBeVisible());
-  });
-
-  it("reactivar un registro incompleto lo deja otra vez incompleto", async () => {
-    let reactivado = false;
-    const incompleto = { ...ADMINISTRADORES[1], estado: "inactivo" as const };
-    const devuelto = { ...ADMINISTRADORES[1] };
+    const inactivo = { ...ADMINISTRADORES[1], estado: "inactivo" as const };
+    const devuelto = { ...ADMINISTRADORES[1], estado: "invitacion_vencida" as const };
     responderApi({
       [SESION]: sesionDe(ROOT),
       [LISTA]: () =>
         lista(
           reactivado
-            ? [ADMINISTRADORES[0], devuelto, ADMINISTRADORES[2]]
-            : [ADMINISTRADORES[0], incompleto, ADMINISTRADORES[2]],
+            ? [ADMINISTRADORES[0], devuelto, ADMINISTRADORES[2], ADMINISTRADORES[3]]
+            : [ADMINISTRADORES[0], inactivo, ADMINISTRADORES[2], ADMINISTRADORES[3]],
         ),
       [reactivar(5)]: () => {
         reactivado = true;
@@ -291,8 +336,8 @@ describe("S06 · Desactivar o reactivar administrador (HU-11)", () => {
 
     await user.click(await screen.findByRole("button", { name: "Reactivar a jtorres" }));
 
-    expect(await screen.findByText(/Reactivamos a jtorres/)).toBeVisible();
-    await waitFor(() => expect(fila("jtorres").getByText("Registro incompleto")).toBeVisible());
+    expect(await screen.findByText(/Reenvíale la invitación para que pueda entrar/)).toBeVisible();
+    await waitFor(() => expect(fila("jtorres").getByText("Invitación vencida")).toBeVisible());
   });
 });
 

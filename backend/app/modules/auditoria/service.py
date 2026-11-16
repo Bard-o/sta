@@ -19,6 +19,7 @@ AccionAuditada = Literal[
     "vuelo.cancelar",
     "promocion.crear",
     "administrador.crear",
+    "administrador.reenviar_invitacion",
     "administrador.desactivar",
     "administrador.reactivar",
 ]
