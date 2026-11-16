@@ -11,10 +11,11 @@ Uso en un router:
     @router.post("/vuelos", dependencies=[Depends(require_role(Rol.ADMIN))])
     def crear_vuelo(...): ...
 
-HU-12, RF-02: un administrador con el registro incompleto solo puede iniciar y cerrar sesión,
-consultar /auth/me y completar su registro. Cualquier otra ruta que use la sesión responde
-403 `registro_incompleto`; el bloqueo vive aquí, así que cubre los endpoints de todos los módulos
-sin que cada router lo marque.
+HU-12, RF-02: un administrador con el registro incompleto solo puede iniciar y cerrar sesión y
+consultar /auth/me. Cualquier otra ruta que use la sesión responde 403 `registro_incompleto`; el
+bloqueo vive aquí, así que cubre los endpoints de todos los módulos sin que cada router lo marque.
+Desde la invitación por correo (#100) el invitado no tiene contraseña y no puede iniciar sesión,
+así que el bloqueo queda como defensa por si una cuenta antigua conserva una.
 """
 
 from collections.abc import Callable
@@ -33,20 +34,14 @@ from app.core.security import Rol, crear_token, leer_token, minutos_de_sesion
 # una vez por este intervalo para no reescribirla en cada llamada.
 _RENOVAR_CADA = timedelta(seconds=60)
 
-# HU-12, RF-02: lo único que puede usar un administrador con el registro incompleto. Rutas
-# completas, con el prefijo de app.main.API_PREFIX. El endpoint de registro lo implementa
-# usuarios (#26) y no necesita marcar nada en su router.
+# HU-12, RF-02: lo único que puede usar un administrador con el registro incompleto. Prefijos
+# completos, con el prefijo de app.main.API_PREFIX.
 PREFIJOS_PERMITIDOS_CON_REGISTRO_INCOMPLETO: tuple[str, ...] = ("/api/v1/auth/",)
-RUTAS_PERMITIDAS_CON_REGISTRO_INCOMPLETO: frozenset[tuple[str, str]] = frozenset(
-    {("POST", "/api/v1/administradores/me/registro")}
-)
 
 
 def permitida_con_registro_incompleto(metodo: str, ruta: str) -> bool:
     """True si un administrador con el registro incompleto puede llamar `metodo ruta`."""
-    return ruta.startswith(PREFIJOS_PERMITIDOS_CON_REGISTRO_INCOMPLETO) or (
-        (metodo.upper(), ruta) in RUTAS_PERMITIDAS_CON_REGISTRO_INCOMPLETO
-    )
+    return ruta.startswith(PREFIJOS_PERMITIDOS_CON_REGISTRO_INCOMPLETO)
 
 
 @dataclass(frozen=True)
@@ -101,7 +96,7 @@ def get_current_user(request: Request, response: Response, db: DbSession) -> Usu
         raise NoAutenticado()
 
     # HU-12, RF-02: mientras no complete su registro, el administrador solo puede iniciar y
-    # cerrar sesión, consultar /auth/me y completar el registro.
+    # cerrar sesión y consultar /auth/me.
     if (
         usuario.rol == Rol.ADMIN
         and not usuario.registro_completo
