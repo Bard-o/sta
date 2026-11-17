@@ -395,7 +395,7 @@ Reglas:
 | `estado` | Reserva: `vigente`, `pagada` (todos sus viajeros pagados), `vencida` o `cancelada` (la iteración 3 agrega la cancelación por el cliente; hoy solo la cancelación del vuelo, HU-16). Compra: `pendiente` (sillas bloqueadas, sin pagar), `vencida` (el bloqueo de 15 minutos pasó sin confirmar), `cancelada` (el cliente soltó el bloqueo con `DELETE /compras/{id}`, o se canceló el vuelo antes de pagar) o `activa` (pagada). La iteración 3 usa los demás estados del modelo de #138 (`realizada`, `reembolsada`, `reubicada`) y la cancelación de una compra pagada, de RF-45. |
 | `reserva_id` | En una compra que viene de pagar una reserva, esa reserva. |
 | `compra_id` | En una reserva pagada (toda o en parte), la compra con sus viajeros pagados. |
-| `vence_en` | Reserva: su vencimiento (también en las vencidas: «Vencida el 01/10/2026 09:02»). Compra `pendiente` o `vencida`: fin del bloqueo de 15 minutos (la cuenta regresiva de S18; en el modelo es `bloqueo_hasta`). Compra `activa` o `cancelada`: `null`. |
+| `vence_en` | Reserva: su vencimiento (también en las vencidas: «Vencida el 01/10/2026 09:02»). Compra `pendiente`, `vencida` o soltada sin pagar (`cancelada`): fin del bloqueo de 15 minutos (la cuenta regresiva de S18; en el modelo es `bloqueo_hasta`). Compra pagada (`activa`): `null`. |
 | `pagada_en` | Último pago de una compra; `null` en reservas y en compras sin pagar. |
 | `total` | Suma de los precios congelados de todos los tiquetes. |
 | `total_pendiente` | Lo que falta pagar: tiquetes `reservado` o `bloqueado`. Es lo que cobra pagar la reserva completa o confirmar la compra. |

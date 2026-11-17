@@ -178,8 +178,8 @@ class Viaje(BaseModel):
     )
     creada_en: datetime
     vence_en: datetime | None = Field(
-        description="Reserva: su vencimiento. Compra pendiente o vencida: fin del bloqueo de "
-        "15 minutos. Compra activa o cancelada: null."
+        description="Reserva: su vencimiento. Compra pendiente, vencida o soltada: fin del bloqueo "
+        "de 15 minutos. Compra pagada: null."
     )
     pagada_en: datetime | None = Field(description="Último pago de una compra.")
     total: int = Field(description="Suma de los precios congelados de todos los tiquetes.")

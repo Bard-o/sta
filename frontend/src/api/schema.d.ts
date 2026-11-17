@@ -2451,7 +2451,7 @@ export interface components {
       creada_en: string;
       /**
        * Vence En
-       * @description Reserva: su vencimiento. Compra pendiente o vencida: fin del bloqueo de 15 minutos. Compra activa o cancelada: null.
+       * @description Reserva: su vencimiento. Compra pendiente, vencida o soltada: fin del bloqueo de 15 minutos. Compra pagada: null.
        */
       vence_en: string | null;
       /**
