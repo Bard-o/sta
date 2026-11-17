@@ -1,8 +1,8 @@
 """monedero: crea las tablas tarjetas y movimientos
 
-Revision ID: ccbb3dc9fef5
-Revises: afc3be28e833
-Create Date: 2026-11-17 03:51:55.455907
+Revision ID: e39140d3a16f
+Revises: 27ae61965dda
+Create Date: 2026-11-17 06:13:24.844688
 
 """
 
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 
 from alembic import op
 
-revision: str = "ccbb3dc9fef5"
-down_revision: str | None = "afc3be28e833"
+revision: str = "e39140d3a16f"
+down_revision: str | None = "27ae61965dda"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
