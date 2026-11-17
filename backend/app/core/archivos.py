@@ -15,6 +15,7 @@ Uso desde el service.py de un módulo:
   Formato: 1 a 4 segmentos separados por "/", cada uno con [a-z0-9_-] (máx. 64), sin empezar
   por "_" ni "-"; sin puntos ni extensiones. Una clave inválida lanza ValueError (error de
   programación).
+- Prefijos en uso: `perfiles/` (usuarios) y `correos/` (adjuntos de `app.core.mail`, #116).
 - core no valida tipo ni tamaño ni guarda el tipo de contenido: eso es del módulo (usuarios
   valida JPG/PNG de máx. 2 MB y deduce el media type por la firma de los bytes o lo guarda en
   su modelo).
