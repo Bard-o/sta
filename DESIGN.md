@@ -92,7 +92,7 @@ Dentro de `Shell` (la ventana) los paneles ya son tiles: no se apila vidrio sobr
 
 #### Responsive (IU-01)
 
-360, 768 y 1280 px sin desplazamiento horizontal. Bajo 720 px la ventana `Shell` ocupa la pantalla, el nav muestra solo el avatar y las rejillas de dos columnas pasan a una. Bajo 560 px de ancho, el talón del `FlightPass` baja debajo de la ruta.
+360, 768 y 1280 px sin desplazamiento horizontal. Bajo 720 px la ventana `Shell` ocupa la pantalla, el nav muestra solo el avatar del usuario y las rejillas de dos columnas pasan a una. Bajo ~1.100 px el nav pasa a dos filas: arriba la placa y el usuario, debajo los items, de modo que todos quedan al alcance (también el carrito con su contador); bajo 720 px los items pasan a varias líneas en vez de desplazarse. Bajo 560 px de ancho, el talón del `FlightPass` baja debajo de la ruta.
 
 ### Componentes
 
