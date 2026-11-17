@@ -1029,7 +1029,10 @@ def encolar_correo(
     adjuntos: Sequence[Adjunto] = (),
 ) -> int:
     """Como hoy, más los adjuntos: se guardan con core/archivos.py y la cola guarda solo la
-    referencia. Si la transacción de quien encola se revierte, el correo no sale."""
+    referencia. Si la transacción de quien encola se revierte, el correo no sale.
+
+    Máximo 10 adjuntos y 10 MB en total por correo; `tipo_mime` en minúscula. Un adjunto
+    vacío, sin nombre o con un tipo mal formado lanza ValueError (error de programación)."""
 ```
 
 ### Procesos programados nuevos
@@ -1046,7 +1049,7 @@ Ambas cada minuto, idempotentes y sin commit, como dice `AGENTS.md`.
 Necesitan un issue del líder porque tocan `core/`, Docker o recursos compartidos:
 
 1. **Parametrización (RNF-23).** La vigencia de la reserva (24 h), los límites de venta y cancelación (1 h y 3 h), el máximo de tiquetes por vuelo (5) y el bloqueo de la compra (15 min) deben leerse de `core/config.py`. Mientras tanto, cada módulo los declara como constantes con nombre (`VIGENCIA_RESERVA`, `LIMITE_VENTA`, `MAXIMO_TIQUETES_POR_VUELO`, `BLOQUEO_COMPRA`; esta última ya existe en `reservas.service`) para que el cambio sea de una línea, y los schemas no los repiten.
-2. **Adjuntos en la cola de correos y librería de PDF.** #116.
+2. **Adjuntos en la cola de correos y librería de PDF.** Resuelto en #116: `encolar_correo(..., adjuntos=[Adjunto(...)])` guarda cada archivo con `core/archivos.py` (clave `correos/<uuid>`) y la tabla `cola_correos_adjuntos` guarda solo la referencia; los reintentos reenvían el mismo archivo y se borra tras el envío. La librería de PDF es `fpdf2` (Python puro, sin cambios en el Dockerfile).
 3. **Fixture con datos confirmados** para la prueba de 50 compras simultáneas. #129.
 4. **Prueba de carga de la búsqueda** con un servicio de Compose de perfil `carga`. #135.
 5. **Códigos de error repetidos.** `rango_invalido`, `clase_agotada` y los demás se lanzan con las excepciones de `core` y `codigo=` propio (`DatosInvalidos("…", codigo="rango_invalido", campos=…)`) o con una subclase en el módulo. Si varios módulos repiten la misma subclase, puede subir a `core/errors.py`.
