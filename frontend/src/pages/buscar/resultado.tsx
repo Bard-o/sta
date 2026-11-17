@@ -5,10 +5,11 @@ import { useAgregarSeleccion } from "@/auth/carrito";
 import { Button } from "@/components/ui/button";
 import { FlightPass } from "@/components/ui/flight-pass";
 import { Notice } from "@/components/ui/notice";
-import { cop, desfase, duracion, fecha, hora } from "@/lib/format";
+import { cop } from "@/lib/format";
 import { AgregarAlCarritoDialogo } from "./agregar-dialogo";
 import type { VueloBusqueda } from "./api";
 import { NOMBRE_CLASE, type Clase } from "./filtros";
+import { datosDelPase } from "./pase";
 
 /** Quién ve el resultado: el cliente agrega, el visitante inicia sesión para agregar y el
  *  administrador y el root solo consultan (no compran, Apéndice B). */
@@ -42,8 +43,6 @@ export function ResultadoVuelo({
   const agregar = useAgregarSeleccion();
   const [eligiendo, setEligiendo] = useState(false);
 
-  const zo = vuelo.origen.zona_horaria;
-  const zd = vuelo.destino.zona_horaria;
   // Sin filtro de clase se muestra económica, salvo que esté agotada y primera no (SUP-20).
   const mostrada: Clase =
     clase ?? (vuelo.economica.agotada && !vuelo.primera.agotada ? "primera" : "economica");
@@ -107,21 +106,7 @@ export function ResultadoVuelo({
   return (
     <div className="flex flex-col gap-2">
       <FlightPass
-        code={vuelo.codigo}
-        from={{
-          iata: vuelo.origen.codigo,
-          city: vuelo.origen.nombre,
-          time: hora(vuelo.salida, zo),
-          tz: desfase(vuelo.salida, zo),
-        }}
-        to={{
-          iata: vuelo.destino.codigo,
-          city: vuelo.destino.nombre,
-          time: hora(vuelo.llegada, zd),
-          tz: desfase(vuelo.llegada, zd),
-        }}
-        duration={`${duracion(vuelo.duracion_minutos)}, directo`}
-        date={`Salida ${fecha(vuelo.salida, zo)}`}
+        {...datosDelPase(vuelo)}
         badges={badges}
         note={`${lineaDeClase(vuelo, "economica")} · ${lineaDeClase(vuelo, "primera")}`}
         oldPrice={datos.promocion ? cop(datos.precio_base) : undefined}
