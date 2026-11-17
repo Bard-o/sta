@@ -1,5 +1,6 @@
 import { useState, type MouseEventHandler, type ReactNode } from "react";
 import { Link, NavLink } from "react-router";
+import { Badge } from "./badge";
 import { Icon } from "./icon";
 import { SelectorTema } from "./selector-tema";
 import type { IconName } from "./icon-paths";
@@ -11,6 +12,8 @@ export interface NavItem {
   /** Si se omite, el item se marca activo cuando la ruta actual empieza por `href`. */
   active?: boolean;
   onClick?: MouseEventHandler;
+  /** Contador junto al nombre (el carrito). Con 0 o sin valor no se muestra. */
+  count?: number;
 }
 
 export interface TopNavProps {
@@ -85,9 +88,15 @@ export function TopNav({
             className="sta-nav__item"
             onClick={it.onClick}
             aria-current={it.active === undefined ? undefined : it.active ? "page" : false}
+            aria-label={
+              it.count
+                ? `${it.label}, ${it.count} ${it.count === 1 ? "selección" : "selecciones"}`
+                : undefined
+            }
           >
             {it.icon && <Icon name={it.icon} />}
             {it.label}
+            {it.count ? <Badge>{it.count}</Badge> : null}
           </NavLink>
         ))}
       </nav>
