@@ -51,7 +51,7 @@ export const requerido = (mensaje: string, max = 200) =>
   z.string().trim().min(1, mensaje).max(max, `Usa como máximo ${max} caracteres.`);
 
 /** Nombres y apellidos: deben tener letras; no se aceptan solo números o símbolos. */
-const nombrePropio = (mensaje: string) =>
+export const nombrePropio = (mensaje: string) =>
   requerido(mensaje, 100).regex(
     /^($|\p{L}[\p{L} '.-]*$)/u,
     "Usa solo letras, espacios, apóstrofo o guion.",
@@ -141,3 +141,15 @@ export const camposPersona = {
     .max(254)
     .pipe(z.email("Escribe un correo válido, por ejemplo nombre@correo.co.")),
 };
+
+/** Años cumplidos el día `fechaIso` por quien nació el `nacimientoIso` (ambos aaaa-mm-dd). Solo
+ *  aritmética, sin `Date`, para no depender de la zona horaria (RF-35: la edad se calcula a la
+ *  fecha del vuelo). */
+export function edadEn(nacimientoIso: string, fechaIso: string): number {
+  const [an, mn, dn] = nacimientoIso.split("-").map(Number);
+  const [af, mf, df] = fechaIso.split("-").map(Number);
+  return af - an - (mf < mn || (mf === mn && df < dn) ? 1 : 0);
+}
+
+/** Mayoría de edad: 18 años cumplidos el día del vuelo (RF-35, SUP-11). */
+export const MAYORIA_DE_EDAD = 18;
