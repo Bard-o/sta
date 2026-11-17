@@ -28,20 +28,21 @@ export function nombreVisible(usuario: Usuario): string {
   return nombre || usuario.nombre_usuario;
 }
 
-// Items del nav por rol (DESIGN.md › TopNav). Las rutas se implementan en sus issues.
+// Items del nav por rol (DESIGN.md › TopNav). Las rutas de la iteración 2 ya existen (router.tsx).
 export const NAV_VISITANTE: NavItem[] = [
-  { label: "Vuelos", icon: "plane", href: "/vuelos" },
+  { label: "Vuelos", icon: "plane", href: "/buscar" },
   { label: "Noticias", icon: "news", href: "/noticias" },
   { label: "Check-in", icon: "check-circle", href: "/check-in" },
 ];
 
 export const NAV_ROL: Record<Rol, NavItem[]> = {
   cliente: [
-    { label: "Vuelos", icon: "plane", href: "/vuelos" },
+    { label: "Vuelos", icon: "plane", href: "/buscar" },
     { label: "Noticias", icon: "news", href: "/noticias" },
     { label: "Mis viajes", icon: "ticket", href: "/mis-viajes" },
     { label: "Monedero", icon: "wallet", href: "/monedero" },
     { label: "Muro", icon: "message", href: "/muro" },
+    { label: "Carrito", icon: "cart", href: "/carrito" },
   ],
   admin: [
     { label: "Vuelos programados", icon: "plane", href: "/admin/vuelos" },
