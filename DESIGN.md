@@ -18,13 +18,13 @@
 ## Reglas no negociables
 
 - Toda variable visual sale de un token por nombre (`var(--accent)`); nunca escribas un hex, rgba, px de radio o sombra suelto en el CSS de una pantalla.
-- Máximo dos capas de vidrio: la ventana (`Shell`) y el tile interior (`glass-inset`). Nunca texto directo sobre el fondo (`backdrop`).
-- Amarillo `accent` solo para la acción principal de la vista (en listados, una por fila), lo que el usuario eligió (silla, vuelo) y la placa AVIANCO. La opción activa del nav o de un segmentado es `invert`, no amarilla.
+- Máximo dos capas: la ventana (`Shell`) y el tile interior (`glass-inset`). Nunca texto directo sobre el fondo (`backdrop`).
+- Amarillo `accent` solo para la acción principal de la vista (en listados, una por fila), lo que el usuario eligió (silla, vuelo) y la placa AVIANCO. Sobre blanco el amarillo no se distingue (1,6:1): el vuelo elegido lleva además borde `ink` y el badge «En tu carrito». La opción activa del nav o de un segmentado es `invert`, no amarilla.
 - Cada estado lleva palabra o ícono además del color (`Badge`).
 - Toda acción irreversible (cancelar compra, cancelar vuelo, cambiar silla) pide confirmación con `Dialog` (IU-07).
 - Formatos: dinero `$ 1.250.000` (IU-06), fecha `dd/mm/aaaa`, hora 24 h en la hora local de la ciudad con su zona cuando importa (IU-05), código de vuelo `STA-00021`, silla `12C`.
 - Responsive a 360, 768 y 1280 px sin scroll horizontal (IU-01).
-- Tema por atributo: `<html data-theme="noche">` (principal) o `data-theme="dia"`.
+- Tema por atributo: `<html data-theme="claro">` (por defecto), `data-theme="noche"` o `data-theme="dia"`.
 
 ## Guía de marca
 
@@ -61,7 +61,11 @@ Dentro de `Shell` (la ventana) los paneles ya son tiles: no se apila vidrio sobr
 
 #### Color
 
-- Dos temas: **Noche** (el principal, vidrio oscuro como la referencia) y **Día** (vidrio escarchado claro). Cambie de tema con `data-theme="noche|dia"` en `<html>`.
+- Tres temas. **Claro** es el de por defecto y el que se diseña primero: superficies sólidas, paneles blancos (`surface`) sobre un gris muy claro (`page`), sin vidrio, sin blur y con sombra solo en lo que flota. **Noche** (vidrio oscuro) y **Día** (vidrio escarchado claro) siguen disponibles. Cambie de tema con `data-theme="claro|noche|dia"` en `<html>`.
+- En Claro los tokens de vidrio (`glass`, `glass-strong`, `glass-inset`, `glass-hover`, `glass-edge`) valen colores sólidos: los componentes no cambian, solo `components.css` quita el blur y las luces del fondo. `surface`, `surface-inset`, `line` y `page` nombran esas mismas superficies para el código nuevo.
+- La barra superior de Claro es `signage` (oscura, como el letrero de un terminal) con la placa amarilla; su texto es `on-signage` y `on-signage-muted`, y el foco sobre ella es amarillo. En Claro el item activo del nav es una píldora `on-signage` sobre `signage`.
+- Radios más sobrios en Claro: 8 / 12 / 16 px, ventana y diálogos 20 px, y botones de 6 px (`radius-control`) en lugar de píldora. Chips, segmentados y búsqueda conservan `radius-pill`.
+- Contraste medido en Claro: `ink` 17,9:1, `ink-muted` 7,0:1 y los estados (`success`, `danger`, `info`, `accent-text`) ≥5,4:1 sobre `surface` y `surface-inset`; `control-line` 3,7:1 como mínimo sobre `surface-inset` y `page`.
 - Texto: `ink` principal, `ink-muted` secundario; `ink-faint` solo para íconos decorativos y deshabilitados. Sobre vidrio, en ambos temas, `ink` y `ink-muted` superan 4,5:1 incluso con la luz del backdrop más brillante debajo (medido sobre `glass + glass-inset`).
 - **Amarillo** `accent` solo para: el botón primario (uno por vista; en listados, el de cada fila), la silla elegida, el vuelo elegido y la placa «AVIANCO». Texto sobre amarillo: `on-accent`. Amarillo como texto: `accent-text` (en Día se oscurece a ocre para leerse).
 - La opción activa (nav, segmentado, página actual) es una píldora `invert` / `on-invert`, no amarilla.
@@ -82,7 +86,7 @@ Dentro de `Shell` (la ventana) los paneles ya son tiles: no se apila vidrio sobr
 
 #### Estados e interacción
 
-- Hover: `glass-hover`. Foco de teclado: anillo sólido de 2 px `focus` con 2 px de separación (amarillo en Noche, tinta en Día; ≥3:1 sobre todo vidrio).
+- Hover: `glass-hover`. Foco de teclado: anillo sólido de 2 px `focus` con 2 px de separación (amarillo en Noche, tinta en Claro y Día; ≥3:1 sobre toda superficie).
 - Deshabilitado: 45 % de opacidad (botones) o 55 % (pasabordo agotado), siempre con la razón escrita al lado.
 - Movimiento: transiciones de 150 ms en color y brillo; nada de animaciones decorativas.
 
@@ -117,39 +121,48 @@ La marca es **AVIANCO**: el nombre en Barlow Condensed SemiBold, en mayúsculas,
 
 ### Color
 
-| Token | Noche | Día | Uso |
-|---|---|---|---|
-| `backdrop` | `#14171a` | `#e7e3dc` | Fondo sólido de la página, debajo de todo el vidrio. Nunca lleva texto directo: el texto siempre va sobre un panel de vidrio. |
-| `backdrop-glow-warm` | `rgba(214,146,56,0.62)` | `rgba(240,178,84,0.50)` | Luz cálida del fondo (atardecer sobre la pista). Solo en el gradiente de .sta-backdrop; le da al vidrio algo que difuminar. |
-| `backdrop-glow-cool` | `rgba(72,126,132,0.55)` | `rgba(120,170,176,0.42)` | Luz fría del fondo (ventanal del terminal). Solo en el gradiente de .sta-backdrop. |
-| `glass` | `rgba(34,37,42,0.70)` | `rgba(255,255,255,0.56)` | Vidrio base: paneles, tarjetas de vuelo, barra lateral de filtros. Siempre con backdrop-filter blur-md. |
-| `glass-strong` | `rgba(22,24,27,0.82)` | `rgba(255,255,255,0.84)` | Vidrio denso: barra de navegación, diálogos, menús, la ventana del chatbot. Más opaco porque flota sobre contenido. |
-| `glass-inset` | `rgba(255,255,255,0.06)` | `rgba(255,255,255,0.55)` | Tile dentro de un panel (KPI, fila destacada, talón del pasabordo). Se apila sobre glass, nunca va solo sobre el fondo. |
-| `glass-hover` | `rgba(255,255,255,0.10)` | `rgba(255,255,255,0.75)` | Hover de filas, tarjetas y botones secundarios. |
-| `glass-edge` | `rgba(255,255,255,0.12)` | `rgba(255,255,255,0.75)` | Borde de 1px de todo vidrio. Decorativo: la separación la da el blur y la sombra, no este borde. |
-| `glass-highlight` | `rgba(255,255,255,0.14)` | `rgba(255,255,255,0.95)` | Reflejo interior superior (inset 0 1px 0) de paneles y botones. |
-| `scrim` | `rgba(8,9,10,0.55)` | `rgba(40,36,30,0.35)` | Velo detrás de un diálogo modal. |
-| `field` | `rgba(0,0,0,0.30)` | `rgba(255,255,255,0.72)` | Relleno de inputs, selects y la búsqueda, sobre glass. |
-| `control-line` | `#959aa3` | `#7b8088` | Borde de inputs, selects, sillas libres y botón secundario: ≥3:1 sobre glass y field en ambos temas. |
-| `ink` | `#f3f4f5` | `#15171a` | Texto principal sobre glass, glass-strong, glass-inset y field. |
-| `ink-muted` | `#b3b8bf` | `#50555c` | Texto secundario: ciudades bajo el código IATA, metadatos, etiquetas de campo. Sobre glass, glass-inset y field. |
-| `ink-faint` | `#999ea6` | `#6b7078` | Íconos decorativos, placeholder de búsqueda, texto deshabilitado. Solo marcas ≥3:1; no para texto de lectura. |
-| `accent` | `#f5c518` | `#f5c518` | Amarillo de señalética: SOLO la acción principal de la vista o lo que el usuario eligió (su silla, su vuelo). Relleno, no texto en Día. |
-| `on-accent` | `#15171a` | `#15171a` | Texto e íconos sobre un relleno accent (el label del botón primario, la silla elegida). |
-| `accent-text` | `#f5c518` | `#7a5a00` | Amarillo como texto o borde (precio de promoción, enlace activo del nav) sobre glass o accent-soft. |
-| `accent-soft` | `rgba(245,197,24,0.10)` | `rgba(245,197,24,0.28)` | Fondo teñido de chips de promoción y del item activo del nav, detrás de accent-text. |
-| `success` | `#72e39e` | `#17683a` | Estado positivo con palabra o flecha: recarga, reembolso, 'Activa', variación ↑. Sobre glass o success-soft. |
-| `success-soft` | `rgba(114,227,158,0.10)` | `rgba(23,104,58,0.10)` | Fondo de chips de éxito, detrás de success. |
-| `danger` | `#ffb4a9` | `#a1221b` | Error de validación, 'Agotado', cancelar vuelo, variación ↓. Siempre con palabra o ícono. Sobre glass o danger-soft. |
-| `danger-soft` | `rgba(255,165,152,0.10)` | `rgba(161,34,27,0.09)` | Fondo de chips de error y de la caja de aviso de un diálogo destructivo. |
-| `info` | `#a0d3ff` | `#1f5fa8` | Estado informativo: 'Reserva' (pendiente de pago), 'Check-in abierto'. Sobre glass o info-soft. |
-| `info-soft` | `rgba(160,211,255,0.10)` | `rgba(31,95,168,0.10)` | Fondo de chips informativos, detrás de info. |
-| `focus` | `#f5c518` | `#15171a` | Anillo de foco de teclado: 2px sólidos con 2px de separación. ≥3:1 sobre todo vidrio. |
-| `invert` | `#f3f4f5` | `#15171a` | Relleno invertido (claro en Noche, oscuro en Día): opción activa de un segmentado, burbuja del usuario en el chatbot. |
-| `on-invert` | `#15171a` | `#f3f4f5` | Texto e íconos sobre invert. |
-| `seat-current` | `{invert}` | `{invert}` | Relleno de 'Tu silla actual' en el mapa de sillas (alias de invert). |
-| `on-seat-current` | `{on-invert}` | `{on-invert}` | Texto sobre seat-current (alias de on-invert). |
-| `seat-taken` | `rgba(255,255,255,0.10)` | `rgba(21,23,26,0.10)` | Relleno de silla ocupada (con rayado en ink-faint). No seleccionable. |
+| Token | Claro | Noche | Día | Uso |
+|---|---|---|---|---|
+| `backdrop` | `#f3f4f6` | `#14171a` | `#e7e3dc` | Fondo sólido de la página, debajo de todo el vidrio. Nunca lleva texto directo: el texto siempre va sobre un panel de vidrio. |
+| `backdrop-glow-warm` | `rgba(0,0,0,0)` | `rgba(214,146,56,0.62)` | `rgba(240,178,84,0.50)` | Luz cálida del fondo (atardecer sobre la pista). Solo en el gradiente de .sta-backdrop; le da al vidrio algo que difuminar. |
+| `backdrop-glow-cool` | `rgba(0,0,0,0)` | `rgba(72,126,132,0.55)` | `rgba(120,170,176,0.42)` | Luz fría del fondo (ventanal del terminal). Solo en el gradiente de .sta-backdrop. |
+| `glass` | `#ffffff` | `rgba(34,37,42,0.70)` | `rgba(255,255,255,0.56)` | Vidrio base: paneles, tarjetas de vuelo, barra lateral de filtros. Siempre con backdrop-filter blur-md. |
+| `glass-strong` | `#ffffff` | `rgba(22,24,27,0.82)` | `rgba(255,255,255,0.84)` | Vidrio denso: barra de navegación, diálogos, menús, la ventana del chatbot. Más opaco porque flota sobre contenido. |
+| `glass-inset` | `#f7f8fa` | `rgba(255,255,255,0.06)` | `rgba(255,255,255,0.55)` | Tile dentro de un panel (KPI, fila destacada, talón del pasabordo). Se apila sobre glass, nunca va solo sobre el fondo. |
+| `glass-hover` | `#eceef1` | `rgba(255,255,255,0.10)` | `rgba(255,255,255,0.75)` | Hover de filas, tarjetas y botones secundarios. |
+| `glass-edge` | `#dadde2` | `rgba(255,255,255,0.12)` | `rgba(255,255,255,0.75)` | Borde de 1px de todo vidrio. Decorativo: la separación la da el blur y la sombra, no este borde. |
+| `glass-highlight` | `rgba(0,0,0,0)` | `rgba(255,255,255,0.14)` | `rgba(255,255,255,0.95)` | Reflejo interior superior (inset 0 1px 0) de paneles y botones. |
+| `scrim` | `rgba(21,23,26,0.50)` | `rgba(8,9,10,0.55)` | `rgba(40,36,30,0.35)` | Velo detrás de un diálogo modal. |
+| `field` | `#ffffff` | `rgba(0,0,0,0.30)` | `rgba(255,255,255,0.72)` | Relleno de inputs, selects y la búsqueda, sobre glass. |
+| `control-line` | `#7b8088` | `#959aa3` | `#7b8088` | Borde de inputs, selects, sillas libres y botón secundario: ≥3:1 sobre glass y field en ambos temas. |
+| `ink` | `#15171a` | `#f3f4f5` | `#15171a` | Texto principal sobre glass, glass-strong, glass-inset y field. |
+| `ink-muted` | `#50555c` | `#b3b8bf` | `#50555c` | Texto secundario: ciudades bajo el código IATA, metadatos, etiquetas de campo. Sobre glass, glass-inset y field. |
+| `ink-faint` | `#6b7078` | `#999ea6` | `#6b7078` | Íconos decorativos, placeholder de búsqueda, texto deshabilitado. Solo marcas ≥3:1; no para texto de lectura. |
+| `accent` | `#f5c518` | `#f5c518` | `#f5c518` | Amarillo de señalética: SOLO la acción principal de la vista o lo que el usuario eligió (su silla, su vuelo). Relleno, no texto en Claro ni en Día. |
+| `on-accent` | `#15171a` | `#15171a` | `#15171a` | Texto e íconos sobre un relleno accent (el label del botón primario, la silla elegida). |
+| `accent-text` | `#6b4f00` | `#f5c518` | `#7a5a00` | Amarillo como texto o borde (precio de promoción, enlace activo del nav) sobre glass o accent-soft. |
+| `accent-soft` | `#fcf1c4` | `rgba(245,197,24,0.10)` | `rgba(245,197,24,0.28)` | Fondo teñido de chips de promoción y del item activo del nav, detrás de accent-text. |
+| `success` | `#17683a` | `#72e39e` | `#17683a` | Estado positivo con palabra o flecha: recarga, reembolso, 'Activa', variación ↑. Sobre glass o success-soft. |
+| `success-soft` | `#e3f1e8` | `rgba(114,227,158,0.10)` | `rgba(23,104,58,0.10)` | Fondo de chips de éxito, detrás de success. |
+| `danger` | `#a1221b` | `#ffb4a9` | `#a1221b` | Error de validación, 'Agotado', cancelar vuelo, variación ↓. Siempre con palabra o ícono. Sobre glass o danger-soft. |
+| `danger-soft` | `#f8e4e2` | `rgba(255,165,152,0.10)` | `rgba(161,34,27,0.09)` | Fondo de chips de error y de la caja de aviso de un diálogo destructivo. |
+| `info` | `#1f5fa8` | `#a0d3ff` | `#1f5fa8` | Estado informativo: 'Reserva' (pendiente de pago), 'Check-in abierto'. Sobre glass o info-soft. |
+| `info-soft` | `#e1ecf8` | `rgba(160,211,255,0.10)` | `rgba(31,95,168,0.10)` | Fondo de chips informativos, detrás de info. |
+| `focus` | `#15171a` | `#f5c518` | `#15171a` | Anillo de foco de teclado: 2px sólidos con 2px de separación (amarillo en Noche, tinta en Claro y Día; sobre la barra signage del tema claro se usa accent). ≥3:1. |
+| `invert` | `#15171a` | `#f3f4f5` | `#15171a` | Relleno invertido (claro en Noche, oscuro en Día): opción activa de un segmentado, burbuja del usuario en el chatbot. |
+| `on-invert` | `#ffffff` | `#15171a` | `#f3f4f5` | Texto e íconos sobre invert. |
+| `seat-current` | `{invert}` | `{invert}` | `{invert}` | Relleno de 'Tu silla actual' en el mapa de sillas (alias de invert). |
+| `on-seat-current` | `{on-invert}` | `{on-invert}` | `{on-invert}` | Texto sobre seat-current (alias de on-invert). |
+| `seat-taken` | `#e3e5e9` | `rgba(255,255,255,0.10)` | `rgba(21,23,26,0.10)` | Relleno de silla ocupada (con rayado en ink-faint). No seleccionable. |
+| `page` | `#f3f4f6` | `#14171a` | `#e7e3dc` | Fondo gris de la página en el tema claro; en Noche y Día es el mismo fondo sólido de backdrop. |
+| `surface` | `#ffffff` | `#22252a` | `#ffffff` | Panel sólido: ventana, tarjetas y diálogos. En Noche y Día es el vidrio denso hecho sólido. |
+| `surface-inset` | `#f7f8fa` | `#2a2e34` | `#f4f2ed` | Tile dentro de un panel, talón del pasabordo y cabecera de tabla. |
+| `line` | `#dadde2` | `#3a3f46` | `#d2ccc0` | Borde de 1 px de paneles y separadores. Decorativo: los bordes de controles usan control-line. |
+| `signage` | `#1f2328` | `#16181b` | `#1f2328` | Barra superior tipo letrero de terminal. Solo la usa TopNav en el tema claro. |
+| `signage-hover` | `#2e343b` | `#2a2e34` | `#2e343b` | Hover de los items y del usuario sobre signage. |
+| `signage-line` | `#444b53` | `#3a3f46` | `#444b53` | Borde de los chips del usuario sobre signage. |
+| `on-signage` | `#ffffff` | `#f3f4f5` | `#ffffff` | Texto e íconos sobre signage; la opción activa del nav se rellena con él. |
+| `on-signage-muted` | `#c4c9d0` | `#b3b8bf` | `#c4c9d0` | Texto secundario sobre signage: items inactivos del nav, rol del usuario. |
 
 ### Tipografía
 
@@ -184,13 +197,14 @@ Familias: `--font-display` = Barlow Condensed, Arial Narrow, sans-serif · `--fo
 
 ### Radios
 
-| Token | Valor | Uso |
-|---|---|---|
-| `--radius-sm` | `8px` | Sillas, checkboxes, celdas del tablero. |
-| `--radius-md` | `14px` | Inputs, tiles internos, tarjetas de vuelo. |
-| `--radius-lg` | `20px` | Paneles de vidrio. |
-| `--radius-xl` | `28px` | La ventana principal de la app y los diálogos. |
-| `--radius-pill` | `999px` | Botones, chips, segmentados, búsqueda, FAB del chatbot. |
+| Token | Claro | Noche y Día | Uso |
+|---|---|---|---|
+| `--radius-sm` | `8px` | `8px` | Sillas, checkboxes, celdas del tablero. |
+| `--radius-md` | `12px` | `14px` | Inputs, tiles internos, tarjetas de vuelo. |
+| `--radius-lg` | `16px` | `20px` | Paneles de vidrio. |
+| `--radius-xl` | `20px` | `28px` | La ventana principal de la app y los diálogos. |
+| `--radius-pill` | `999px` | `999px` | Botones, chips, segmentados, búsqueda, FAB del chatbot. |
+| `--radius-control` | `6px` | `999px` | Botones. Claro usa esquinas de 6 px; Noche y Día conservan la píldora. |
 
 ### Blur (backdrop-filter)
 
@@ -202,11 +216,11 @@ Familias: `--font-display` = Barlow Condensed, Arial Narrow, sans-serif · `--fo
 
 ### Sombras
 
-| Token | Noche | Día | Uso |
-|---|---|---|---|
-| `--shadow-glass` | `0 18px 48px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.10)` | `0 18px 44px rgba(60,48,30,0.16), inset 0 1px 0 rgba(255,255,255,0.90)` | Paneles y la ventana principal. |
-| `--shadow-float` | `0 24px 64px rgba(0,0,0,0.60), inset 0 1px 0 rgba(255,255,255,0.12)` | `0 24px 60px rgba(60,48,30,0.24), inset 0 1px 0 rgba(255,255,255,0.95)` | Diálogos, menús y el FAB del chatbot. |
-| `--shadow-accent` | `0 6px 20px rgba(245,197,24,0.28)` | `0 6px 18px rgba(180,130,0,0.28)` | Halo del botón primario. |
+| Token | Claro | Noche | Día | Uso |
+|---|---|---|---|---|
+| `--shadow-glass` | `none` | `0 18px 48px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.10)` | `0 18px 44px rgba(60,48,30,0.16), inset 0 1px 0 rgba(255,255,255,0.90)` | Paneles y la ventana principal. |
+| `--shadow-float` | `0 8px 24px rgba(21,23,26,0.18)` | `0 24px 64px rgba(0,0,0,0.60), inset 0 1px 0 rgba(255,255,255,0.12)` | `0 24px 60px rgba(60,48,30,0.24), inset 0 1px 0 rgba(255,255,255,0.95)` | Diálogos, menús y el FAB del chatbot. |
+| `--shadow-accent` | `none` | `0 6px 20px rgba(245,197,24,0.28)` | `0 6px 18px rgba(180,130,0,0.28)` | Halo del botón primario. |
 
 ## Componentes
 
@@ -234,6 +248,7 @@ La barra «letrero» (IU-02): placa amarilla con el nombre de la aerolínea, «A
 
 - `items`: `[{label, icon, href, active}]`. Cliente: Vuelos, Noticias, Mis viajes, Monedero, Muro. Administrador: Vuelos programados, Promociones, Vuelos realizados, Muros, Auditoría. Visitante: Vuelos, Noticias, Check-in + botones Iniciar sesión / Crear cuenta en `right`.
 - El item activo es una píldora `invert` (como el filtro activo de la referencia), NO amarilla: el amarillo queda para la acción principal.
+- Lleva el selector de tema (`SelectorTema`): un botón de solo ícono que alterna entre Claro y Noche, guarda la elección en `localStorage` (`sta-tema`) y la aplica antes de pintar desde `index.html`. Día no está en el selector; se activa con `data-theme="dia"`.
 - `user`: `{name, role}`; las iniciales salen solas.
 - `brand`: texto de la placa; por defecto «AVIANCO».
 
@@ -358,7 +373,7 @@ Ejemplos armados con estos componentes a partir de los wireframes de las histori
 
 - [ ] ¿Usa solo tokens y clases `sta-*`?
 - [ ] ¿Hay como mucho un botón `primary` por vista (o uno por fila en un listado)?
-- [ ] ¿Se ve bien en Noche y en Día?
+- [ ] ¿Se ve bien en Claro (el de por defecto) y en Noche?
 - [ ] ¿Funciona a 360 px sin scroll horizontal?
 - [ ] ¿Los errores aparecen junto al campo, en español, diciendo cómo corregirlos?
 - [ ] ¿Dinero, fechas y horas siguen los formatos de IU-05 e IU-06?

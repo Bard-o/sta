@@ -10,6 +10,15 @@
   --color-backdrop: var(--backdrop);
   --color-backdrop-glow-warm: var(--backdrop-glow-warm);
   --color-backdrop-glow-cool: var(--backdrop-glow-cool);
+  --color-page: var(--page);
+  --color-surface: var(--surface);
+  --color-surface-inset: var(--surface-inset);
+  --color-line: var(--line);
+  --color-signage: var(--signage);
+  --color-signage-hover: var(--signage-hover);
+  --color-signage-line: var(--signage-line);
+  --color-on-signage: var(--on-signage);
+  --color-on-signage-muted: var(--on-signage-muted);
   --color-glass: var(--glass);
   --color-glass-strong: var(--glass-strong);
   --color-glass-inset: var(--glass-inset);
@@ -51,6 +60,7 @@
   --radius-lg: var(--radius-lg);
   --radius-xl: var(--radius-xl);
   --radius-pill: var(--radius-pill);
+  --radius-control: var(--radius-control);
   --shadow-*: initial;
   --shadow-glass: var(--shadow-glass);
   --shadow-float: var(--shadow-float);

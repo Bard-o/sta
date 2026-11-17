@@ -1,5 +1,55 @@
 /* AVIANCO — generado desde tokens.json. No editar a mano: cambie tokens.json y regenere. */
-:root, [data-theme="noche"] {
+:root, [data-theme="claro"] {
+  --backdrop: #f3f4f6;
+  --backdrop-glow-warm: rgba(0,0,0,0);
+  --backdrop-glow-cool: rgba(0,0,0,0);
+  --glass: #ffffff;
+  --glass-strong: #ffffff;
+  --glass-inset: #f7f8fa;
+  --glass-hover: #eceef1;
+  --glass-edge: #dadde2;
+  --glass-highlight: rgba(0,0,0,0);
+  --scrim: rgba(21,23,26,0.50);
+  --field: #ffffff;
+  --control-line: #7b8088;
+  --ink: #15171a;
+  --ink-muted: #50555c;
+  --ink-faint: #6b7078;
+  --accent: #f5c518;
+  --on-accent: #15171a;
+  --accent-text: #6b4f00;
+  --accent-soft: #fcf1c4;
+  --success: #17683a;
+  --success-soft: #e3f1e8;
+  --danger: #a1221b;
+  --danger-soft: #f8e4e2;
+  --info: #1f5fa8;
+  --info-soft: #e1ecf8;
+  --focus: #15171a;
+  --invert: #15171a;
+  --on-invert: #ffffff;
+  --seat-current: var(--invert);
+  --on-seat-current: var(--on-invert);
+  --seat-taken: #e3e5e9;
+  --page: #f3f4f6;
+  --surface: #ffffff;
+  --surface-inset: #f7f8fa;
+  --line: #dadde2;
+  --signage: #1f2328;
+  --signage-hover: #2e343b;
+  --signage-line: #444b53;
+  --on-signage: #ffffff;
+  --on-signage-muted: #c4c9d0;
+  --shadow-glass: none;
+  --shadow-float: 0 8px 24px rgba(21,23,26,0.18);
+  --shadow-accent: none;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-control: 6px;
+}
+[data-theme="noche"] {
   --backdrop: #14171a;
   --backdrop-glow-warm: rgba(214,146,56,0.62);
   --backdrop-glow-cool: rgba(72,126,132,0.55);
@@ -31,9 +81,23 @@
   --seat-current: var(--invert);
   --on-seat-current: var(--on-invert);
   --seat-taken: rgba(255,255,255,0.10);
+  --page: #14171a;
+  --surface: #22252a;
+  --surface-inset: #2a2e34;
+  --line: #3a3f46;
+  --signage: #16181b;
+  --signage-hover: #2a2e34;
+  --signage-line: #3a3f46;
+  --on-signage: #f3f4f5;
+  --on-signage-muted: #b3b8bf;
   --shadow-glass: 0 18px 48px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.10);
   --shadow-float: 0 24px 64px rgba(0,0,0,0.60), inset 0 1px 0 rgba(255,255,255,0.12);
   --shadow-accent: 0 6px 20px rgba(245,197,24,0.28);
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+  --radius-control: 999px;
 }
 [data-theme="dia"] {
   --backdrop: #e7e3dc;
@@ -67,9 +131,23 @@
   --seat-current: var(--invert);
   --on-seat-current: var(--on-invert);
   --seat-taken: rgba(21,23,26,0.10);
+  --page: #e7e3dc;
+  --surface: #ffffff;
+  --surface-inset: #f4f2ed;
+  --line: #d2ccc0;
+  --signage: #1f2328;
+  --signage-hover: #2e343b;
+  --signage-line: #444b53;
+  --on-signage: #ffffff;
+  --on-signage-muted: #c4c9d0;
   --shadow-glass: 0 18px 44px rgba(60,48,30,0.16), inset 0 1px 0 rgba(255,255,255,0.90);
   --shadow-float: 0 24px 60px rgba(60,48,30,0.24), inset 0 1px 0 rgba(255,255,255,0.95);
   --shadow-accent: 0 6px 18px rgba(180,130,0,0.28);
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+  --radius-control: 999px;
 }
 :root {
   --space-1: 4px;
@@ -80,10 +158,6 @@
   --space-6: 24px;
   --space-8: 32px;
   --space-12: 48px;
-  --radius-sm: 8px;
-  --radius-md: 14px;
-  --radius-lg: 20px;
-  --radius-xl: 28px;
   --radius-pill: 999px;
   --blur-sm: 12px;
   --blur-md: 24px;

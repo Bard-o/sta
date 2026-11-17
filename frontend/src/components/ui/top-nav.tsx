@@ -1,6 +1,7 @@
 import { useState, type MouseEventHandler, type ReactNode } from "react";
 import { Link, NavLink } from "react-router";
 import { Icon } from "./icon";
+import { SelectorTema } from "./selector-tema";
 import type { IconName } from "./icon-paths";
 
 export interface NavItem {
@@ -91,6 +92,7 @@ export function TopNav({
         ))}
       </nav>
       <div className="sta-nav__right">
+        <SelectorTema />
         {right}
         {user && <UserChip user={user} />}
       </div>
