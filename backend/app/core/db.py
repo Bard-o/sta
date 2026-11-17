@@ -6,13 +6,16 @@ from typing import Annotated
 
 from fastapi import Depends
 from sqlalchemy import (
+    CheckConstraint,
     DateTime,
     Enum,
+    ForeignKey,
     Index,
     Integer,
     MetaData,
     String,
     Text,
+    UniqueConstraint,
     create_engine,
     func,
     text,
@@ -50,7 +53,8 @@ class CorreoEnCola(TimestampMixin, Base):
     """Correo saliente pendiente de enviar (RNF-05, RNF-21; issue #5).
 
     Vive en core porque `alembic/env.py` solo descubre los modelos de los módulos y los que importa
-    este archivo. Se escribe con `app.core.mail.encolar_correo`.
+    este archivo. Se escribe con `app.core.mail.encolar_correo`. Sus adjuntos están en
+    `AdjuntoEnCola` (issue #116).
     """
 
     __tablename__ = "cola_correos"
@@ -78,6 +82,30 @@ class CorreoEnCola(TimestampMixin, Base):
     proximo_intento_en: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     enviado_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     ultimo_error: Mapped[str | None] = mapped_column(Text)
+
+
+class AdjuntoEnCola(Base):
+    """Archivo adjunto de un correo de la cola (RF-39; issue #116).
+
+    El contenido vive en `app.core.archivos` bajo `clave`; la cola guarda solo la referencia.
+    `posicion` conserva el orden de los adjuntos y `tamano` (bytes) se comprueba al enviar.
+    Lo escribe `app.core.mail.encolar_correo`; tras un envío exitoso se borra el archivo y la
+    fila queda como registro.
+    """
+
+    __tablename__ = "cola_correos_adjuntos"
+    __table_args__ = (
+        UniqueConstraint("correo_id", "posicion", name="uq_cola_correos_adjuntos_correo_posicion"),
+        CheckConstraint("tamano > 0", name="tamano_positivo"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    correo_id: Mapped[int] = mapped_column(ForeignKey("cola_correos.id", ondelete="CASCADE"))
+    posicion: Mapped[int] = mapped_column(Integer)
+    nombre: Mapped[str] = mapped_column(String(255))
+    tipo_mime: Mapped[str] = mapped_column(String(255))
+    clave: Mapped[str] = mapped_column(String(255), unique=True)
+    tamano: Mapped[int] = mapped_column(Integer)
 
 
 engine = create_engine(get_settings().database_url, pool_pre_ping=True)
