@@ -74,6 +74,9 @@ _MENSAJE_CLASE_OCUPADA = "Ya hay una promoción vigente o programada para esta c
 _ESTADOS_TERMINALES: tuple[EstadoPromocion, ...] = ("vencida", "agotada", "cancelada")
 _NOMBRE_TAREA_VENCER = "vuelos.vencer_promociones"
 _NOMBRE_TAREA_REALIZADOS = "vuelos.marcar_realizados"
+# SUP-07, RF-36: la venta cierra 1 h antes de la salida en un vuelo nacional y 3 h en uno
+# internacional. Saldrá de la configuración (RNF-23).
+_HORAS_LIMITE_DE_VENTA: dict[TipoVuelo, int] = {"nacional": 1, "internacional": 3}
 # Sillas (SUP-25, SUP-26): la base conserva el número interno y la interfaz muestra fila y letra.
 _LETRAS_POR_FILA_CINCO = "ABCDE"
 _LETRAS_ECONOMICA_INTERNACIONAL = "ABCDEFGHJK"  # sin la I, para no confundirla con el 1
@@ -1111,6 +1114,19 @@ def nombre_de_silla(tipo: TipoVuelo, clase: Clase, numero: int) -> str:
         m = numero - 50
         return f"{10 + (m - 1) // 10 + 1}{_LETRAS_ECONOMICA_INTERNACIONAL[(m - 1) % 10]}"
     return f"{(numero - 1) // 5 + 1}{_LETRAS_POR_FILA_CINCO[(numero - 1) % 5]}"
+
+
+# ---------- Límite de venta (SUP-07, RF-36, RF-43) ----------
+
+
+def limite_de_venta(tipo: TipoVuelo, salida: datetime) -> datetime:
+    """Hasta cuándo se reserva o se compra un vuelo: 1 h antes de la salida si es nacional y 3 h
+    si es internacional (SUP-07, RF-36). Es también el límite de cancelación de RF-43.
+
+    Devuelve el instante en UTC, igual que `salida`. Búsqueda, carrito, reservas y compras
+    comparan `ahora` contra él: desde ese instante el vuelo ya no se vende.
+    """
+    return salida - timedelta(hours=_HORAS_LIMITE_DE_VENTA[tipo])
 
 
 # ---------- Promociones (HU-17, RF-23 a RF-26) ----------

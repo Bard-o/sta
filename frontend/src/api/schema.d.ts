@@ -776,6 +776,344 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/busqueda/vuelos": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Buscar Vuelos
+     * @description Vuelos programados y a la venta que cumplen todos los filtros (HU-20, RF-27).
+     *
+     *     Público. La primera página de la búsqueda de un cliente se registra (RF-29).
+     */
+    get: operations["buscar_vuelos"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/busqueda/regresos": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Buscar Regresos
+     * @description Regresos desde el destino de la ida que salen después de su llegada (HU-21, RF-28).
+     */
+    get: operations["buscar_regresos"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/carrito": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Obtener Carrito
+     * @description El carrito del cliente con el precio y la disponibilidad de hoy (HU-23, RF-30).
+     */
+    get: operations["obtener_carrito"];
+    put?: never;
+    post?: never;
+    /**
+     * Vaciar Carrito
+     * @description Quita todas las selecciones del carrito (HU-23).
+     */
+    delete: operations["vaciar_carrito"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/carrito/selecciones": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Agregar Seleccion
+     * @description Agrega un trayecto único o completo; valida cupo y límite de 5 (HU-22, RF-32).
+     */
+    post: operations["agregar_seleccion"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/carrito/selecciones/{seleccion_id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Quitar Seleccion
+     * @description Quita una selección del carrito (HU-23).
+     */
+    delete: operations["quitar_seleccion"];
+    options?: never;
+    head?: never;
+    /**
+     * Modificar Seleccion
+     * @description Cambia la clase o la cantidad de viajeros y vuelve a validar (HU-23).
+     */
+    patch: operations["modificar_seleccion"];
+    trace?: never;
+  };
+  "/api/v1/reservas": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Reservar
+     * @description Reserva sin pagar: asigna sillas, congela el precio y fija el vencimiento (HU-24, HU-26).
+     */
+    post: operations["reservar"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/reservas/{reserva_id}/pagar": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Pagar Reserva
+     * @description Paga la reserva completa o algunos viajeros al precio congelado (HU-27, RF-38).
+     */
+    post: operations["pagar_reserva"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/compras": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Iniciar Compra
+     * @description Asigna las sillas y las bloquea 15 minutos mientras el cliente paga (HU-25, SUP-15).
+     */
+    post: operations["iniciar_compra"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/compras/{compra_id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Obtener Compra
+     * @description Una compra del cliente, pendiente, vencida, cancelada o activa (HU-25).
+     */
+    get: operations["obtener_compra"];
+    put?: never;
+    post?: never;
+    /**
+     * Soltar Compra
+     * @description Suelta el bloqueo de una compra pendiente y libera sus sillas (HU-25).
+     */
+    delete: operations["soltar_compra"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/compras/{compra_id}/confirmar": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Confirmar Compra
+     * @description Cobra con el monedero, emite los tiquetes y envía el código y el comprobante (HU-25).
+     */
+    post: operations["confirmar_compra"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/mis-viajes": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Listar Mis Viajes
+     * @description Reservas o compras del cliente, de la más reciente a la más antigua (HU-27, RF-45).
+     */
+    get: operations["listar_mis_viajes"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/monedero": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Consultar Saldo
+     * @description Saldo del monedero (HU-31, RF-48).
+     */
+    get: operations["consultar_saldo"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/monedero/movimientos": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Listar Movimientos
+     * @description Movimientos del más reciente al más antiguo, con filtros por tipo y fecha (HU-31).
+     */
+    get: operations["listar_movimientos"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/monedero/tarjetas": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Listar Tarjetas
+     * @description Tarjetas registradas y no eliminadas, enmascaradas (HU-29, RF-46).
+     */
+    get: operations["listar_tarjetas"];
+    put?: never;
+    /**
+     * Registrar Tarjeta
+     * @description Registra una tarjeta simulada: Luhn y vencimiento; guarda solo los últimos 4 (HU-28).
+     */
+    post: operations["registrar_tarjeta"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/monedero/tarjetas/{tarjeta_id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Eliminar Tarjeta
+     * @description Elimina una tarjeta; sus recargas conservan la referencia (HU-29).
+     */
+    delete: operations["eliminar_tarjeta"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/monedero/recargas": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Recargar Monedero
+     * @description Recarga el monedero desde una tarjeta vigente; aprobación simulada (HU-30, RF-47).
+     */
+    post: operations["recargar_monedero"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -823,6 +1161,26 @@ export interface components {
        * Format: date-time
        */
       creado_en: string;
+    };
+    /** AvisoSeleccion */
+    AvisoSeleccion: {
+      /**
+       * Codigo
+       * @enum {string}
+       */
+      codigo:
+        | "precio_cambio"
+        | "clase_agotada"
+        | "limite_tiquetes"
+        | "vuelo_no_disponible"
+        | "fuera_de_plazo";
+      /** Mensaje */
+      mensaje: string;
+      /**
+       * Tramo
+       * @description 0 ida, 1 regreso.
+       */
+      tramo: number;
     };
     /** BloqueoDesactivacion */
     BloqueoDesactivacion: {
@@ -882,6 +1240,27 @@ export interface components {
       /** Total */
       total: number;
     };
+    /**
+     * Carrito
+     * @description El carrito del cliente (HU-23, RF-30).
+     */
+    Carrito: {
+      /**
+       * Selecciones
+       * @description La más reciente primero.
+       */
+      selecciones: components["schemas"]["SeleccionCarrito"][];
+      /**
+       * Cantidad
+       * @description Selecciones en el carrito, para el contador del menú.
+       */
+      cantidad: number;
+      /**
+       * Total
+       * @description Suma de los subtotales de las selecciones confirmables.
+       */
+      total: number;
+    };
     /** Ciudad */
     Ciudad: {
       /** Codigo */
@@ -911,6 +1290,27 @@ export interface components {
        */
       imagen_url: string;
     };
+    /** CiudadBusqueda */
+    CiudadBusqueda: {
+      /** Codigo */
+      codigo: string;
+      /** Nombre */
+      nombre: string;
+      /**
+       * Zona Horaria
+       * @description Zona IANA para mostrar la hora local (RF-15).
+       */
+      zona_horaria: string;
+    };
+    /** CiudadCarrito */
+    CiudadCarrito: {
+      /** Codigo */
+      codigo: string;
+      /** Nombre */
+      nombre: string;
+      /** Zona Horaria */
+      zona_horaria: string;
+    };
     /** CiudadNoticia */
     CiudadNoticia: {
       /** Codigo */
@@ -928,6 +1328,33 @@ export interface components {
       nombre: string;
       /** Zona Horaria */
       zona_horaria: string;
+    };
+    /** CiudadViaje */
+    CiudadViaje: {
+      /** Codigo */
+      codigo: string;
+      /** Nombre */
+      nombre: string;
+      /** Zona Horaria */
+      zona_horaria: string;
+    };
+    /** ClaseBusqueda */
+    ClaseBusqueda: {
+      /** Precio Base */
+      precio_base: number;
+      /**
+       * Precio Vigente
+       * @description Con el descuento de la promoción vigente (RF-24).
+       */
+      precio_vigente: number;
+      promocion: components["schemas"]["PromocionBusqueda"] | null;
+      /**
+       * Disponibles
+       * @description Descuenta sillas vendidas, reservadas y bloqueadas.
+       */
+      disponibles: number;
+      /** Agotada */
+      agotada: boolean;
     };
     /** ClaseDetalle */
     ClaseDetalle: {
@@ -1117,6 +1544,41 @@ export interface components {
       /** Mensaje */
       mensaje: string;
     };
+    /** Monedero */
+    Monedero: {
+      /**
+       * Saldo
+       * @description COP. Suma de todos los movimientos; nunca es negativo (RF-48).
+       */
+      saldo: number;
+    };
+    /** Movimiento */
+    Movimiento: {
+      /** Id */
+      id: number;
+      /**
+       * Tipo
+       * @enum {string}
+       */
+      tipo: "recarga" | "compra" | "reembolso";
+      /**
+       * Valor
+       * @description COP con signo: + recargas y reembolsos, − compras.
+       */
+      valor: number;
+      /** Saldo Resultante */
+      saldo_resultante: number;
+      /**
+       * Referencia
+       * @description Código de reserva (compra, reembolso) o **** 1234 (recarga).
+       */
+      referencia: string;
+      /**
+       * Creado En
+       * Format: date-time
+       */
+      creado_en: string;
+    };
     /** MunicipioSalida */
     MunicipioSalida: {
       /** Codigo */
@@ -1199,6 +1661,17 @@ export interface components {
       /** Disponibles */
       disponibles: number;
     };
+    /** PaginaMovimientos */
+    PaginaMovimientos: {
+      /** Items */
+      items: components["schemas"]["Movimiento"][];
+      /** Total */
+      total: number;
+      /** Pagina */
+      pagina: number;
+      /** Por Pagina */
+      por_pagina: number;
+    };
     /** PaginaNoticias */
     PaginaNoticias: {
       /** Items */
@@ -1221,6 +1694,17 @@ export interface components {
       /** Por Pagina */
       por_pagina: number;
     };
+    /** PaginaViajes */
+    PaginaViajes: {
+      /** Items */
+      items: components["schemas"]["Viaje"][];
+      /** Total */
+      total: number;
+      /** Pagina */
+      pagina: number;
+      /** Por Pagina */
+      por_pagina: number;
+    };
     /** PaginaVuelosAdmin */
     PaginaVuelosAdmin: {
       /** Items */
@@ -1231,6 +1715,33 @@ export interface components {
       pagina: number;
       /** Por Pagina */
       por_pagina: number;
+    };
+    /** PaginaVuelosBusqueda */
+    PaginaVuelosBusqueda: {
+      /** Items */
+      items: components["schemas"]["VueloBusqueda"][];
+      /** Total */
+      total: number;
+      /** Pagina */
+      pagina: number;
+      /** Por Pagina */
+      por_pagina: number;
+    };
+    /**
+     * PagoReservaEntrada
+     * @description HU-27. Sin `viajero_ids` (o con null) se pagan todos los viajeros que siguen reservados.
+     */
+    PagoReservaEntrada: {
+      /** Viajero Ids */
+      viajero_ids?: number[] | null;
+    };
+    /**
+     * PagoReservaSalida
+     * @description HU-27: la reserva con sus viajeros pendientes y la compra con los pagados.
+     */
+    PagoReservaSalida: {
+      reserva: components["schemas"]["Viaje"];
+      compra: components["schemas"]["Viaje"];
     };
     /** PaisSalida */
     PaisSalida: {
@@ -1396,6 +1907,17 @@ export interface components {
        */
       creada_en: string;
     };
+    /** PromocionBusqueda */
+    PromocionBusqueda: {
+      /** Porcentaje */
+      porcentaje: number;
+      /**
+       * Fin
+       * Format: date-time
+       * @description UTC: hasta cuándo rige el descuento.
+       */
+      fin: string;
+    };
     /** PromocionEntrada */
     PromocionEntrada: {
       /**
@@ -1469,6 +1991,16 @@ export interface components {
        */
       estado: "programada" | "vigente" | "vencida" | "agotada" | "cancelada";
     };
+    /** RecargaEntrada */
+    RecargaEntrada: {
+      /** Tarjeta Id */
+      tarjeta_id: number;
+      /**
+       * Valor
+       * @description COP, entero mayor que 0 (HU-30).
+       */
+      valor: number;
+    };
     /**
      * ReenviarInvitacionEntrada
      * @description Correo para completar cuentas antiguas que quedaron sin uno (HU-10).
@@ -1540,6 +2072,66 @@ export interface components {
      * @enum {string}
      */
     Rol: "root" | "admin" | "cliente";
+    /**
+     * SeleccionCambio
+     * @description HU-23. Solo cambia lo que se envía; vuelve a validar cupo y límite.
+     */
+    SeleccionCambio: {
+      /** Viajeros */
+      viajeros?: number | null;
+      /**
+       * Clases
+       * @description Una por tramo, en el orden de la selección.
+       */
+      clases?: ("economica" | "primera")[] | null;
+    };
+    /** SeleccionCarrito */
+    SeleccionCarrito: {
+      /** Id */
+      id: number;
+      /** Tramos */
+      tramos: components["schemas"]["TramoCarrito"][];
+      /** Viajeros */
+      viajeros: number;
+      /**
+       * Subtotal
+       * @description Suma de precio_unitario × viajeros de los tramos (RF-40).
+       */
+      subtotal: number;
+      /**
+       * Confirmable
+       * @description Sin avisos que impidan reservar o comprar (todos menos precio_cambio).
+       */
+      confirmable: boolean;
+      /** Avisos */
+      avisos: components["schemas"]["AvisoSeleccion"][];
+      /**
+       * Reserva Venceria En
+       * @description Si se reservara ahora: 24 h o el límite de venta más próximo (SUP-07). null si no es confirmable.
+       */
+      reserva_venceria_en: string | null;
+      /**
+       * Agregada En
+       * Format: date-time
+       */
+      agregada_en: string;
+    };
+    /**
+     * SeleccionEntrada
+     * @description HU-22. Un tramo (trayecto único) o dos (ida y regreso, RF-40).
+     */
+    SeleccionEntrada: {
+      /**
+       * Tramos
+       * @description En orden: ida y, si hay, regreso.
+       */
+      tramos: components["schemas"]["TramoSeleccionEntrada"][];
+      /**
+       * Viajeros
+       * @description Cantidad de viajeros.
+       */
+      viajeros: number;
+    };
     /** SerieVistaPrevia */
     SerieVistaPrevia: {
       /**
@@ -1623,6 +2215,110 @@ export interface components {
       /** Noticias */
       noticias: boolean;
     };
+    /** Tarjeta */
+    Tarjeta: {
+      /** Id */
+      id: number;
+      /**
+       * Tipo
+       * @enum {string}
+       */
+      tipo: "credito" | "debito";
+      /**
+       * Franquicia
+       * @enum {string}
+       */
+      franquicia: "visa" | "mastercard" | "amex" | "diners" | "otra";
+      /** Titular */
+      titular: string;
+      /**
+       * Numero Enmascarado
+       * @description **** y los últimos 4 dígitos.
+       */
+      numero_enmascarado: string;
+      /**
+       * Vencimiento
+       * @description MM/AA.
+       */
+      vencimiento: string;
+      /**
+       * Vencida
+       * @description Ya pasó su mes de vencimiento: no sirve para recargar.
+       */
+      vencida: boolean;
+      /**
+       * Creada En
+       * Format: date-time
+       */
+      creada_en: string;
+    };
+    /**
+     * TarjetaEntrada
+     * @description HU-28. La franquicia la deduce el backend a partir del número.
+     */
+    TarjetaEntrada: {
+      /**
+       * Tipo
+       * @enum {string}
+       */
+      tipo: "credito" | "debito";
+      /** Titular */
+      titular: string;
+      /**
+       * Numero
+       * @description Solo dígitos, sin espacios. Se valida con Luhn.
+       */
+      numero: string;
+      /**
+       * Vencimiento
+       * @description MM/AA.
+       */
+      vencimiento: string;
+      /**
+       * Cvv
+       * @description Se valida y se descarta (RNF-12).
+       */
+      cvv: string;
+    };
+    /** TiqueteViaje */
+    TiqueteViaje: {
+      /** Id */
+      id: number;
+      /**
+       * Tramo
+       * @description Índice en `tramos`: 0 ida, 1 regreso.
+       */
+      tramo: number;
+      /**
+       * Clase
+       * @enum {string}
+       */
+      clase: "economica" | "primera";
+      /**
+       * Silla
+       * @description Fila y letra, p. ej. 18C (SUP-26).
+       */
+      silla: string;
+      /** Numero Silla */
+      numero_silla: number;
+      /**
+       * Precio
+       * @description Precio congelado al reservar o al iniciar la compra (RF-24).
+       */
+      precio: number;
+      /**
+       * Estado
+       * @enum {string}
+       */
+      estado:
+        | "bloqueado"
+        | "reservado"
+        | "comprado"
+        | "cancelado"
+        | "vencido"
+        | "reembolsado"
+        | "reubicado";
+    };
     /**
      * TokenEntrada
      * @description Token de un enlace enviado por correo (verificación o baja de noticias).
@@ -1630,6 +2326,59 @@ export interface components {
     TokenEntrada: {
       /** Token */
       token: string;
+    };
+    /** TramoCarrito */
+    TramoCarrito: {
+      vuelo: components["schemas"]["VueloCarrito"];
+      /**
+       * Clase
+       * @enum {string}
+       */
+      clase: "economica" | "primera";
+      /**
+       * Precio Unitario
+       * @description Precio vigente hoy por viajero (RF-24).
+       */
+      precio_unitario: number;
+      /**
+       * Precio Al Agregar
+       * @description Precio por viajero al agregar o modificar la selección.
+       */
+      precio_al_agregar: number;
+      /**
+       * Promocion Porcentaje
+       * @description Descuento vigente en la clase.
+       */
+      promocion_porcentaje: number | null;
+      /**
+       * Disponibles
+       * @description Sillas libres hoy en la clase.
+       */
+      disponibles: number;
+      /**
+       * Tiquetes Activos
+       * @description Tiquetes activos del cliente en el vuelo (RF-32).
+       */
+      tiquetes_activos: number;
+    };
+    /** TramoSeleccionEntrada */
+    TramoSeleccionEntrada: {
+      /** Vuelo Id */
+      vuelo_id: number;
+      /**
+       * Clase
+       * @enum {string}
+       */
+      clase: "economica" | "primera";
+    };
+    /** TramoViaje */
+    TramoViaje: {
+      vuelo: components["schemas"]["VueloViaje"];
+    };
+    /** TramoViajeEntrada */
+    TramoViajeEntrada: {
+      /** Vuelo Id */
+      vuelo_id: number;
     };
     /** UsuarioSalida */
     UsuarioSalida: {
@@ -1653,6 +2402,173 @@ export interface components {
     ValidarInvitacionEntrada: {
       /** Token */
       token: string;
+    };
+    /**
+     * Viaje
+     * @description Una reserva o una compra (HU-24 a HU-27).
+     */
+    Viaje: {
+      /** Id */
+      id: number;
+      /**
+       * Tipo
+       * @enum {string}
+       */
+      tipo: "reserva" | "compra";
+      /**
+       * Codigo
+       * @description Código de reserva de 6 caracteres; pagar lo conserva (HU-27).
+       */
+      codigo: string;
+      /**
+       * Estado
+       * @enum {string}
+       */
+      estado:
+        | "pendiente"
+        | "vigente"
+        | "pagada"
+        | "vencida"
+        | "activa"
+        | "cancelada"
+        | "realizada"
+        | "reembolsada"
+        | "reubicada";
+      /**
+       * Reserva Id
+       * @description Compra que viene de pagar una reserva: esa reserva.
+       */
+      reserva_id: number | null;
+      /**
+       * Compra Id
+       * @description Reserva pagada, toda o en parte: la compra con sus viajeros pagados.
+       */
+      compra_id: number | null;
+      /**
+       * Creada En
+       * Format: date-time
+       */
+      creada_en: string;
+      /**
+       * Vence En
+       * @description Reserva: su vencimiento. Compra pendiente, vencida o soltada: fin del bloqueo de 15 minutos. Compra pagada: null.
+       */
+      vence_en: string | null;
+      /**
+       * Pagada En
+       * @description Último pago de una compra.
+       */
+      pagada_en: string | null;
+      /**
+       * Total
+       * @description Suma de los precios congelados de todos los tiquetes.
+       */
+      total: number;
+      /**
+       * Total Pendiente
+       * @description Lo que falta pagar: tiquetes reservados o bloqueados.
+       */
+      total_pendiente: number;
+      /** Tramos */
+      tramos: components["schemas"]["TramoViaje"][];
+      /** Viajeros */
+      viajeros: components["schemas"]["ViajeroViaje"][];
+    };
+    /**
+     * ViajeEntrada
+     * @description Cuerpo de POST /reservas y POST /compras (HU-24, HU-25, HU-26).
+     */
+    ViajeEntrada: {
+      /**
+       * Tramos
+       * @description Ida y, en un trayecto completo, regreso (RF-40).
+       */
+      tramos: components["schemas"]["TramoViajeEntrada"][];
+      /** Viajeros */
+      viajeros: components["schemas"]["ViajeroEntrada"][];
+    };
+    /**
+     * ViajeroEntrada
+     * @description RF-31. Todos los datos son obligatorios: así cada viajero recibe el código de reserva.
+     */
+    ViajeroEntrada: {
+      /**
+       * Tipo Documento
+       * @enum {string}
+       */
+      tipo_documento: "CC" | "TI" | "RC" | "CE" | "PA";
+      /** Numero Documento */
+      numero_documento: string;
+      /** Nombres */
+      nombres: string;
+      /** Apellidos */
+      apellidos: string;
+      /**
+       * Fecha Nacimiento
+       * Format: date
+       * @description La edad se calcula a la fecha de salida de cada tramo (RF-35).
+       */
+      fecha_nacimiento: string;
+      /**
+       * Genero
+       * @enum {string}
+       */
+      genero: "femenino" | "masculino" | "otro";
+      /** Telefono */
+      telefono: string;
+      /** Email */
+      email: string;
+      /**
+       * Contacto Nombre
+       * @description Contacto de emergencia.
+       */
+      contacto_nombre: string;
+      /** Contacto Telefono */
+      contacto_telefono: string;
+      /**
+       * Clases
+       * @description Una por tramo, en el orden de `tramos` (RF-33).
+       */
+      clases: ("economica" | "primera")[];
+    };
+    /** ViajeroViaje */
+    ViajeroViaje: {
+      /** Id */
+      id: number;
+      /**
+       * Tipo Documento
+       * @enum {string}
+       */
+      tipo_documento: "CC" | "TI" | "RC" | "CE" | "PA";
+      /** Numero Documento */
+      numero_documento: string;
+      /** Nombres */
+      nombres: string;
+      /** Apellidos */
+      apellidos: string;
+      /**
+       * Fecha Nacimiento
+       * Format: date
+       */
+      fecha_nacimiento: string;
+      /**
+       * Genero
+       * @enum {string}
+       */
+      genero: "femenino" | "masculino" | "otro";
+      /** Telefono */
+      telefono: string;
+      /** Email */
+      email: string;
+      /** Contacto Nombre */
+      contacto_nombre: string;
+      /** Contacto Telefono */
+      contacto_telefono: string;
+      /**
+       * Tiquetes
+       * @description Uno por tramo.
+       */
+      tiquetes: components["schemas"]["TiqueteViaje"][];
     };
     /** Vuelo */
     Vuelo: {
@@ -1768,6 +2684,77 @@ export interface components {
       promociones: components["schemas"]["PromocionResumen"][];
     };
     /**
+     * VueloBusqueda
+     * @description Un resultado de la búsqueda o de los regresos (HU-20, HU-21).
+     */
+    VueloBusqueda: {
+      /** Id */
+      id: number;
+      /** Codigo */
+      codigo: string;
+      /**
+       * Tipo
+       * @enum {string}
+       */
+      tipo: "nacional" | "internacional";
+      origen: components["schemas"]["CiudadBusqueda"];
+      destino: components["schemas"]["CiudadBusqueda"];
+      /**
+       * Salida
+       * Format: date-time
+       * @description UTC.
+       */
+      salida: string;
+      /**
+       * Llegada
+       * Format: date-time
+       * @description UTC.
+       */
+      llegada: string;
+      /** Duracion Minutos */
+      duracion_minutos: number;
+      economica: components["schemas"]["ClaseBusqueda"];
+      primera: components["schemas"]["ClaseBusqueda"];
+      /**
+       * Agotado
+       * @description Ninguna de las dos clases tiene sillas (SUP-20).
+       */
+      agotado: boolean;
+    };
+    /** VueloCarrito */
+    VueloCarrito: {
+      /** Id */
+      id: number;
+      /** Codigo */
+      codigo: string;
+      /**
+       * Tipo
+       * @enum {string}
+       */
+      tipo: "nacional" | "internacional";
+      origen: components["schemas"]["CiudadCarrito"];
+      destino: components["schemas"]["CiudadCarrito"];
+      /**
+       * Salida
+       * Format: date-time
+       * @description UTC.
+       */
+      salida: string;
+      /**
+       * Llegada
+       * Format: date-time
+       * @description UTC.
+       */
+      llegada: string;
+      /** Duracion Minutos */
+      duracion_minutos: number;
+      /**
+       * Estado
+       * @enum {string}
+       */
+      estado: "programado" | "realizado" | "cancelado";
+    };
+    /**
      * VueloDetalle
      * @description Detalle público del vuelo: lo abren las noticias y el carrusel (HU-19).
      */
@@ -1852,6 +2839,39 @@ export interface components {
        * @description COP, entero.
        */
       precio_primera: number;
+    };
+    /** VueloViaje */
+    VueloViaje: {
+      /** Id */
+      id: number;
+      /** Codigo */
+      codigo: string;
+      /**
+       * Tipo
+       * @enum {string}
+       */
+      tipo: "nacional" | "internacional";
+      origen: components["schemas"]["CiudadViaje"];
+      destino: components["schemas"]["CiudadViaje"];
+      /**
+       * Salida
+       * Format: date-time
+       * @description UTC.
+       */
+      salida: string;
+      /**
+       * Llegada
+       * Format: date-time
+       * @description UTC.
+       */
+      llegada: string;
+      /** Duracion Minutos */
+      duracion_minutos: number;
+      /**
+       * Estado
+       * @enum {string}
+       */
+      estado: "programado" | "realizado" | "cancelado";
     };
     /**
      * VueloVistaPrevia
@@ -4679,6 +5699,1371 @@ export interface operations {
       };
       /** @description El rol no tiene permiso */
       403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  buscar_vuelos: {
+    parameters: {
+      query?: {
+        /** @description Parte del código, p. ej. STA-0003. */
+        codigo?: string | null;
+        origen?: string | null;
+        destino?: string | null;
+        tipo?: ("nacional" | "internacional") | null;
+        /** @description Día de salida en la hora local del origen de cada vuelo. */
+        fecha_desde?: string | null;
+        /** @description Día de salida en la hora local del origen de cada vuelo. */
+        fecha_hasta?: string | null;
+        /** @description Hora de salida (hh:mm) en la hora local del origen de cada vuelo. */
+        hora_desde?: string | null;
+        /** @description Hora de salida (hh:mm) en la hora local del origen de cada vuelo. */
+        hora_hasta?: string | null;
+        /** @description Minutos. */
+        duracion_min?: number | null;
+        /** @description Minutos. */
+        duracion_max?: number | null;
+        /** @description COP, sobre el precio vigente de `clase` (o el menor de las dos sin `clase`). */
+        precio_min?: number | null;
+        /** @description COP, sobre el precio vigente de `clase` (o el menor de las dos sin `clase`). */
+        precio_max?: number | null;
+        clase?: ("economica" | "primera") | null;
+        orden?: "precio" | "fecha" | "duracion";
+        pagina?: number;
+        por_pagina?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PaginaVuelosBusqueda"];
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  buscar_regresos: {
+    parameters: {
+      query: {
+        /** @description Vuelo de ida elegido. */
+        vuelo_ida_id: number;
+        /** @description Ciudad de regreso; puede ser distinta del origen de la ida. */
+        destino: string;
+        /** @description Día de salida del regreso, en la hora local de su origen. */
+        fecha: string;
+        clase?: ("economica" | "primera") | null;
+        orden?: "precio" | "fecha" | "duracion";
+        pagina?: number;
+        por_pagina?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PaginaVuelosBusqueda"];
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description No existe */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  obtener_carrito: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Carrito"];
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  vaciar_carrito: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  agregar_seleccion: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SeleccionEntrada"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SeleccionCarrito"];
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Choca con el estado actual */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  quitar_seleccion: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        seleccion_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description No existe */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  modificar_seleccion: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        seleccion_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SeleccionCambio"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SeleccionCarrito"];
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description No existe */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Choca con el estado actual */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  reservar: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ViajeEntrada"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Viaje"];
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Choca con el estado actual */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  pagar_reserva: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        reserva_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["PagoReservaEntrada"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PagoReservaSalida"];
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description No existe */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Choca con el estado actual */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  iniciar_compra: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ViajeEntrada"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Viaje"];
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Choca con el estado actual */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  obtener_compra: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        compra_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Viaje"];
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description No existe */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  soltar_compra: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        compra_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description No existe */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Choca con el estado actual */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  confirmar_compra: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        compra_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Viaje"];
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description No existe */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Choca con el estado actual */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  listar_mis_viajes: {
+    parameters: {
+      query: {
+        /** @description Pestaña de S19: reserva o compra. */
+        tipo: "reserva" | "compra";
+        estado?:
+          | (
+              | "pendiente"
+              | "vigente"
+              | "pagada"
+              | "vencida"
+              | "activa"
+              | "cancelada"
+              | "realizada"
+              | "reembolsada"
+              | "reubicada"
+            )
+          | null;
+        /** @description Día de salida del primer tramo, en hora de Colombia. */
+        desde?: string | null;
+        /** @description Día de salida del primer tramo, en hora de Colombia. */
+        hasta?: string | null;
+        pagina?: number;
+        por_pagina?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PaginaViajes"];
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  consultar_saldo: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Monedero"];
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  listar_movimientos: {
+    parameters: {
+      query?: {
+        tipo?: ("recarga" | "compra" | "reembolso") | null;
+        /** @description Fecha del movimiento en hora de Colombia. */
+        desde?: string | null;
+        /** @description Fecha del movimiento en hora de Colombia. */
+        hasta?: string | null;
+        pagina?: number;
+        por_pagina?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PaginaMovimientos"];
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  listar_tarjetas: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Tarjeta"][];
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  registrar_tarjeta: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["TarjetaEntrada"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Tarjeta"];
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  eliminar_tarjeta: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        tarjeta_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description No existe */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Datos inválidos */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+    };
+  };
+  recargar_monedero: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RecargaEntrada"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Movimiento"];
+        };
+      };
+      /** @description Solicitud inválida */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description Sin sesión o sesión vencida */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description El rol no tiene permiso */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorRespuesta"];
+        };
+      };
+      /** @description No existe */
+      404: {
         headers: {
           [name: string]: unknown;
         };

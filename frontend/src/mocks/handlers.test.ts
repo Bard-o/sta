@@ -370,3 +370,295 @@ describe("API simulada (MSW)", () => {
     });
   });
 });
+
+// Iteración 2 (docs/api/iteracion-2.md). Los tests comparten el estado de los mocks: cada uno
+// usa documentos propios y compara saldos de forma relativa.
+const adulto = (numero_documento: string, clases: string[] = ["economica"]) => ({
+  tipo_documento: "CC",
+  numero_documento,
+  nombres: "Daniel",
+  apellidos: "Arango",
+  fecha_nacimiento: "1990-08-15",
+  genero: "masculino",
+  telefono: "311 555 0188",
+  email: "daniel.arango@correo.co",
+  contacto_nombre: "Laura Gómez",
+  contacto_telefono: "310 555 0192",
+  clases,
+});
+const viaje = (vuelos: number[], viajeros: unknown[]) => ({
+  tramos: vuelos.map((vuelo_id) => ({ vuelo_id })),
+  viajeros,
+});
+type Item = {
+  codigo: string;
+  origen: { codigo: string };
+  economica: { precio_vigente: number; agotada: boolean };
+};
+
+describe("API simulada de la iteración 2 (MSW)", () => {
+  it("busca vuelos públicos con filtros combinados y rechaza rangos invertidos (HU-20)", async () => {
+    const { status, body } = await api(
+      "GET",
+      "/api/v1/busqueda/vuelos?origen=PEI&precio_min=200000&precio_max=400000&clase=economica",
+    );
+    expect(status).toBe(200);
+    expect(body.items.length).toBeGreaterThan(0);
+    for (const v of body.items as Item[]) {
+      expect(v.origen.codigo).toBe("PEI");
+      expect(v.economica.precio_vigente).toBeGreaterThanOrEqual(200_000);
+      expect(v.economica.precio_vigente).toBeLessThanOrEqual(400_000);
+    }
+    const codigos = (body.items as Item[]).map((v) => v.codigo);
+    expect(codigos).not.toContain("STA-00044"); // cancelado
+    expect((body.items as Item[]).find((v) => v.codigo === "STA-00157")?.economica.agotada).toBe(
+      true,
+    );
+
+    const rango = await api("GET", "/api/v1/busqueda/vuelos?precio_min=400000&precio_max=200000");
+    expect(rango.status).toBe(422);
+    expect(rango.body.error).toMatchObject({ codigo: "rango_invalido" });
+    expect(rango.body.error.campos.precio_max).toBeDefined();
+  });
+
+  it("ofrece solo regresos que salen después de la llegada de la ida (HU-21)", async () => {
+    const regresos = (fecha: string, ida = 101) =>
+      api("GET", `/api/v1/busqueda/regresos?vuelo_ida_id=${ida}&destino=CTG&fecha=${fecha}`);
+    const codigos = async (fecha: string, ida?: number) =>
+      ((await regresos(fecha, ida)).body.items as Item[]).map((v) => v.codigo);
+    expect(await codigos("2027-04-15")).toEqual(["STA-00133"]);
+    expect(await codigos("2027-04-22")).toEqual(["STA-00132"]);
+    expect(await codigos("2027-04-15", 104)).toEqual([]);
+    expect((await regresos("2027-04-14")).body.error.codigo).toBe("rango_invalido");
+    expect((await regresos("2027-04-22", 9999)).status).toBe(404);
+  });
+
+  it("el carrito es del cliente y valida cupo y límite al agregar (HU-22)", async () => {
+    expect((await api("GET", "/api/v1/carrito")).status).toBe(401);
+    await entrar("cruiz");
+    expect((await api("GET", "/api/v1/carrito")).status).toBe(403);
+    await entrar("lauragomez");
+    const agregar = (vuelo_id: number, clase: string, viajeros = 1) =>
+      api("POST", "/api/v1/carrito/selecciones", { tramos: [{ vuelo_id, clase }], viajeros });
+    expect((await agregar(158, "primera")).body.error.codigo).toBe("clase_agotada");
+    expect((await agregar(135, "economica")).body.error.codigo).toBe("limite_tiquetes");
+    expect((await agregar(44, "economica")).body.error.codigo).toBe("vuelo_no_disponible");
+    const unaSilla = await agregar(159, "economica");
+    expect(unaSilla.status).toBe(201);
+    const cambio = await api("PATCH", `/api/v1/carrito/selecciones/${unaSilla.body.id}`, {
+      viajeros: 2,
+    });
+    expect(cambio.body.error.codigo).toBe("clase_agotada");
+    expect((await api("DELETE", `/api/v1/carrito/selecciones/${unaSilla.body.id}`)).status).toBe(
+      204,
+    );
+  });
+
+  it("advierte el cambio de precio y la falta de cupo antes de confirmar (HU-23)", async () => {
+    await entrar("lauragomez");
+    const { body } = await api("GET", "/api/v1/carrito");
+    type Sel = {
+      id: number;
+      confirmable: boolean;
+      avisos: { codigo: string }[];
+      tramos: { precio_unitario: number; precio_al_agregar: number }[];
+    };
+    const sel = (id: number) => (body.selecciones as Sel[]).find((s) => s.id === id)!;
+    expect(sel(71).avisos.map((a) => a.codigo)).toEqual(["precio_cambio"]);
+    expect(sel(71).tramos[0]).toMatchObject({
+      precio_al_agregar: 262_500,
+      precio_unitario: 210_000,
+    });
+    expect(sel(71).confirmable).toBe(true);
+    expect(sel(72).confirmable).toBe(false);
+    expect(sel(73).tramos).toHaveLength(2);
+    expect(sel(73)).toMatchObject({ subtotal: 11_700_000 });
+  });
+
+  it("reserva con las reglas de los viajeros (HU-24)", async () => {
+    await entrar("pedrorios");
+    expect(
+      (await api("POST", "/api/v1/reservas", viaje([142], [adulto("1088000501")]))).body.error
+        .codigo,
+    ).toBe("correo_no_verificado");
+
+    await entrar("lauragomez");
+    const duplicado = await api("POST", "/api/v1/reservas", viaje([131], [adulto("42118907")]));
+    expect(duplicado.status).toBe(409);
+    expect(duplicado.body.error).toMatchObject({
+      codigo: "viajero_duplicado",
+      campos: {
+        "viajeros.0.numero_documento": "Este documento ya tiene un tiquete activo en este vuelo.",
+      },
+    });
+    const repetido = await api(
+      "POST",
+      "/api/v1/reservas",
+      viaje([142], [adulto("1088000510"), adulto("1088000510")]),
+    );
+    expect(repetido.body.error).toMatchObject({
+      codigo: "viajero_duplicado",
+      campos: {
+        "viajeros.1.numero_documento": "Este documento ya tiene un tiquete activo en este vuelo.",
+      },
+    });
+    const menor = await api(
+      "POST",
+      "/api/v1/reservas",
+      viaje([142], [{ ...adulto("1088000502"), fecha_nacimiento: "2012-05-02" }]),
+    );
+    expect(menor.body.error.codigo).toBe("menor_sin_adulto");
+    const cumple18 = await api(
+      "POST",
+      "/api/v1/reservas",
+      viaje([142], [{ ...adulto("1088000503"), fecha_nacimiento: "2009-04-14" }]),
+    );
+    expect(cumple18.status).toBe(201);
+    expect(cumple18.body).toMatchObject({ tipo: "reserva", estado: "vigente" });
+    expect(cumple18.body.codigo).toMatch(/^[A-HJ-NP-Z2-9]{6}$/);
+    expect(
+      Date.parse(cumple18.body.vence_en) - Date.parse(cumple18.body.creada_en),
+    ).toBeLessThanOrEqual(24 * 3_600_000);
+  });
+
+  it("compra en dos pasos: bloquea, confirma o rechaza sin cobrar (HU-25)", async () => {
+    await entrar("lauragomez");
+    const antes = (await api("GET", "/api/v1/monedero")).body.saldo;
+    const pagada = await api("POST", "/api/v1/compras/901/confirmar");
+    expect(pagada.body).toMatchObject({ estado: "activa", codigo: "K7Q2PX", total_pendiente: 0 });
+    expect((await api("GET", "/api/v1/monedero")).body.saldo).toBe(antes - 800_000);
+    expect((await api("POST", "/api/v1/compras/901/confirmar")).body.error.codigo).toBe(
+      "estado_invalido",
+    );
+    expect((await api("POST", "/api/v1/compras/902/confirmar")).body.error.codigo).toBe(
+      "bloqueo_vencido",
+    );
+
+    await entrar("sofiamarin");
+    const compra = await api(
+      "POST",
+      "/api/v1/compras",
+      viaje([101], [adulto("1088456789", ["primera"])]),
+    );
+    expect(compra.body).toMatchObject({ tipo: "compra", estado: "pendiente" });
+    const sinSaldo = await api("POST", `/api/v1/compras/${compra.body.id}/confirmar`);
+    expect(sinSaldo.body.error.codigo).toBe("saldo_insuficiente");
+    expect((await api("GET", "/api/v1/monedero")).body.saldo).toBe(0);
+    expect((await api("DELETE", `/api/v1/compras/${compra.body.id}`)).status).toBe(204);
+    expect((await api("GET", `/api/v1/compras/${compra.body.id}`)).body.estado).toBe("cancelada");
+  });
+
+  it("reserva un trayecto completo con clase por tramo bajo un solo código (HU-26)", async () => {
+    await entrar("lauragomez");
+    const completo = await api(
+      "POST",
+      "/api/v1/reservas",
+      viaje([101, 132], [adulto("1088000504", ["primera", "economica"])]),
+    );
+    expect(completo.status).toBe(201);
+    expect(completo.body.tramos).toHaveLength(2);
+    expect(completo.body.viajeros[0].tiquetes).toHaveLength(2);
+    expect(completo.body.total).toBe(4_100_000 + 1_750_000);
+    const alReves = await api(
+      "POST",
+      "/api/v1/reservas",
+      viaje([101, 129], [adulto("1088000505", ["economica", "economica"])]),
+    );
+    expect(alReves.body.error.codigo).toBe("regreso_invalido");
+  });
+
+  it("paga una reserva por viajero al precio congelado y rechaza las vencidas (HU-27)", async () => {
+    await entrar("lauragomez");
+    await api("POST", "/api/v1/monedero/recargas", { tarjeta_id: 21, valor: 2_000_000 });
+    expect(
+      (await api("POST", "/api/v1/reservas/41/pagar", { viajero_ids: [4103] })).body.error.codigo,
+    ).toBe("menor_sin_adulto");
+    const pago = await api("POST", "/api/v1/reservas/41/pagar", { viajero_ids: [4101, 4102] });
+    expect(pago.status).toBe(200);
+    // Precio congelado: $ 262.500 aunque hoy STA-00131 cueste $ 210.000.
+    expect(pago.body.compra).toMatchObject({
+      tipo: "compra",
+      estado: "activa",
+      codigo: "H4N8WQ",
+      total: 525_000,
+    });
+    expect(pago.body.reserva).toMatchObject({ estado: "vigente", total_pendiente: 262_500 });
+    expect((await api("POST", "/api/v1/reservas/42/pagar", {})).body.error.codigo).toBe(
+      "reserva_no_vigente",
+    );
+    const compras = await api("GET", "/api/v1/mis-viajes?tipo=compra");
+    expect((compras.body.items as Item[]).map((v) => v.codigo)).toContain("H4N8WQ");
+  });
+
+  it("registra tarjetas con Luhn y vencimiento y recarga el valor exacto (HU-28, HU-30)", async () => {
+    await entrar("sofiamarin");
+    const tarjeta = {
+      tipo: "credito",
+      titular: "SOFIA MARIN",
+      numero: "4242424242424241",
+      vencimiento: "08/28",
+      cvv: "123",
+    };
+    const luhn = await api("POST", "/api/v1/monedero/tarjetas", tarjeta);
+    expect(luhn.status).toBe(422);
+    expect(luhn.body.error).toMatchObject({
+      codigo: "tarjeta_invalida",
+      campos: { numero: "El número no es válido. Revisa los dígitos." },
+    });
+    const vencida = await api("POST", "/api/v1/monedero/tarjetas", {
+      ...tarjeta,
+      numero: "4242424242424242",
+      vencimiento: "01/20",
+    });
+    expect(vencida.body.error.codigo).toBe("tarjeta_vencida");
+    const nueva = await api("POST", "/api/v1/monedero/tarjetas", {
+      ...tarjeta,
+      numero: "4242424242424242",
+    });
+    expect(nueva.status).toBe(201);
+    expect(nueva.body).toMatchObject({
+      numero_enmascarado: "**** 4242",
+      franquicia: "visa",
+      vencida: false,
+    });
+    expect(JSON.stringify(nueva.body)).not.toContain("4242424242424242"); // RNF-12
+    const cero = await api("POST", "/api/v1/monedero/recargas", {
+      tarjeta_id: nueva.body.id,
+      valor: 0,
+    });
+    expect(cero.body.error.campos.valor).toBe("Debe ser mayor que 0.");
+    const antes = (await api("GET", "/api/v1/monedero")).body.saldo;
+    const recarga = await api("POST", "/api/v1/monedero/recargas", {
+      tarjeta_id: nueva.body.id,
+      valor: 500_000,
+    });
+    expect(recarga.body).toMatchObject({
+      tipo: "recarga",
+      valor: 500_000,
+      referencia: "**** 4242",
+    });
+    expect((await api("GET", "/api/v1/monedero")).body.saldo).toBe(antes + 500_000);
+  });
+
+  it("elimina tarjetas sin perder la referencia de sus recargas y filtra movimientos (HU-29, HU-31)", async () => {
+    await entrar("lauragomez");
+    expect(
+      (await api("POST", "/api/v1/monedero/recargas", { tarjeta_id: 23, valor: 100_000 })).body
+        .error.codigo,
+    ).toBe("tarjeta_vencida");
+    expect((await api("DELETE", "/api/v1/monedero/tarjetas/22")).status).toBe(204);
+    const tarjetas = (await api("GET", "/api/v1/monedero/tarjetas")).body as { id: number }[];
+    expect(tarjetas.map((t) => t.id)).not.toContain(22);
+    const recargas = (await api("GET", "/api/v1/monedero/movimientos?tipo=recarga")).body.items as {
+      tipo: string;
+      referencia: string;
+    }[];
+    expect(recargas.every((m) => m.tipo === "recarga")).toBe(true);
+    expect(recargas.map((m) => m.referencia)).toContain("**** 5100");
+    const { body } = await api(
+      "GET",
+      "/api/v1/monedero/movimientos?desde=2026-10-01&hasta=2026-09-01",
+    );
+    expect(body.error.codigo).toBe("rango_invalido");
+  });
+});

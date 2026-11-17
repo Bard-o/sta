@@ -10,7 +10,11 @@ from app.core import health
 from app.core.config import get_settings
 from app.core.errors import RESPUESTAS_ERROR, registrar_manejadores
 from app.core.planificador import cargar_tareas_de_modulos, planificador
+from app.modules.busqueda.router import router as busqueda_router
+from app.modules.carrito.router import router as carrito_router
+from app.modules.monedero.router import router as monedero_router
 from app.modules.noticias.router import router as noticias_router
+from app.modules.reservas.router import router as reservas_router
 from app.modules.usuarios.router import router as usuarios_router
 from app.modules.vuelos.router import router as vuelos_router
 
@@ -49,6 +53,10 @@ def create_app() -> FastAPI:
     app.include_router(usuarios_router, prefix=API_PREFIX)
     app.include_router(vuelos_router, prefix=API_PREFIX)
     app.include_router(noticias_router, prefix=API_PREFIX)
+    app.include_router(busqueda_router, prefix=API_PREFIX)
+    app.include_router(carrito_router, prefix=API_PREFIX)
+    app.include_router(reservas_router, prefix=API_PREFIX)
+    app.include_router(monedero_router, prefix=API_PREFIX)
     return app
 
 
