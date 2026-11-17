@@ -15,16 +15,21 @@ const resolve = (value) => {
   return alias ? `var(--${alias[1]})` : value;
 };
 
+// Un token con un valor distinto por tema (objeto) va en el bloque de cada tema; uno con un valor
+// único (texto) va en :root.
+const esPorTema = (t) => typeof t.value === "object";
+const porTema = (lista) => lista.filter(esPorTema);
+
 const themeBlock = (theme, index) => {
   const selector = index === 0 ? `:root, [data-theme="${theme.id}"]` : `[data-theme="${theme.id}"]`;
-  const lines = [...tokens.color.tokens, ...tokens.shadow.tokens].map(
+  const lines = [...tokens.color.tokens, ...tokens.shadow.tokens, ...porTema(tokens.radius.tokens)].map(
     (t) => `  --${t.name}: ${resolve(t.value[theme.id])};`,
   );
   return [`${selector} {`, ...lines, "}"];
 };
 
 const scaleBlock = () => {
-  const lines = [...tokens.spacing.tokens, ...tokens.radius.tokens, ...tokens.blur.tokens].map(
+  const lines = [...tokens.spacing.tokens, ...tokens.radius.tokens.filter((t) => !esPorTema(t)), ...tokens.blur.tokens].map(
     (t) => `  --${t.name}: ${t.value};`,
   );
   for (const [name, stack] of Object.entries(tokens.type.families)) {

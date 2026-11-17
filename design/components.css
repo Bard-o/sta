@@ -66,7 +66,7 @@ body { font-family: var(--font-sans); font-size: 15px; line-height: 22px; color:
 .sta-icon--lg { width: 22px; height: 22px; }
 
 /* ---------- Button ---------- */
-.sta-btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); height: 40px; padding: 0 var(--space-5); border-radius: var(--radius-pill); border: 1px solid transparent; font: 600 14px/18px var(--font-sans); white-space: nowrap; cursor: pointer; text-decoration: none; transition: background-color .15s, filter .15s, transform .15s; }
+.sta-btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); height: 40px; padding: 0 var(--space-5); border-radius: var(--radius-control); border: 1px solid transparent; font: 600 14px/18px var(--font-sans); white-space: nowrap; cursor: pointer; text-decoration: none; transition: background-color .15s, filter .15s, transform .15s; }
 .sta-btn--sm { height: 32px; padding: 0 var(--space-3); font-size: 13px; }
 .sta-btn--block { width: 100%; }
 .sta-btn--primary { background: var(--accent); color: var(--on-accent); box-shadow: var(--shadow-accent); }
@@ -267,3 +267,43 @@ select.sta-input option { color: #15171a; }
 @media (prefers-reduced-transparency: reduce) {
   .sta-glass, .sta-pass__main, .sta-pass__stub, .sta-nav, .sta-dialog, .sta-chatfab { background: var(--glass-strong); -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
+
+/* ---------- Tema claro: superficies sólidas, sin vidrio ---------- */
+/* Los tokens de vidrio ya valen colores sólidos en este tema (tokens.json); aquí solo se quita lo
+   que no tiene sentido sin vidrio (luces del fondo, blur) y se pinta la barra «letrero». */
+[data-theme="claro"] .sta-backdrop { background-image: none; }
+[data-theme="claro"] .sta-backdrop::before { display: none; }
+[data-theme="claro"] .sta-glass,
+[data-theme="claro"] .sta-pass__main,
+[data-theme="claro"] .sta-pass__stub,
+[data-theme="claro"] .sta-nav,
+[data-theme="claro"] .sta-dialog,
+[data-theme="claro"] .sta-chatfab,
+[data-theme="claro"] .sta-btn--secondary { -webkit-backdrop-filter: none; backdrop-filter: none; }
+[data-theme="claro"] .sta-shell.sta-glass { border-color: var(--line); }
+/* El vuelo elegido lleva borde de tinta: el borde amarillo no se distingue sobre blanco. */
+[data-theme="claro"] .sta-pass--selected .sta-pass__main,
+[data-theme="claro"] .sta-pass--selected .sta-pass__stub { border-color: var(--ink); }
+[data-theme="claro"] .sta-pass--selected .sta-pass__stub { border-left-color: var(--ink); }
+@container (max-width: 560px) {
+  [data-theme="claro"] .sta-pass--selected .sta-pass__stub { border-left-color: var(--ink); border-top-color: var(--ink); }
+}
+
+/* Barra superior oscura: letrero de terminal con la placa amarilla. */
+[data-theme="claro"] .sta-nav { background: var(--signage); border-bottom-color: var(--signage); color: var(--on-signage); }
+[data-theme="claro"] .sta-nav__item { color: var(--on-signage-muted); }
+[data-theme="claro"] .sta-nav__item:hover { color: var(--on-signage); background: var(--signage-hover); }
+[data-theme="claro"] .sta-nav__item[aria-current="page"] { color: var(--signage); background: var(--on-signage); }
+[data-theme="claro"] .sta-nav .sta-user { background: var(--signage-hover); border-color: var(--signage-line); color: var(--on-signage); }
+[data-theme="claro"] .sta-nav .sta-user__role { color: var(--on-signage-muted); }
+[data-theme="claro"] .sta-nav .sta-avatar { background: var(--on-signage); color: var(--signage); }
+[data-theme="claro"] .sta-nav .sta-btn--ghost { color: var(--on-signage-muted); }
+[data-theme="claro"] .sta-nav .sta-btn--ghost:hover { color: var(--on-signage); background: var(--signage-hover); }
+[data-theme="claro"] .sta-nav .sta-btn--secondary { background: transparent; color: var(--on-signage); border-color: var(--on-signage-muted); }
+[data-theme="claro"] .sta-nav .sta-btn--secondary:hover { background: var(--signage-hover); }
+[data-theme="claro"] .sta-nav .sta-search { background: var(--signage-hover); border-color: var(--signage-line); color: var(--on-signage); }
+[data-theme="claro"] .sta-nav .sta-search input { color: var(--on-signage); }
+[data-theme="claro"] .sta-nav .sta-search input::placeholder { color: var(--on-signage-muted); }
+[data-theme="claro"] .sta-nav .sta-search__btn { background: var(--signage-line); color: var(--on-signage); }
+[data-theme="claro"] .sta-nav :focus-visible,
+[data-theme="claro"] .sta-nav .sta-search:focus-within { outline-color: var(--accent); }

@@ -1,9 +1,21 @@
 <!doctype html>
-<html lang="es-CO" data-theme="noche">
+<html lang="es-CO" data-theme="claro">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AVIANCO · Tiquetes aéreos</title>
+    <script>
+      // Aplica el tema guardado antes de pintar, para que no parpadee el claro. Si el
+      // almacenamiento no está disponible (modo privado), queda el tema por defecto.
+      try {
+        var tema = localStorage.getItem("sta-tema");
+        if (tema === "claro" || tema === "noche" || tema === "dia") {
+          document.documentElement.setAttribute("data-theme", tema);
+        }
+      } catch (e) {
+        /* sin almacenamiento: se queda el tema por defecto */
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
