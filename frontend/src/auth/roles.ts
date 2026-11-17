@@ -57,10 +57,13 @@ export const NAV_ROL: Record<Rol, NavItem[]> = {
   ],
 };
 
+/** Ruta interna segura: empieza por `/` y no por `//` ni `/\` (contrato de la iteración 2). */
+export function esRutaInterna(ruta: string | null | undefined): ruta is string {
+  return !!ruta && ruta.startsWith("/") && !ruta.startsWith("//") && !ruta.startsWith("/\\");
+}
+
 /** A dónde ir tras iniciar sesión: `?next=` si es una ruta interna, o el inicio del rol. */
 export function destinoTrasLogin(usuario: Usuario, next: string | null): string {
-  if (next && next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/\\")) {
-    return next;
-  }
+  if (esRutaInterna(next)) return next;
   return INICIO_ROL[usuario.rol];
 }
