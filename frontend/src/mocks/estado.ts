@@ -11,6 +11,10 @@ import {
   TOKEN_INVITACION_MOCK,
   VUELOS,
 } from "./datos";
+import { MOVIMIENTOS, TARJETAS, type MovimientoGuardado } from "./datos-monedero";
+import { SELECCIONES, VIAJES, type ViajeGuardado } from "./datos-viajes";
+import { aLaVenta } from "./reglas";
+import { aIso } from "./tiempo";
 
 type Usuario = Schemas["UsuarioSalida"];
 type Rol = Usuario["rol"];
@@ -77,6 +81,10 @@ export const db = {
     },
     { id: 10, tipo: "vuelo", vuelo_id: 92, publicada_en: "2026-10-19T21:40:00Z" },
   ] as NoticiaGuardada[],
+  selecciones: structuredClone(SELECCIONES),
+  viajes: structuredClone(VIAJES),
+  tarjetas: structuredClone(TARJETAS),
+  movimientos: structuredClone(MOVIMIENTOS),
 };
 
 let siguienteId = 1000;
@@ -244,4 +252,179 @@ export function publicarNoticia(tipo: Noticia["tipo"], vuelo_id: number, promoci
     promocion_id,
     publicada_en: new Date().toISOString(),
   });
+}
+
+// ---------- Iteración 2: ocupación, vencimientos y saldo ----------
+
+type ClaseVuelo = "economica" | "primera";
+type EstadoTiquete = Schemas["TiqueteViaje"]["estado"];
+
+/** Precio vigente de una clase, con la promoción vigente si la hay (RF-24). */
+export function precioVigente(v: VueloAdmin, clase: ClaseVuelo): number {
+  return vueloDetalle(conPromociones(v))[clase].precio_vigente;
+}
+
+/** Suma `n` sillas (o las quita, con n < 0) a la ocupación del vuelo. */
+export function ocupar(
+  vueloId: number,
+  clase: ClaseVuelo,
+  n: number,
+  columna: "reservadas" | "vendidas",
+) {
+  const v = db.vuelos.find((x) => x.id === vueloId);
+  if (!v) return;
+  const c = v.ocupacion[clase];
+  c[columna] += n;
+  c.disponibles = c.capacidad - c.vendidas - c.reservadas;
+  v.tiquetes_vendidos = v.ocupacion.primera.vendidas + v.ocupacion.economica.vendidas;
+}
+
+/** Reservas vigentes y compras pendientes del vuelo (impiden editarlo, HU-15). */
+export function reservasActivas(viaje: ViajeGuardado, n: number) {
+  for (const { vuelo } of viaje.tramos) {
+    const v = db.vuelos.find((x) => x.id === vuelo.id);
+    if (v) v.reservas_activas = Math.max(0, v.reservas_activas + n);
+  }
+}
+
+/** Un tiquete cuenta como activo en una reserva si sigue reservado, y en una compra si está
+ *  comprado o bloqueado: un viajero pagado no cuenta dos veces (RF-32, RF-34). */
+function activo(viaje: ViajeGuardado, estado: EstadoTiquete): boolean {
+  return viaje.tipo === "reserva"
+    ? estado === "reservado"
+    : estado === "comprado" || estado === "bloqueado";
+}
+
+function tiquetesActivosDe(viajes: ViajeGuardado[], vueloId: number) {
+  return viajes.flatMap((viaje) =>
+    viaje.viajeros.flatMap((viajero) =>
+      viajero.tiquetes
+        .filter((t) => activo(viaje, t.estado) && viaje.tramos[t.tramo].vuelo.id === vueloId)
+        .map((t) => ({ viajero, t })),
+    ),
+  );
+}
+
+/** RF-32: tiquetes activos del cliente en el vuelo (reservados, comprados y bloqueados). */
+export function tiquetesActivos(usuarioId: number, vueloId: number): number {
+  procesarVencimientos();
+  return tiquetesActivosDe(
+    db.viajes.filter((v) => v.usuario_id === usuarioId),
+    vueloId,
+  ).length;
+}
+
+/** RF-34: el documento ya tiene un tiquete activo en el vuelo, de cualquier cliente. */
+export function documentoActivo(tipo: string, numero: string, vueloId: number): boolean {
+  procesarVencimientos();
+  return tiquetesActivosDe(db.viajes, vueloId).some(
+    ({ viajero }) =>
+      viajero.tipo_documento === tipo &&
+      viajero.numero_documento.toUpperCase() === numero.toUpperCase(),
+  );
+}
+
+/** Libera las sillas de una reserva o compra que termina sin pagarse (RF-37, SUP-15): vence
+ *  (`vencido`, `vencida`) o la suelta el cliente o el vuelo (`cancelado`, `cancelada`). */
+export function soltar(
+  viaje: ViajeGuardado,
+  de: EstadoTiquete,
+  a: EstadoTiquete,
+  estado: ViajeGuardado["estado"],
+) {
+  for (const viajero of viaje.viajeros) {
+    for (const t of viajero.tiquetes) {
+      if (t.estado !== de) continue;
+      t.estado = a;
+      ocupar(viaje.tramos[t.tramo].vuelo.id, t.clase, -1, "reservadas");
+    }
+  }
+  reservasActivas(viaje, -1);
+  viaje.estado = estado;
+  viaje.total_pendiente = 0;
+}
+
+/** Lo que hacen las tareas `reservas.vencer_reservas` y `reservas.liberar_bloqueos`. */
+export function procesarVencimientos(ahora = Date.now()) {
+  for (const v of db.viajes) {
+    if (!v.vence_en || Date.parse(v.vence_en) > ahora) continue;
+    if (v.tipo === "reserva" && v.estado === "vigente")
+      soltar(v, "reservado", "vencido", "vencida");
+    if (v.tipo === "compra" && v.estado === "pendiente") {
+      soltar(v, "bloqueado", "vencido", "vencida");
+    }
+  }
+}
+
+/** Valida los vuelos de los tramos como el backend: existen, se venden y el regreso cuadra. */
+export function vuelosDeTramos(vueloIds: number[]): VueloAdmin[] | Response {
+  const vuelos: VueloAdmin[] = [];
+  for (const [i, id] of vueloIds.entries()) {
+    const campo = `tramos.${i}.vuelo_id`;
+    const v = db.vuelos.find((x) => x.id === id);
+    if (!v || v.estado !== "programado") {
+      return error(409, "vuelo_no_disponible", "Uno de los vuelos ya no está a la venta.", {
+        [campo]: "El vuelo no existe o ya no está programado.",
+      });
+    }
+    if (!aLaVenta(v)) {
+      return error(
+        409,
+        "fuera_de_plazo",
+        `La venta de ${v.codigo} ya cerró: cierra 1 hora antes de la salida (3 horas si es internacional).`,
+        { [campo]: "Ya no se puede reservar ni comprar." },
+      );
+    }
+    vuelos.push(v);
+  }
+  if (vuelos.length === 2) {
+    const [ida, regreso] = vuelos;
+    const invalido =
+      regreso.id === ida.id ||
+      regreso.origen.codigo !== ida.destino.codigo ||
+      Date.parse(regreso.salida) <= Date.parse(ida.llegada);
+    if (invalido) {
+      return error(
+        422,
+        "regreso_invalido",
+        `El regreso debe salir de ${ida.destino.nombre} después de la llegada de la ida.`,
+        { "tramos.1.vuelo_id": "Elige un regreso que salga después de tu llegada." },
+      );
+    }
+  }
+  return vuelos;
+}
+
+export function saldoDe(usuarioId: number): number {
+  return db.movimientos.filter((m) => m.usuario_id === usuarioId).reduce((s, m) => s + m.valor, 0);
+}
+
+export function registrarMovimiento(
+  usuarioId: number,
+  tipo: MovimientoGuardado["tipo"],
+  valor: number,
+  referencia: string,
+): MovimientoGuardado {
+  const movimiento: MovimientoGuardado = {
+    id: nuevoId(),
+    usuario_id: usuarioId,
+    tipo,
+    valor,
+    saldo_resultante: saldoDe(usuarioId) + valor,
+    referencia,
+    creado_en: aIso(new Date()),
+  };
+  db.movimientos.push(movimiento);
+  return movimiento;
+}
+
+/** Quita el dueño antes de responder: la API no lo expone. */
+export function aViaje({ usuario_id, ...viaje }: ViajeGuardado): Schemas["Viaje"] {
+  void usuario_id;
+  return viaje;
+}
+
+export function aMovimiento({ usuario_id, ...m }: MovimientoGuardado): Schemas["Movimiento"] {
+  void usuario_id;
+  return m;
 }

@@ -1,13 +1,16 @@
-// Datos de ejemplo de la API simulada (docs/api/iteracion-1.md). Todos tipados con los schemas
+// Datos de ejemplo de la API simulada (docs/api/iteracion-1.md e iteracion-2.md). Todos tipados con los schemas
 // generados: si el contrato cambia, `npm run typecheck` señala qué ajustar aquí.
 //
 // Usuarios de prueba (contraseña de todos: CONTRASENA_MOCK):
 //   lauragomez  cliente con el correo verificado y una compra activa (no puede desactivarse)
 //   pedrorios   cliente con el correo sin verificar
+//   sofiamarin  cliente verificado sin saldo, sin tarjetas, sin viajes y con el carrito vacío
 //   cruiz       administrador          root      root
 //   amejia      administrador inactivo («cuenta inactiva»)
 //   jtorres     administrador invitado, sin contraseña hasta completar la invitación
 //   bloqueado   cualquier contraseña responde 429 (HU-03, 5 intentos fallidos)
+// Iteración 2: los datos de carrito, viajes y monedero están en datos-viajes.ts y
+// datos-monedero.ts; los valores de prueba, en docs/api/iteracion-2.md («Mocks para el frontend»).
 import type { Schemas } from "@/api/client";
 import { aIso, sumarMinutos } from "./tiempo";
 
@@ -194,6 +197,8 @@ export function armarVuelo(
   };
 }
 
+const dur = (origen: string, destino: string) => duracionMinutos(ciudad(origen)!, ciudad(destino)!);
+
 export const VUELOS: VueloAdmin[] = [
   // Programados (wireframes S08, S09, S11, S13)
   armarVuelo(31, "PEI", "BOG", "2026-12-10T11:00:00Z", 50, [280_000, 750_000]),
@@ -223,6 +228,158 @@ export const VUELOS: VueloAdmin[] = [
   }),
   // Cancelado
   armarVuelo(44, "BAQ", "BGA", "2026-11-05T15:30:00Z", 70, [290_000, 780_000], "cancelado"),
+  // Iteración 2 (búsqueda, carrito, reservas y compras), en abril de 2027 para que sigan a la
+  // venta todo el semestre. Ver docs/api/iteracion-2.md, «Mocks para el frontend».
+  armarVuelo(
+    131,
+    "PEI",
+    "BOG",
+    "2027-04-15T11:00:00Z",
+    dur("PEI", "BOG"),
+    [262_500, 690_000],
+    "programado",
+    {
+      vendidas: [21, 110],
+      reservadas: [0, 3], // reserva H4N8WQ
+      reservas_activas: 1,
+    },
+  ),
+  armarVuelo(
+    135,
+    "PEI",
+    "CTG",
+    "2027-04-18T15:00:00Z",
+    dur("PEI", "CTG"),
+    [300_000, 850_000],
+    "programado",
+    {
+      vendidas: [2, 40], // incluye la compra P3X7KD
+      reservadas: [0, 2], // reserva R5T2LM
+      reservas_activas: 1,
+    },
+  ),
+  armarVuelo(
+    142,
+    "PEI",
+    "MDE",
+    "2027-04-15T12:40:00Z",
+    dur("PEI", "MDE"),
+    [185_000, 520_000],
+    "programado",
+    {
+      vendidas: [6, 38],
+    },
+  ),
+  armarVuelo(
+    157,
+    "PEI",
+    "CTG",
+    "2027-04-15T14:15:00Z",
+    dur("PEI", "CTG"),
+    [320_000, 890_000],
+    "programado",
+    {
+      vendidas: [10, 125], // económica agotada
+    },
+  ),
+  armarVuelo(
+    158,
+    "PEI",
+    "BOG",
+    "2027-04-15T23:00:00Z",
+    dur("PEI", "BOG"),
+    [240_000, 690_000],
+    "programado",
+    {
+      vendidas: [25, 40], // primera agotada
+    },
+  ),
+  armarVuelo(
+    159,
+    "PEI",
+    "MDE",
+    "2027-04-15T17:00:00Z",
+    dur("PEI", "MDE"),
+    [230_000, 610_000],
+    "programado",
+    {
+      vendidas: [3, 124], // una sola silla en económica
+    },
+  ),
+  armarVuelo(
+    160,
+    "PEI",
+    "CTG",
+    "2027-04-20T14:15:00Z",
+    dur("PEI", "CTG"),
+    [400_000, 950_000],
+    "programado",
+    {
+      vendidas: [5, 86],
+      reservadas: [0, 2], // compra pendiente K7Q2PX
+      reservas_activas: 1,
+    },
+  ),
+  armarVuelo(
+    101,
+    "PEI",
+    "JFK",
+    "2027-04-15T13:00:00Z",
+    dur("PEI", "JFK"),
+    [1_650_000, 4_100_000],
+    "programado",
+    {
+      vendidas: [12, 80],
+    },
+  ),
+  armarVuelo(
+    104,
+    "PEI",
+    "JFK",
+    "2027-04-16T04:10:00Z",
+    dur("PEI", "JFK"),
+    [1_450_000, 3_650_000],
+    "programado",
+    {
+      vendidas: [5, 60],
+    },
+  ),
+  armarVuelo(
+    129,
+    "JFK",
+    "CTG",
+    "2027-04-15T10:30:00Z",
+    dur("JFK", "CTG"),
+    [1_620_000, 3_800_000],
+    "programado",
+    {
+      vendidas: [0, 30],
+    },
+  ),
+  armarVuelo(
+    133,
+    "JFK",
+    "CTG",
+    "2027-04-16T00:00:00Z",
+    dur("JFK", "CTG"),
+    [1_580_000, 3_700_000],
+    "programado",
+    {
+      vendidas: [2, 15],
+    },
+  ),
+  armarVuelo(
+    132,
+    "JFK",
+    "CTG",
+    "2027-04-22T14:00:00Z",
+    dur("JFK", "CTG"),
+    [1_750_000, 3_900_000],
+    "programado",
+    {
+      vendidas: [8, 120],
+    },
+  ),
 ];
 
 // ---------- Promociones ----------
@@ -284,6 +441,16 @@ export const PROMOCIONES: Promocion[] = [
     "2026-11-15T04:59:00Z",
     "programada",
     "2026-10-19T16:40:00Z",
+  ),
+  armarPromocion(
+    4,
+    131,
+    20,
+    ["economica"],
+    "2026-11-10T13:00:00Z",
+    "2027-04-10T04:59:00Z",
+    "vigente",
+    "2026-11-10T12:30:00Z",
   ),
 ];
 
@@ -361,6 +528,19 @@ const pedro: Perfil = {
   suscrito_noticias: false,
 };
 
+const sofia: Perfil = {
+  ...laura,
+  id: 14,
+  nombre_usuario: "sofiamarin",
+  numero_documento: "1088456789",
+  nombres: "Sofía",
+  apellidos: "Marín Restrepo",
+  fecha_nacimiento: "2000-06-21",
+  email: "sofia.marin@correo.co",
+  telefono: "311 444 0123",
+  suscrito_noticias: false,
+};
+
 const carlos: Perfil = {
   id: 3,
   nombre_usuario: "cruiz",
@@ -417,6 +597,7 @@ const sinPerfil = (id: number, nombre_usuario: string, rol: Usuario["rol"]): Usu
 export const CUENTAS: CuentaMock[] = [
   { usuario: usuarioDe(laura), perfil: laura, activo: true },
   { usuario: usuarioDe(pedro), perfil: pedro, activo: true },
+  { usuario: usuarioDe(sofia), perfil: sofia, activo: true },
   { usuario: usuarioDe(carlos), perfil: carlos, activo: true },
   { usuario: sinPerfil(1, "root", "root"), activo: true },
   { usuario: { ...sinPerfil(2, "amejia", "admin"), registro_completo: true }, activo: false },
