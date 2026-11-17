@@ -14,6 +14,7 @@ from app.core.auth import UsuarioActual, require_role
 from app.core.db import DbSession
 from app.core.errors import NoImplementado, respuestas_error
 from app.core.security import Rol
+from app.modules.reservas import service
 from app.modules.reservas.schemas import (
     EstadoViaje,
     PaginaViajes,
@@ -42,7 +43,9 @@ reservas = APIRouter(prefix="/reservas", tags=["reservas"])
 )
 def reservar(datos: ViajeEntrada, usuario: Cliente, db: DbSession) -> Viaje:
     """Reserva sin pagar: asigna sillas, congela el precio y fija el vencimiento (HU-24, HU-26)."""
-    raise NoImplementado()
+    transaccion = service.crear_reserva(db, usuario.id, datos)
+    db.commit()
+    return service.viaje_de(db, transaccion)
 
 
 @reservas.post(
