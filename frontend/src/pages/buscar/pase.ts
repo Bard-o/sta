@@ -1,11 +1,21 @@
 import type { FlightPassProps } from "@/components/ui/flight-pass";
 import { desfase, duracion, fecha, hora } from "@/lib/format";
-import type { VueloBusqueda } from "./api";
+
+/** Lo mínimo de un vuelo para dibujarlo como pasabordo: lo comparten la búsqueda, el carrito y la
+ *  compra (cada uno con su propio tipo de la API). */
+interface VueloParaPase {
+  codigo: string;
+  origen: { codigo: string; nombre: string; zona_horaria: string };
+  destino: { codigo: string; nombre: string; zona_horaria: string };
+  salida: string;
+  llegada: string;
+  duracion_minutos: number;
+}
 
 /** Lo que el pasabordo muestra de un vuelo, con las horas en la hora local de cada ciudad
  *  (IU-05): código, ruta, salida, llegada, duración y fecha de salida. */
 export function datosDelPase(
-  vuelo: VueloBusqueda,
+  vuelo: VueloParaPase,
 ): Pick<FlightPassProps, "code" | "from" | "to" | "duration" | "date"> {
   const zo = vuelo.origen.zona_horaria;
   const zd = vuelo.destino.zona_horaria;
