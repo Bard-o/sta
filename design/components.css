@@ -264,6 +264,19 @@ select.sta-input option { color: #15171a; }
   .sta-nav__item { padding: 0 var(--space-2); }
   .sta-seg { max-width: 100%; overflow-x: auto; }
 }
+/* Menú en dos filas cuando los items no caben junto a la placa y el usuario (≈1.100 px con el menú
+   del cliente o del administrador): arriba la placa y el usuario, debajo los items. Así nada queda
+   fuera de alcance, incluido el carrito. Con un nombre de usuario largo la fila de arriba crece. */
+@media (max-width: 1120px) {
+  .sta-nav { flex-wrap: wrap; height: auto; row-gap: var(--space-1); padding-top: var(--space-2); padding-bottom: var(--space-2); }
+  .sta-nav .sta-brand { order: 1; margin-right: 0; }
+  .sta-nav__right { order: 2; flex-wrap: wrap; justify-content: flex-end; }
+  .sta-nav__items { order: 3; flex: 1 0 100%; max-width: 100%; }
+}
+/* En pantallas angostas los items pasan a varias líneas en vez de desplazarse: todos se ven. */
+@media (max-width: 720px) {
+  .sta-nav__items { flex-wrap: wrap; overflow: visible; }
+}
 @media (prefers-reduced-transparency: reduce) {
   .sta-glass, .sta-pass__main, .sta-pass__stub, .sta-nav, .sta-dialog, .sta-chatfab { background: var(--glass-strong); -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
