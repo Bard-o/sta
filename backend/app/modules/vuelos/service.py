@@ -15,8 +15,9 @@ from math import asin, ceil, cos, radians, sin, sqrt
 from typing import Literal
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import case, func, literal, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy import Date, Time, and_, case, func, literal, or_, select
+from sqlalchemy.orm import Session, aliased
+from sqlalchemy.orm.util import AliasedClass
 
 from app.core.errors import Conflicto, DatosInvalidos, NoEncontrado
 from app.core.planificador import planificador, registrar_tarea
@@ -46,6 +47,7 @@ _MINUTOS_RODAJE = 30
 _GRANULARIDAD_MINUTOS = 5
 _MENSAJE_RUTA = "Las rutas internacionales salen de Pereira, Bogotá, Medellín, Cali o Cartagena."
 _MENSAJE_DUPLICADO = "Ya existe un vuelo de esta ruta a esa hora."
+_MENSAJE_IDA_NO_VENDIBLE = "El vuelo de ida no existe o ya no está a la venta."
 
 # SUP-37: el horizonte de las series se mide en la fecha local de Colombia, no en UTC.
 _ZONA_NEGOCIO = ZoneInfo("America/Bogota")
@@ -1479,6 +1481,327 @@ def _vuelos_por_id(db: Session, vuelo_ids: set[int]) -> dict[int, Vuelo]:
     if not vuelo_ids:
         return {}
     return {vuelo.id: vuelo for vuelo in db.scalars(select(Vuelo).where(Vuelo.id.in_(vuelo_ids)))}
+
+
+# ---------- Búsqueda pública (HU-20, HU-21) ----------
+
+OrdenBusqueda = Literal["precio", "fecha", "duracion"]
+
+
+@dataclass(frozen=True)
+class FiltrosBusqueda:
+    """Filtros de RF-27; None = sin filtro. Fechas y horas, locales del origen de cada vuelo."""
+
+    codigo: str | None = None
+    origen: str | None = None
+    destino: str | None = None
+    tipo: TipoVuelo | None = None
+    fecha_desde: date | None = None
+    fecha_hasta: date | None = None
+    hora_desde: time | None = None
+    hora_hasta: time | None = None
+    duracion_min: int | None = None
+    duracion_max: int | None = None
+    precio_min: int | None = None
+    precio_max: int | None = None
+    clase: Clase | None = None
+
+
+@dataclass(frozen=True)
+class PaginaVuelosBuscados:
+    """Página de resultados: cada item es el VueloDetalleGestion que ya usa el detalle (HU-19)."""
+
+    items: list[VueloDetalleGestion]
+    total: int
+    pagina: int
+    por_pagina: int
+
+
+def buscar_vuelos(
+    db: Session,
+    filtros: FiltrosBusqueda,
+    *,
+    orden: OrdenBusqueda = "precio",
+    pagina: int = 1,
+    por_pagina: int = 20,
+    ahora: datetime | None = None,
+) -> PaginaVuelosBuscados:
+    """Vuelos programados antes de su límite de venta que cumplen todos los filtros (RF-27).
+
+    Fechas y horas se comparan con la salida en la hora local del origen. El precio se filtra y
+    se ordena sobre el precio vigente de `clase`, o sobre el menor de las dos sin `clase`. Orden
+    ascendente con desempate por salida e id. Los vuelos sin cupo se incluyen. No valida que
+    los rangos tengan sentido (eso lo hace busqueda). Precio y ocupación de la página en un
+    número fijo de consultas, con reservas.ocupacion_de_vuelos (RNF-01). No hace commit.
+    """
+    momento = ahora or datetime.now(UTC)
+    return _pagina_buscada(
+        db,
+        filtros,
+        orden=orden,
+        pagina=pagina,
+        por_pagina=por_pagina,
+        momento=momento,
+    )
+
+
+def regresos_de(
+    db: Session,
+    vuelo_ida_id: int,
+    ciudad_regreso: str,
+    fecha: date,
+    *,
+    clase: Clase | None = None,
+    orden: OrdenBusqueda = "precio",
+    pagina: int = 1,
+    por_pagina: int = 20,
+    ahora: datetime | None = None,
+) -> PaginaVuelosBuscados:
+    """Regresos de un trayecto completo (RF-28): vuelos a la venta desde el destino de la ida
+    hacia `ciudad_regreso`, que salen el día `fecha` (hora local de su origen) y después de la
+    llegada de la ida.
+
+    Lanza NoEncontrado si la ida no existe o ya no está a la venta, y
+    DatosInvalidos(codigo="rango_invalido", campos={"fecha": ...}) si `fecha` es anterior a la
+    fecha de salida de la ida en la hora local de su origen. No hace commit.
+    """
+    momento = ahora or datetime.now(UTC)
+    ida = db.get(Vuelo, vuelo_ida_id)
+    if (
+        ida is None
+        or ida.estado != "programado"
+        or momento >= limite_de_venta(ida.tipo, ida.salida)
+    ):
+        raise NoEncontrado(_MENSAJE_IDA_NO_VENDIBLE)
+
+    origen = obtener_ciudad(db, ida.origen_codigo)
+    if origen is None:
+        raise NoEncontrado(_MENSAJE_IDA_NO_VENDIBLE)
+    salida_local = ida.salida.astimezone(ZoneInfo(origen.zona_horaria)).date()
+    if fecha < salida_local:
+        raise DatosInvalidos(
+            "Revisa los rangos marcados.",
+            codigo="rango_invalido",
+            campos={"fecha": "La fecha de regreso no puede ser anterior a la de ida."},
+        )
+
+    filtros = FiltrosBusqueda(
+        origen=ida.destino_codigo,
+        destino=ciudad_regreso,
+        fecha_desde=fecha,
+        fecha_hasta=fecha,
+        clase=clase,
+    )
+    # RF-28: estrictamente después de la llegada de la ida, no en el mismo instante.
+    return _pagina_buscada(
+        db,
+        filtros,
+        orden=orden,
+        pagina=pagina,
+        por_pagina=por_pagina,
+        momento=momento,
+        extra=(Vuelo.salida > ida.llegada,),
+    )
+
+
+def _pagina_buscada(
+    db: Session,
+    filtros: FiltrosBusqueda,
+    *,
+    orden: OrdenBusqueda,
+    pagina: int,
+    por_pagina: int,
+    momento: datetime,
+    extra: tuple[object, ...] = (),
+) -> PaginaVuelosBuscados:
+    """Una página de la búsqueda con el precio y la ocupación resueltos en lote (RNF-01)."""
+    economia = aliased(Promocion)
+    primera = aliased(Promocion)
+    base = (
+        select(Vuelo)
+        .join(Ciudad, Ciudad.codigo == Vuelo.origen_codigo)
+        .outerjoin(economia, _promocion_vigente_condicion(economia, "economica", momento))
+        .outerjoin(primera, _promocion_vigente_condicion(primera, "primera", momento))
+    )
+    precio = _precio_de_filtro(filtros.clase, economia, primera)
+    condiciones = [*_filtros_busqueda(filtros, precio, momento), *extra]
+
+    subconsulta = base.with_only_columns(Vuelo.id).where(*condiciones).subquery()
+    total = db.scalar(select(func.count()).select_from(subconsulta)) or 0
+
+    vuelos = list(
+        db.scalars(
+            base.where(*condiciones)
+            .order_by(*_orden_busqueda(orden, precio))
+            .offset((pagina - 1) * por_pagina)
+            .limit(por_pagina)
+        )
+    )
+    return PaginaVuelosBuscados(
+        items=_detalles_de_pagina(db, vuelos, momento=momento),
+        total=total,
+        pagina=pagina,
+        por_pagina=por_pagina,
+    )
+
+
+def _filtros_busqueda(filtros: FiltrosBusqueda, precio: object, momento: datetime) -> list[object]:
+    """Condiciones de RF-27 en SQL. Todos los filtros se combinan con AND."""
+    condiciones: list[object] = [Vuelo.estado == "programado", _a_la_venta(momento)]
+    if filtros.codigo is not None and filtros.codigo.strip():
+        condiciones.append(
+            Vuelo.codigo.ilike(f"%{_escapar_like(filtros.codigo.strip())}%", escape="\\")
+        )
+    if filtros.origen is not None:
+        condiciones.append(Vuelo.origen_codigo == filtros.origen)
+    if filtros.destino is not None:
+        condiciones.append(Vuelo.destino_codigo == filtros.destino)
+    if filtros.tipo is not None:
+        condiciones.append(Vuelo.tipo == filtros.tipo)
+
+    # La salida en la hora local del origen de cada vuelo (RF-15).
+    local = func.timezone(Ciudad.zona_horaria, Vuelo.salida)
+    if filtros.fecha_desde is not None:
+        condiciones.append(local.cast(Date) >= filtros.fecha_desde)
+        # Pre-filtro conservador en UTC para no perder el índice por `salida`.
+        condiciones.append(Vuelo.salida >= _medianoche_utc(filtros.fecha_desde - timedelta(days=1)))
+    if filtros.fecha_hasta is not None:
+        condiciones.append(local.cast(Date) <= filtros.fecha_hasta)
+        condiciones.append(Vuelo.salida < _medianoche_utc(filtros.fecha_hasta + timedelta(days=2)))
+    if filtros.hora_desde is not None:
+        condiciones.append(local.cast(Time) >= filtros.hora_desde)
+    if filtros.hora_hasta is not None:
+        condiciones.append(local.cast(Time) <= filtros.hora_hasta)
+
+    if filtros.duracion_min is not None:
+        condiciones.append(Vuelo.duracion_minutos >= filtros.duracion_min)
+    if filtros.duracion_max is not None:
+        condiciones.append(Vuelo.duracion_minutos <= filtros.duracion_max)
+    if filtros.precio_min is not None:
+        condiciones.append(precio >= filtros.precio_min)
+    if filtros.precio_max is not None:
+        condiciones.append(precio <= filtros.precio_max)
+    return condiciones
+
+
+def _a_la_venta(momento: datetime) -> object:
+    """El vuelo todavía se puede reservar o comprar en `momento` (SUP-07, RF-36)."""
+    return or_(
+        *(
+            and_(Vuelo.tipo == tipo, Vuelo.salida > momento + timedelta(hours=horas))
+            for tipo, horas in _HORAS_LIMITE_DE_VENTA.items()
+        )
+    )
+
+
+def _promocion_vigente_condicion(
+    promocion: AliasedClass[Promocion], clase: Clase, momento: datetime
+) -> object:
+    """La promoción que `estado_de` consideraría vigente en `momento` (RF-23, RF-24)."""
+    aplica = promocion.aplica_economica if clase == "economica" else promocion.aplica_primera
+    return and_(
+        promocion.vuelo_id == Vuelo.id,
+        promocion.estado == "programada",
+        aplica.is_(True),
+        promocion.inicio <= momento,
+        promocion.fin > momento,
+    )
+
+
+def _precio_con_promocion(precio: object, promocion: AliasedClass[Promocion]) -> object:
+    """Precio vigente en SQL; redondea hacia abajo, igual que `precio_con_descuento`."""
+    return case(
+        (promocion.id.is_not(None), precio * (100 - promocion.porcentaje) / 100),
+        else_=precio,
+    )
+
+
+def _precio_de_filtro(
+    clase: Clase | None,
+    economia: AliasedClass[Promocion],
+    primera: AliasedClass[Promocion],
+) -> object:
+    """Precio de `clase` o, sin clase, el menor de las dos clases (RF-27)."""
+    precio_economica = _precio_con_promocion(Vuelo.precio_economica, economia)
+    if clase == "economica":
+        return precio_economica
+    precio_primera = _precio_con_promocion(Vuelo.precio_primera, primera)
+    if clase == "primera":
+        return precio_primera
+    return func.least(precio_economica, precio_primera)
+
+
+def _orden_busqueda(orden: OrdenBusqueda, precio: object) -> tuple[object, ...]:
+    """Ascendente, con desempate por salida y luego por id."""
+    if orden == "fecha":
+        return (Vuelo.salida.asc(), Vuelo.id.asc())
+    if orden == "duracion":
+        return (Vuelo.duracion_minutos.asc(), Vuelo.salida.asc(), Vuelo.id.asc())
+    return (precio.asc(), Vuelo.salida.asc(), Vuelo.id.asc())
+
+
+def _medianoche_utc(fecha: date) -> datetime:
+    """Medianoche de un día en UTC, para el pre-filtro de los rangos de fecha."""
+    return datetime.combine(fecha, time.min, tzinfo=UTC)
+
+
+def _detalles_de_pagina(
+    db: Session, vuelos: Sequence[Vuelo], *, momento: datetime
+) -> list[VueloDetalleGestion]:
+    """Ciudades, promociones y ocupación de toda la página en consultas fijas (RNF-01)."""
+    if not vuelos:
+        return []
+    ids = [vuelo.id for vuelo in vuelos]
+    ciudades = _ciudades_por_codigo(
+        db, {codigo for vuelo in vuelos for codigo in (vuelo.origen_codigo, vuelo.destino_codigo)}
+    )
+    promociones = _promociones_vigentes_de(db, ids, momento=momento)
+    ocupaciones = reservas_service.ocupacion_de_vuelos(db, ids)
+    detalles: list[VueloDetalleGestion] = []
+    for vuelo in vuelos:
+        ocupacion = ocupaciones.get(vuelo.id, reservas_service.OcupacionVuelo())
+        vigentes = promociones.get(vuelo.id, {})
+        detalles.append(
+            VueloDetalleGestion(
+                vuelo=vuelo,
+                origen=ciudades[vuelo.origen_codigo],
+                destino=ciudades[vuelo.destino_codigo],
+                economica=_clase_detalle(
+                    vuelo.capacidad_economica,
+                    ocupacion.vendidas_economica,
+                    ocupacion.reservadas_economica,
+                    vuelo.precio_economica,
+                    vigentes.get("economica"),
+                ),
+                primera=_clase_detalle(
+                    vuelo.capacidad_primera,
+                    ocupacion.vendidas_primera,
+                    ocupacion.reservadas_primera,
+                    vuelo.precio_primera,
+                    vigentes.get("primera"),
+                ),
+            )
+        )
+    return detalles
+
+
+def _promociones_vigentes_de(
+    db: Session, vuelo_ids: Sequence[int], *, momento: datetime
+) -> dict[int, dict[Clase, PromocionVigente]]:
+    """La promoción vigente de cada clase y vuelo de la página, en una sola consulta."""
+    promociones = db.scalars(
+        select(Promocion)
+        .where(Promocion.vuelo_id.in_(vuelo_ids), Promocion.estado == "programada")
+        .order_by(Promocion.id)
+    )
+    vigentes: dict[int, dict[Clase, PromocionVigente]] = {}
+    for promocion in promociones:
+        if estado_de(promocion, ahora=momento) != "vigente":
+            continue
+        vigente = _promocion_vigente_de(promocion)
+        for clase in vigente.clases:
+            vigentes.setdefault(promocion.vuelo_id, {})[clase] = vigente
+    return vigentes
 
 
 # El planificador importa los services para que registren sus tareas (HU-18). La guarda evita
