@@ -4,6 +4,7 @@ import { api, unwrap, type Schemas } from "@/api/client";
 export type Carrito = Schemas["Carrito"];
 export type SeleccionCarrito = Schemas["SeleccionCarrito"];
 export type SeleccionCambio = Schemas["SeleccionCambio"];
+export type SeleccionEntrada = Schemas["SeleccionEntrada"];
 
 export const CARRITO_KEY = ["carrito"] as const;
 
@@ -14,6 +15,20 @@ export function useCarrito(habilitado = true) {
     queryKey: CARRITO_KEY,
     enabled: habilitado,
     queryFn: () => unwrap(api.GET("/api/v1/carrito")),
+  });
+}
+
+/** Agrega un vuelo (o una ida y regreso) al carrito (HU-22). El servidor valida el vuelo, el
+ *  límite de 5 y el cupo (`vuelo_no_disponible`, `fuera_de_plazo`, `limite_tiquetes`,
+ *  `clase_agotada`); el contador del menú se actualiza al terminar. */
+export function useAgregarSeleccion() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (entrada: SeleccionEntrada) =>
+      unwrap(api.POST("/api/v1/carrito/selecciones", { body: entrada })),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: CARRITO_KEY });
+    },
   });
 }
 
