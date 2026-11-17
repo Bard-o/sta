@@ -1,6 +1,7 @@
 import { Link, Outlet, useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
 import { inicioDe, NAV_ROL, NAV_VISITANTE, nombreVisible, NOMBRE_ROL } from "@/auth/roles";
+import { useCarrito } from "@/auth/carrito";
 import { usePerfil } from "@/auth/perfil";
 import { useLogout, useSesion } from "@/auth/sesion";
 import { RUTA_VERIFICACION } from "@/auth/verificacion";
@@ -18,6 +19,8 @@ export function AppLayout() {
   const location = useLocation();
   // El root no tiene perfil con imagen; los demás la muestran en la barra.
   const { data: perfil } = usePerfil(Boolean(usuario) && usuario?.rol !== "root");
+  // El contador del carrito en el menú (HU-23). Solo el cliente tiene carrito.
+  const { data: carrito } = useCarrito(usuario?.rol === "cliente");
 
   const cerrarSesion = () =>
     logout.mutate(undefined, {
@@ -36,7 +39,9 @@ export function AppLayout() {
   ) : usuario ? (
     <TopNav
       homeHref={inicioDe(usuario)}
-      items={NAV_ROL[usuario.rol]}
+      items={NAV_ROL[usuario.rol].map((item) =>
+        item.href === "/carrito" ? { ...item, count: carrito?.cantidad } : item,
+      )}
       user={{
         name: nombreVisible(usuario),
         role: NOMBRE_ROL[usuario.rol],
