@@ -96,7 +96,7 @@ Dentro de `Shell` (la ventana) los paneles ya son tiles: no se apila vidrio sobr
 
 ### Componentes
 
-`Backdrop`, `Shell`, `TopNav`, `Glass`, `Button`, `Badge`, `Segmented`, `Field`, `SearchPill`, `StatTile`, `FlightPass`, `Board` (+ `Board.Flap`), `Meter`, `SeatMap` (+ `SeatMap.Legend`), `Dialog`, `ChatFab`, `Icon` y el formateador `STA.cop()`. Su implementación de referencia está en `design/reference/components.reference.js` (React 18, `window.STA`); los estilos están en `design/components.css` y leen solo variables de `design/tokens.css`.
+`Backdrop`, `Shell`, `TopNav`, `Glass`, `Button`, `Badge`, `Segmented`, `Field`, `SearchPill`, `StatTile`, `FlightPass`, `Board` (+ `Board.Flap`), `Meter`, `SeatMap` (+ `SeatMap.Legend`), `Dialog`, `ChatFab`, `Pasos`, `Icon` y el formateador `STA.cop()`. Su implementación de referencia está en `design/reference/components.reference.js` (React 18, `window.STA`); los estilos están en `design/components.css` y leen solo variables de `design/tokens.css`.
 
 Las cuatro **Pantallas** son ejemplos armados con esos componentes a partir de los wireframes del documento de historias de usuario: S14 Resultados de búsqueda, S22 Monedero, S26 Cambio de silla y S09 Vuelos programados del administrador.
 
@@ -352,6 +352,13 @@ El botón flotante «Información» que abre el chatbot (IU-03), abajo a la dere
 
 - Props: `onClick`, `label`, `static` (en flujo, para documentación).
 - Disco `accent` con el ícono `info` sobre píldora `glass-strong`. No lo muestre a administradores ni root.
+
+### Pasos
+
+Indicador de pasos de la compra (S17 y S18): Vuelos → Viajeros → Pago.
+
+- Props: `pasos` (los nombres, en orden) y `actual` (índice del paso en el que está el cliente).
+- Hecho: punto `invert`; actual: punto `accent` con borde `ink`; pendiente: anillo `control-line`. Cada paso lleva su nombre y un texto solo para lectores de pantalla («hecho», «paso actual»): el estado no va solo en el color.
 
 ### Icon
 
