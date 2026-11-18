@@ -1,7 +1,7 @@
 """carrito: crea las tablas selecciones_carrito y tramos_carrito
 
 Revision ID: 2f61c813b097
-Revises: 3f7a9c1b2d4e
+Revises: b7f4c2a91d3e
 Create Date: 2026-11-18 02:48:41.621931
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "2f61c813b097"
-down_revision: str | None = "3f7a9c1b2d4e"
+down_revision: str | None = "b7f4c2a91d3e"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
