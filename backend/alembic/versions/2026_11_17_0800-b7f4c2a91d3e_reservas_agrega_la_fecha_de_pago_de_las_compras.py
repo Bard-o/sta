@@ -1,7 +1,7 @@
 """reservas: agrega la fecha de pago de las compras
 
 Revision ID: b7f4c2a91d3e
-Revises: e39140d3a16f
+Revises: 3f7a9c1b2d4e
 Create Date: 2026-11-17 08:00:00.000000
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "b7f4c2a91d3e"
-down_revision: str | None = "e39140d3a16f"
+down_revision: str | None = "3f7a9c1b2d4e"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
