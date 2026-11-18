@@ -57,7 +57,11 @@ def pagar_reserva(
     reserva_id: int, datos: PagoReservaEntrada, usuario: Cliente, db: DbSession
 ) -> PagoReservaSalida:
     """Paga la reserva completa o algunos viajeros al precio congelado (HU-27, RF-38)."""
-    raise NoImplementado()
+    reserva, compra = service.pagar_reserva(db, usuario.id, reserva_id, datos.viajero_ids)
+    db.commit()
+    return PagoReservaSalida(
+        reserva=service.viaje_de(db, reserva), compra=service.viaje_de(db, compra)
+    )
 
 
 # ---------- Compras ----------
