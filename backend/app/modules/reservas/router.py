@@ -1,8 +1,7 @@
 """Endpoints de reservas, compras y Mis viajes. Contrato: docs/api/iteracion-2.md (HU-24 a HU-27).
 
-Los endpoints que responden NoImplementado (501) son stubs del contrato: ya validan la sesión,
-el rol y el cuerpo. Los implementan #118 (reservar), #124 (comprar), #130 (trayecto completo) y
-#131 (pagar una reserva y Mis viajes).
+Reservar (#118), comprar (#124), el trayecto completo (#130), pagar una reserva y Mis viajes
+(#131) ya están implementados: los endpoints validan la sesión y el rol, y delegan en el service.
 """
 
 from datetime import date
@@ -12,7 +11,7 @@ from fastapi import APIRouter, Depends, Query, status
 
 from app.core.auth import UsuarioActual, require_role
 from app.core.db import DbSession
-from app.core.errors import NoImplementado, respuestas_error
+from app.core.errors import respuestas_error
 from app.core.security import Rol
 from app.modules.reservas import service
 from app.modules.reservas.schemas import (
@@ -130,7 +129,18 @@ def listar_mis_viajes(
     por_pagina: PorPagina = 20,
 ) -> PaginaViajes:
     """Reservas o compras del cliente, de la más reciente a la más antigua (HU-27, RF-45)."""
-    raise NoImplementado()
+    pagina_de_viajes = service.listar_mis_viajes(
+        db,
+        usuario.id,
+        tipo=tipo,
+        estado=estado,
+        desde=desde,
+        hasta=hasta,
+        pagina=pagina,
+        por_pagina=por_pagina,
+    )
+    db.commit()  # pudo vencer reservas (estado efectivo), como GET /compras/{id}
+    return pagina_de_viajes
 
 
 router = APIRouter()

@@ -2,7 +2,7 @@
 
 Aquí viven las reglas de los viajeros (RF-31 a RF-35), la creación de una reserva (HU-24,
 RF-36, RF-41 y RF-42), la compra con el monedero (HU-25), el trayecto completo (HU-26), el pago
-de una reserva completa o por viajero (HU-27, RF-38), el vencimiento
+de una reserva completa o por viajero (HU-27, RF-38), Mis viajes (HU-27, RF-45), el vencimiento
 automático (RF-37) y la anulación al cancelar un vuelo (HU-16), además de las consultas que
 usan vuelos, usuarios y carrito.
 
@@ -43,6 +43,9 @@ from app.modules.reservas.models import (
 )
 from app.modules.reservas.schemas import (
     CiudadViaje,
+    EstadoViaje,
+    PaginaViajes,
+    TipoViaje,
     TiqueteViaje,
     TramoViaje,
     Viaje,
@@ -587,18 +590,19 @@ def vencer_reservas(db: Session, ahora: datetime) -> int:
     ejecuta el planificador cada minuto. En una reserva pagada en parte solo vencen los
     tiquetes que siguen reservados: los pagados ya viven en su compra (HU-27).
     """
-    reservas = list(
-        db.scalars(
-            select(Transaccion)
-            .where(
-                Transaccion.tipo == "reserva",
-                Transaccion.estado == "vigente",
-                Transaccion.vence_en <= ahora,
-            )
-            .order_by(Transaccion.id)
-            .with_for_update(skip_locked=True)
-        )
+    return _vencer_reservas(db, ahora)
+
+
+def _vencer_reservas(db: Session, ahora: datetime, *, cliente_id: int | None = None) -> int:
+    """`vencer_reservas`, opcionalmente solo las de un cliente (estado efectivo de Mis viajes)."""
+    consulta = select(Transaccion).where(
+        Transaccion.tipo == "reserva",
+        Transaccion.estado == "vigente",
+        Transaccion.vence_en <= ahora,
     )
+    if cliente_id is not None:
+        consulta = consulta.where(Transaccion.cliente_id == cliente_id)
+    reservas = list(db.scalars(consulta.order_by(Transaccion.id).with_for_update(skip_locked=True)))
     for reserva in reservas:
         reserva.estado = "vencida"
         _cambiar_estado_de_tiquetes(db, reserva.id, "vencido")
@@ -778,6 +782,97 @@ def _mover_a_la_compra(
         tiquete.tramo_id = copia.id
         tiquete.estado = "comprado"
     db.flush()
+
+
+# ---------- Mis viajes (HU-27, RF-45) ----------
+
+
+def listar_mis_viajes(
+    db: Session,
+    usuario_id: int,
+    *,
+    tipo: TipoViaje,
+    estado: EstadoViaje | None = None,
+    desde: date | None = None,
+    hasta: date | None = None,
+    pagina: int = 1,
+    por_pagina: int = 20,
+    ahora: datetime | None = None,
+) -> PaginaViajes:
+    """Reservas o compras del cliente, de la más reciente a la más antigua (HU-27, RF-45).
+
+    `desde` y `hasta` filtran por el día de salida del primer tramo en hora de Colombia, ambos
+    incluidos. Las compras sin pagar no se listan. Una reserva con el plazo pasado se vence
+    antes de listar, para informar su estado efectivo. No hace commit.
+    """
+    if desde is not None and hasta is not None and hasta < desde:
+        raise DatosInvalidos(
+            "Revisa los rangos marcados.",
+            codigo="rango_invalido",
+            campos={"hasta": "La fecha final no puede ser anterior a la inicial."},
+        )
+
+    momento = ahora or datetime.now(UTC)
+    if tipo == "reserva":
+        _vencer_reservas(db, momento, cliente_id=usuario_id)
+
+    consulta = select(Transaccion.id).where(
+        Transaccion.cliente_id == usuario_id, Transaccion.tipo == tipo
+    )
+    if tipo == "compra":
+        consulta = consulta.where(Transaccion.pagada_en.is_not(None))
+    if estado is not None:
+        consulta = consulta.where(Transaccion.estado == estado)
+    ids = list(db.scalars(consulta.order_by(Transaccion.creado_en.desc(), Transaccion.id.desc())))
+
+    detalles: dict[int, Any] = {}
+    if (desde is not None or hasta is not None) and ids:
+        primer_vuelo = {
+            transaccion_id: vuelo_id
+            for transaccion_id, vuelo_id in db.execute(
+                select(Tramo.transaccion_id, Tramo.vuelo_id)
+                .where(Tramo.transaccion_id.in_(ids), Tramo.orden == 1)
+                .distinct()
+            )
+        }
+        ids = [
+            transaccion_id
+            for transaccion_id in ids
+            if transaccion_id in primer_vuelo
+            and _sale_entre(db, primer_vuelo[transaccion_id], detalles, desde, hasta)
+        ]
+
+    inicio = (pagina - 1) * por_pagina
+    ids_de_la_pagina = ids[inicio : inicio + por_pagina]
+    por_id = (
+        {
+            transaccion.id: transaccion
+            for transaccion in db.scalars(
+                select(Transaccion).where(Transaccion.id.in_(ids_de_la_pagina))
+            )
+        }
+        if ids_de_la_pagina
+        else {}
+    )
+    return PaginaViajes(
+        items=[_viaje_de(db, por_id[viaje_id], detalles) for viaje_id in ids_de_la_pagina],
+        total=len(ids),
+        pagina=pagina,
+        por_pagina=por_pagina,
+    )
+
+
+def _sale_entre(
+    db: Session,
+    vuelo_id: int,
+    detalles: dict[int, Any],
+    desde: date | None,
+    hasta: date | None,
+) -> bool:
+    """El día de salida del vuelo en hora de Colombia cae entre `desde` y `hasta` (inclusive)."""
+    salida = _detalle_de_vuelo(db, vuelo_id, detalles).vuelo.salida
+    dia = salida.astimezone(_ZONA_NEGOCIO).date()
+    return (desde is None or dia >= desde) and (hasta is None or dia <= hasta)
 
 
 def _detalle_de_vuelo(db: Session, vuelo_id: int, detalles: dict[int, Any]) -> Any:
