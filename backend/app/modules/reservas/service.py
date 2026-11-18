@@ -22,8 +22,15 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.errors import Conflicto, DatosInvalidos, NoAutenticado, NoEncontrado
-from app.core.mail import encolar_correo
+from app.core.mail import Adjunto, encolar_correo
 from app.core.planificador import registrar_tarea
+from app.modules.reservas.comprobante import (
+    DatosComprobante,
+    TiqueteComprobante,
+    TramoComprobante,
+    ViajeroComprobante,
+    generar_comprobante,
+)
 from app.modules.reservas.models import (
     ESTADOS_TIQUETE_ACTIVOS,
     Clase,
@@ -50,8 +57,17 @@ MAXIMO_TIQUETES_POR_VUELO = 5
 # RF-36: la reserva dura 24 horas o hasta el límite de venta del vuelo, lo que ocurra primero.
 VIGENCIA_RESERVA = timedelta(hours=24)
 
+# SUP-15: la compra bloquea las sillas 15 minutos o hasta el límite de venta del vuelo.
+BLOQUEO_COMPRA = timedelta(minutes=15)
+
 # RF-37, RNF-18: nombre de la tarea programada que vence las reservas.
 NOMBRE_TAREA_VENCER = "reservas.vencer_reservas"
+# SUP-15, RNF-18: nombre de la tarea programada que libera los bloqueos de las compras.
+NOMBRE_TAREA_LIBERAR = "reservas.liberar_bloqueos"
+
+# RF-42: las asignaciones de un vuelo se serializan con un lock de asesoría por vuelo.
+# Es la primera clave del par; la segunda es el id del vuelo.
+_CLAVE_LOCK_VUELOS = 1_240
 
 # RF-39: código alfanumérico de 6 caracteres sin letras ni dígitos que se confunden.
 _CODIGO_ALFABETO = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
@@ -109,6 +125,29 @@ class RegresoInvalido(DatosInvalidos):
 
     codigo = "regreso_invalido"
     mensaje = "El regreso debe salir del destino de la ida después de su llegada."
+
+
+class CompraNoEncontrada(NoEncontrado):
+    """HU-25: la compra no existe o es de otro cliente."""
+
+    mensaje = "La compra no existe."
+
+
+class EstadoInvalido(Conflicto):
+    """HU-25: confirmar o soltar una compra que ya está pagada."""
+
+    codigo = "estado_invalido"
+    mensaje = "La compra ya está pagada."
+
+
+class BloqueoVencido(Conflicto):
+    """SUP-15: el bloqueo de 15 minutos de la compra venció o se soltó."""
+
+    codigo = "bloqueo_vencido"
+    mensaje = (
+        "Las sillas se liberaron porque pasaron 15 minutos sin confirmar. "
+        "Vuelve a empezar la compra."
+    )
 
 
 @dataclass(frozen=True)
@@ -173,6 +212,8 @@ def ocupacion_de_vuelos(db: Session, vuelo_ids: Sequence[int]) -> dict[int, Ocup
     Devuelve una entrada por cada id pedido, aunque no tenga ventas. Los tiquetes
     `bloqueado` y `reservado` cuentan como reservadas; los `comprado`, como vendidas. Los
     cancelados, vencidos, reembolsados y reubicados no ocupan silla (RF-32, RF-34).
+    `reservas_activas` cuenta las reservas vigentes y las compras pendientes: ambas impiden
+    editar o cancelar el vuelo sin anularlas (HU-15, HU-16).
     """
     if not vuelo_ids:
         return {}
@@ -195,7 +236,12 @@ def ocupacion_de_vuelos(db: Session, vuelo_ids: Sequence[int]) -> dict[int, Ocup
             func.count().filter(Tiquete.estado == "comprado").label("vendidas"),
             func.count().filter(Tiquete.estado.in_(("bloqueado", "reservado"))).label("reservadas"),
             func.count(distinct(Tramo.transaccion_id))
-            .filter(Transaccion.tipo == "reserva", Transaccion.estado == "vigente")
+            .filter(
+                or_(
+                    and_(Transaccion.tipo == "reserva", Transaccion.estado == "vigente"),
+                    and_(Transaccion.tipo == "compra", Transaccion.estado == "pendiente"),
+                )
+            )
             .label("reservas_activas"),
         )
         .join(Tramo, Tiquete.tramo_id == Tramo.id)
@@ -280,10 +326,34 @@ def crear_reserva(
 
     Aplica las reglas del contrato en su orden (HU-24): correo verificado, vuelo vendible,
     regreso válido, datos y clases, documento duplicado, menores, límite de 5 y cupo. Las
-    asignaciones de un mismo vuelo se serializan con `SELECT … FOR UPDATE` y los índices
-    únicos parciales de `tiquetes` resuelven la carrera por las últimas sillas (RF-42). No
-    hace commit: el endpoint o el test confirman la transacción.
+    asignaciones de un mismo vuelo se serializan con un lock de asesoría y los índices únicos
+    parciales de `tiquetes` resuelven la carrera por las últimas sillas (RF-42). No hace
+    commit: el endpoint o el test confirman la transacción.
     """
+    return _crear_viaje(db, usuario_id, datos, tipo="reserva", ahora=ahora)
+
+
+def crear_compra(
+    db: Session, usuario_id: int, datos: ViajeEntrada, *, ahora: datetime | None = None
+) -> Transaccion:
+    """Inicia una compra: asigna las sillas, congela el precio y las bloquea 15 minutos.
+
+    Usa las mismas reglas de HU-24 que la reserva (RF-31 a RF-35, RF-41 y RF-42), pero deja
+    la compra `pendiente`, sus tiquetes `bloqueado` y `bloqueo_hasta` con el fin de la ventana
+    de pago (SUP-15). No cobra ni hace commit.
+    """
+    return _crear_viaje(db, usuario_id, datos, tipo="compra", ahora=ahora)
+
+
+def _crear_viaje(
+    db: Session,
+    usuario_id: int,
+    datos: ViajeEntrada,
+    *,
+    tipo: Literal["compra", "reserva"],
+    ahora: datetime | None,
+) -> Transaccion:
+    """Reglas comunes de reservar y comprar, en el orden del contrato (HU-24 a HU-26)."""
     from app.modules.vuelos import service as vuelos_service
 
     momento = ahora or datetime.now(UTC)
@@ -307,14 +377,33 @@ def crear_reserva(
             cantidad = sum(1 for viajero in datos.viajeros if viajero.clases[indice] == clase)
             validar_cupo(db, detalle.vuelo.id, clase, cantidad)
 
-    vence_en = min(
-        [momento + VIGENCIA_RESERVA]
-        + [
-            vuelos_service.limite_de_venta(detalle.vuelo.tipo, detalle.vuelo.salida)
-            for detalle in detalles
-        ]
+    limite_de_venta = min(
+        vuelos_service.limite_de_venta(detalle.vuelo.tipo, detalle.vuelo.salida)
+        for detalle in detalles
     )
-    return _insertar_reserva(db, usuario_id, datos, detalles, momento, vence_en)
+    if tipo == "reserva":
+        vence_en: datetime | None = min(momento + VIGENCIA_RESERVA, limite_de_venta)
+        bloqueo_hasta = None
+        estado = "vigente"
+        estado_tiquete: EstadoTiquete = "reservado"
+    else:
+        vence_en = None
+        bloqueo_hasta = min(momento + BLOQUEO_COMPRA, limite_de_venta)
+        estado = "pendiente"
+        estado_tiquete = "bloqueado"
+
+    return _insertar_transaccion(
+        db,
+        usuario_id,
+        datos,
+        detalles,
+        momento,
+        tipo=tipo,
+        estado=estado,
+        vence_en=vence_en,
+        bloqueo_hasta=bloqueo_hasta,
+        estado_tiquete=estado_tiquete,
+    )
 
 
 def viaje_de(db: Session, transaccion: Transaccion) -> Viaje:
@@ -384,6 +473,15 @@ def viaje_de(db: Session, transaccion: Transaccion) -> Viaje:
         if tiquete.estado in ("bloqueado", "reservado")
     )
 
+    # HU-24: una reserva vence en `vence_en`; una compra, al final de su bloqueo, salvo que ya
+    # esté pagada. El contrato llama `vence_en` a las dos fechas.
+    if transaccion.tipo == "reserva":
+        vence_en = transaccion.vence_en
+    elif transaccion.estado == "activa":
+        vence_en = None
+    else:
+        vence_en = transaccion.bloqueo_hasta
+
     return Viaje(
         id=transaccion.id,
         tipo=transaccion.tipo,
@@ -392,8 +490,8 @@ def viaje_de(db: Session, transaccion: Transaccion) -> Viaje:
         reserva_id=None,
         compra_id=None,
         creada_en=transaccion.creado_en,
-        vence_en=transaccion.vence_en,
-        pagada_en=None,
+        vence_en=vence_en,
+        pagada_en=transaccion.pagada_en,
         total=total,
         total_pendiente=total_pendiente,
         tramos=[TramoViaje(vuelo=_vuelo_viaje(detalles[orden])) for orden in ordenes],
@@ -448,6 +546,256 @@ def vencer_reservas(db: Session, ahora: datetime) -> int:
         )
     db.flush()
     return len(reservas)
+
+
+# ---------- Compra (HU-25, RF-39 a RF-42, SUP-15) ----------
+
+
+def obtener_compra(
+    db: Session, usuario_id: int, compra_id: int, *, ahora: datetime | None = None
+) -> Transaccion:
+    """Una compra del cliente en su estado efectivo (HU-25).
+
+    Si el bloqueo ya venció, la deja `vencida` y sus tiquetes `vencido` antes de responder:
+    el contrato informa el vencimiento a su hora aunque el planificador no haya corrido.
+    """
+    momento = ahora or datetime.now(UTC)
+    compra = _compra_del_cliente(db, usuario_id, compra_id, para_actualizar=True)
+    if compra.estado == "pendiente" and _bloqueo_vencido(compra, momento):
+        _vencer_compra(db, compra)
+        db.flush()
+    return compra
+
+
+def confirmar_compra(
+    db: Session, usuario_id: int, compra_id: int, *, ahora: datetime | None = None
+) -> Transaccion:
+    """Cobra la compra con el monedero y emite los tiquetes (HU-25, RNF-17).
+
+    Todo ocurre en la transacción de quien llama: el débito, los tiquetes, el estado, los
+    correos y las promociones agotadas. Si algo falla no queda nada. Los bloqueos vigentes
+    impiden que otra petición tome las sillas, así que aquí no se reasignan.
+    """
+    from app.modules.monedero import service as monedero_service
+    from app.modules.vuelos import service as vuelos_service
+
+    momento = ahora or datetime.now(UTC)
+    compra = _compra_del_cliente(db, usuario_id, compra_id, para_actualizar=True)
+    _exigir_correo_verificado(db, usuario_id)
+
+    if compra.estado == "activa":
+        raise EstadoInvalido()
+    if compra.estado != "pendiente" or _bloqueo_vencido(compra, momento):
+        raise BloqueoVencido()
+
+    total = _total_pendiente(db, compra)
+    if total <= 0:
+        raise EstadoInvalido()
+    codigo = compra.codigo or ""
+    monedero_service.debitar(db, usuario_id, total, referencia=codigo)
+
+    _cambiar_estado_de_tiquetes(db, compra.id, "comprado")
+    compra.estado = "activa"
+    compra.pagada_en = momento
+    db.flush()
+
+    _enviar_correos_de_compra(db, compra, momento)
+    for vuelo_id in _vuelos_de_transaccion(db, compra.id):
+        vuelos_service.marcar_promociones_agotadas(db, vuelo_id, ahora=momento)
+    db.flush()
+    return compra
+
+
+def soltar_compra(
+    db: Session, usuario_id: int, compra_id: int, *, ahora: datetime | None = None
+) -> None:
+    """Suelta el bloqueo de una compra pendiente y libera sus sillas (HU-25).
+
+    Una compra ya cancelada o vencida responde sin cambios; una pagada es `estado_invalido`.
+    No hace commit: el endpoint confirma.
+    """
+    momento = ahora or datetime.now(UTC)
+    compra = _compra_del_cliente(db, usuario_id, compra_id, para_actualizar=True)
+    if compra.estado == "activa":
+        raise EstadoInvalido()
+    if compra.estado == "pendiente":
+        if _bloqueo_vencido(compra, momento):
+            _vencer_compra(db, compra)
+        else:
+            compra.estado = "cancelada"
+            _cambiar_estado_de_tiquetes(db, compra.id, "cancelado")
+        db.flush()
+    elif compra.estado not in ("cancelada", "vencida"):
+        raise EstadoInvalido()
+
+
+def liberar_bloqueos(db: Session, ahora: datetime) -> int:
+    """Vence las compras cuyo bloqueo de 15 minutos pasó y libera sus sillas (SUP-15).
+
+    Procesa todo lo vencido hasta `ahora`, es idempotente y no hace commit: la ejecuta el
+    planificador cada minuto, también al arrancar el servidor (RNF-18).
+    """
+    compras = list(
+        db.scalars(
+            select(Transaccion)
+            .where(
+                Transaccion.tipo == "compra",
+                Transaccion.estado == "pendiente",
+                Transaccion.bloqueo_hasta <= ahora,
+            )
+            .order_by(Transaccion.id)
+            .with_for_update(skip_locked=True)
+        )
+    )
+    for compra in compras:
+        _vencer_compra(db, compra)
+    db.flush()
+    return len(compras)
+
+
+def _compra_del_cliente(
+    db: Session, usuario_id: int, compra_id: int, *, para_actualizar: bool
+) -> Transaccion:
+    """Compra del cliente; 404 si no existe, es de otro o es una reserva."""
+    consulta = select(Transaccion).where(
+        Transaccion.id == compra_id,
+        Transaccion.cliente_id == usuario_id,
+        Transaccion.tipo == "compra",
+    )
+    if para_actualizar:
+        consulta = consulta.with_for_update()
+    compra = db.scalar(consulta)
+    if compra is None:
+        raise CompraNoEncontrada()
+    return compra
+
+
+def _bloqueo_vencido(compra: Transaccion, ahora: datetime) -> bool:
+    return compra.bloqueo_hasta is None or compra.bloqueo_hasta <= ahora
+
+
+def _vencer_compra(db: Session, compra: Transaccion) -> None:
+    compra.estado = "vencida"
+    _cambiar_estado_de_tiquetes(db, compra.id, "vencido")
+
+
+def _total_pendiente(db: Session, compra: Transaccion) -> int:
+    """Suma de los precios congelados de los tiquetes que todavía se deben cobrar."""
+    total = db.scalar(
+        select(func.coalesce(func.sum(Tramo.precio), 0))
+        .join(Tiquete, Tiquete.tramo_id == Tramo.id)
+        .where(
+            Tramo.transaccion_id == compra.id,
+            Tiquete.estado.in_(("bloqueado", "reservado")),
+        )
+    )
+    return int(total or 0)
+
+
+def _vuelos_de_transaccion(db: Session, transaccion_id: int) -> list[int]:
+    return list(
+        db.scalars(
+            select(Tramo.vuelo_id)
+            .where(Tramo.transaccion_id == transaccion_id)
+            .distinct()
+            .order_by(Tramo.vuelo_id)
+        )
+    )
+
+
+def _enviar_correos_de_compra(db: Session, compra: Transaccion, momento: datetime) -> None:
+    """Encola el código a cada viajero y el comprobante PDF al comprador (RF-39, HU-25)."""
+    from app.modules.usuarios import service as usuarios_service
+
+    codigo = compra.codigo or ""
+    viaje = viaje_de(db, compra)
+    for viajero in viaje.viajeros:
+        encolar_correo(
+            db,
+            viajero.email,
+            f"Tu compra {codigo} está confirmada",
+            _texto_para_viajero(viaje, viajero, codigo),
+        )
+
+    comprador = usuarios_service.obtener_perfil(db, compra.cliente_id)
+    datos = _datos_de_comprobante(viaje, comprador, momento)
+    encolar_correo(
+        db,
+        comprador.email,
+        f"Comprobante de compra {codigo}",
+        f"Gracias por comprar con AVIANCO. Adjuntamos el comprobante de tu compra {codigo}.",
+        adjuntos=[
+            Adjunto(
+                f"comprobante-{codigo}.pdf",
+                "application/pdf",
+                generar_comprobante(datos),
+            )
+        ],
+    )
+
+
+def _texto_para_viajero(viaje: Viaje, viajero: ViajeroViaje, codigo: str) -> str:
+    """Texto del correo de confirmación, con el código, cada vuelo y su silla."""
+    lineas = [
+        f"Hola {viajero.nombres}, tu compra {codigo} está confirmada.",
+        "",
+    ]
+    for tiquete in viajero.tiquetes:
+        vuelo = viaje.tramos[tiquete.tramo].vuelo
+        salida = _fecha_local(vuelo.salida, vuelo.origen.zona_horaria)
+        lineas.append(
+            f"Vuelo {vuelo.codigo}: {vuelo.origen.nombre} → {vuelo.destino.nombre}, "
+            f"{salida} (hora local), clase {tiquete.clase}, silla {tiquete.silla}."
+        )
+    lineas += ["", "Presenta este código en el aeropuerto. ¡Buen viaje!"]
+    return "\n".join(lineas)
+
+
+def _datos_de_comprobante(viaje: Viaje, comprador: object, momento: datetime) -> DatosComprobante:
+    """Adapta la respuesta pública del viaje a los datos del comprobante (HU-25)."""
+    tramos = tuple(
+        TramoComprobante(
+            vuelo_codigo=tramo.vuelo.codigo,
+            origen=tramo.vuelo.origen.nombre,
+            destino=tramo.vuelo.destino.nombre,
+            salida=tramo.vuelo.salida,
+            zona_origen=tramo.vuelo.origen.zona_horaria,
+            llegada=tramo.vuelo.llegada,
+            zona_destino=tramo.vuelo.destino.zona_horaria,
+        )
+        for tramo in viaje.tramos
+    )
+    viajeros = tuple(
+        ViajeroComprobante(
+            nombres=viajero.nombres,
+            apellidos=viajero.apellidos,
+            tipo_documento=viajero.tipo_documento,
+            numero_documento=viajero.numero_documento,
+            tiquetes=tuple(
+                TiqueteComprobante(
+                    tramo=tiquete.tramo,
+                    clase=tiquete.clase,
+                    silla=tiquete.silla,
+                    precio=tiquete.precio,
+                )
+                for tiquete in viajero.tiquetes
+            ),
+        )
+        for viajero in viaje.viajeros
+    )
+    return DatosComprobante(
+        codigo=viaje.codigo,
+        comprador=f"{comprador.nombres} {comprador.apellidos}",
+        pagado_en=momento,
+        tramos=tramos,
+        viajeros=viajeros,
+        total=sum(tiquete.precio for viajero in viaje.viajeros for tiquete in viajero.tiquetes),
+    )
+
+
+def _fecha_local(momento: datetime, zona: str) -> str:
+    """IU-05: fecha y hora en la zona del origen, en formato de 24 horas."""
+    return f"{momento.astimezone(ZoneInfo(zona)):%d/%m/%Y %H:%M}"
 
 
 def pasajeros_de_vuelo(db: Session, vuelo_id: int) -> list[PasajeroVuelo]:
@@ -782,14 +1130,15 @@ def _a_viajero_para_validar(viajero: object) -> ViajeroParaValidar:
 
 
 def _bloquear_vuelo(db: Session, vuelo_id: int) -> None:
-    """Serializa las reservas del vuelo (`SELECT … FOR UPDATE`, RF-42).
+    """Serializa las asignaciones del vuelo con un lock de asesoría (RF-42).
 
-    Es la misma fila que bloquea `vuelos.service.cancelar_vuelo`, así una reserva no puede
-    crearse a la vez que se cancela el vuelo. No se importa el modelo de vuelos: solo se
-    bloquea la fila por su tabla. Un id inexistente no bloquea nada y lo reporta la
-    validación posterior, en el orden de los tramos.
+    No bloquea la fila de `vuelos`, que es de otro módulo: solo reserva y compra compiten
+    entre sí por las sillas del mismo vuelo. El lock se libera al terminar la transacción.
     """
-    db.execute(text("SELECT id FROM vuelos WHERE id = :id FOR UPDATE"), {"id": vuelo_id})
+    db.execute(
+        text("SELECT pg_advisory_xact_lock(:clave, :vuelo_id)"),
+        {"clave": _CLAVE_LOCK_VUELOS, "vuelo_id": vuelo_id},
+    )
 
 
 def _bloquear_y_validar_tramos(db: Session, datos: ViajeEntrada, momento: datetime) -> list:
@@ -848,19 +1197,35 @@ def _validar_regreso(detalles: list) -> None:
         )
 
 
-def _insertar_reserva(
+def _insertar_transaccion(
     db: Session,
     usuario_id: int,
     datos: ViajeEntrada,
     detalles: list,
     momento: datetime,
-    vence_en: datetime,
+    *,
+    tipo: Literal["compra", "reserva"],
+    estado: str,
+    vence_en: datetime | None,
+    bloqueo_hasta: datetime | None,
+    estado_tiquete: EstadoTiquete,
 ) -> Transaccion:
     """Crea la transacción y reintenta la asignación si otra petición tomó las sillas (RF-42)."""
     for intento in range(_INTENTOS_DE_ASIGNACION):
         try:
             with db.begin_nested():
-                transaccion = _crear_transaccion(db, usuario_id, datos, detalles, momento, vence_en)
+                transaccion = _crear_transaccion(
+                    db,
+                    usuario_id,
+                    datos,
+                    detalles,
+                    momento,
+                    tipo=tipo,
+                    estado=estado,
+                    vence_en=vence_en,
+                    bloqueo_hasta=bloqueo_hasta,
+                    estado_tiquete=estado_tiquete,
+                )
             return transaccion
         except IntegrityError as error:
             restriccion = _restriccion_de(error)
@@ -880,7 +1245,7 @@ def _insertar_reserva(
                 or intento == _INTENTOS_DE_ASIGNACION - 1
             ):
                 raise
-    raise AssertionError("No se pudo asignar la reserva.")
+    raise AssertionError("No se pudo crear el viaje.")
 
 
 def _crear_transaccion(
@@ -889,16 +1254,22 @@ def _crear_transaccion(
     datos: ViajeEntrada,
     detalles: list,
     momento: datetime,
-    vence_en: datetime,
+    *,
+    tipo: Literal["compra", "reserva"],
+    estado: str,
+    vence_en: datetime | None,
+    bloqueo_hasta: datetime | None,
+    estado_tiquete: EstadoTiquete,
 ) -> Transaccion:
     from app.modules.vuelos import service as vuelos_service
 
     transaccion = Transaccion(
         cliente_id=usuario_id,
-        tipo="reserva",
-        estado="vigente",
+        tipo=tipo,
+        estado=estado,
         codigo=_nuevo_codigo(db),
         vence_en=vence_en,
+        bloqueo_hasta=bloqueo_hasta,
     )
     db.add(transaccion)
     db.flush()
@@ -968,7 +1339,7 @@ def _crear_transaccion(
                     viajero_id=viajero.id,
                     vuelo_id=tramo.vuelo_id,
                     numero_silla=sillas[posicion][indice],
-                    estado="reservado",
+                    estado=estado_tiquete,
                     tipo_documento=viajero.tipo_documento,
                     numero_documento=viajero.numero_documento,
                 )
@@ -1040,3 +1411,6 @@ def _vuelo_viaje(detalle: object) -> VueloViaje:
 
 # RF-37, RNF-18: el planificador vence las reservas cada minuto, también al arrancar.
 registrar_tarea(NOMBRE_TAREA_VENCER, vencer_reservas, cada=timedelta(minutes=1))
+
+# SUP-15, RNF-18: libera los bloqueos de las compras cada minuto, también al arrancar.
+registrar_tarea(NOMBRE_TAREA_LIBERAR, liberar_bloqueos, cada=timedelta(minutes=1))
