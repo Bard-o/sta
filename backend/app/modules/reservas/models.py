@@ -111,6 +111,8 @@ class Transaccion(TimestampMixin, Base):
     vence_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # SUP-15: la compra bloquea las sillas 15 minutos mientras se confirma el pago.
     bloqueo_hasta: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # HU-25, HU-27: hora del último pago de una compra; null mientras no se haya pagado.
+    pagada_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class Tramo(Base):
