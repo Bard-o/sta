@@ -1182,14 +1182,18 @@ def _fuera_de_plazo(indice: int, vuelo: object) -> FueraDePlazo:
 
 
 def _validar_regreso(detalles: list) -> None:
-    """RF-28: el regreso sale del destino de la ida, después de su llegada y es otro vuelo."""
+    """RF-28: el regreso sale del destino de la ida, estrictamente después de su llegada y es
+
+    otro vuelo. La comparación es estricta (`<=`) como en la búsqueda de regresos (HU-21): no se
+    puede abordar un vuelo en el mismo instante en que aterriza el de ida.
+    """
     if len(detalles) != 2:
         return
     ida, regreso = detalles
     if (
         regreso.vuelo.id == ida.vuelo.id
         or regreso.vuelo.origen_codigo != ida.vuelo.destino_codigo
-        or regreso.vuelo.salida < ida.vuelo.llegada
+        or regreso.vuelo.salida <= ida.vuelo.llegada
     ):
         raise RegresoInvalido(
             f"El regreso debe salir de {ida.destino.nombre} después de la llegada de la ida.",
