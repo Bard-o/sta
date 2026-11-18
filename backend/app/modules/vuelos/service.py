@@ -690,6 +690,9 @@ def editar_vuelo(
     el commit y el rollback son de quien llama.
     """
     momento = ahora or datetime.now(UTC)
+    # Como al cancelar: espera las ventas en curso para leer la ocupación ya confirmada, y las
+    # que llegan después leen el vuelo editado (RF-18).
+    reservas_service.bloquear_ventas_de_vuelo(db, vuelo_id)
     vuelo = _vuelo_o_no_encontrado(db, vuelo_id)
     ocupacion = reservas_service.ocupacion_de_vuelos(db, [vuelo.id]).get(
         vuelo.id, reservas_service.OcupacionVuelo()
@@ -728,9 +731,16 @@ def cancelar_vuelo(
     correo a cada cliente), pasa a `cancelada` sus promociones activas, retira las noticias del
     carrusel y audita la cancelación. El código del vuelo no se reutiliza (SUP-01). No hace
     commit: el commit y el rollback son de quien llama.
+
+    Espera a que terminen las ventas en curso del vuelo: una compra confirmada antes cuenta
+    como tiquete vendido y una iniciada antes se anula; las que llegan después ven el vuelo
+    cancelado (RF-19, RNF-17).
     """
     momento = ahora or datetime.now(UTC)
-    # El lock serializa dos cancelaciones simultáneas y la creación de promociones del vuelo.
+    # Primero el lock de ventas y después la fila, en el orden global de reservas.service.
+    # Al revés se interbloquearía con una venta que, con el lock, espera la llave foránea.
+    reservas_service.bloquear_ventas_de_vuelo(db, vuelo_id)
+    # La fila bloqueada serializa dos cancelaciones simultáneas y las promociones del vuelo.
     vuelo = _vuelo_bloqueado(db, vuelo_id)
     ocupacion = reservas_service.ocupacion_de_vuelos(db, [vuelo.id]).get(
         vuelo.id, reservas_service.OcupacionVuelo()
