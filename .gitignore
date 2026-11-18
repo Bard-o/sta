@@ -20,3 +20,7 @@ dist/
 .DS_Store
 .idea/
 .vscode/
+
+# Resultados crudos de las pruebas de carga (el resumen va en docs/pruebas/)
+carga/resultados/*
+!carga/resultados/.gitkeep

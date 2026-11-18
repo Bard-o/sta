@@ -58,6 +58,55 @@ services:
     ports:
       - "${MAILPIT_PORT:-8025}:8025"
 
+  # ---------- Prueba de carga de la búsqueda (issue #135, RNF-01) ----------
+  # Los servicios del perfil `carga` no arrancan con `docker compose up`: se piden con
+  # `--profile carga`. Procedimiento completo en docs/pruebas/carga-busqueda.md.
+  backend-carga:
+    profiles: ["carga"]
+    build: ./backend
+    env_file: .env
+    environment:
+      # Base aparte que crea y borra scripts/carga/sembrar.py: la de desarrollo no se toca.
+      DATABASE_URL: ${CARGA_DATABASE_URL:-postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/sta_carga}
+      # Sin tareas programadas (ni envío de la cola de correos) durante la medición.
+      PLANIFICADOR_ACTIVO: "false"
+      # Se habla por http dentro de la red de compose: una cookie Secure no viajaría.
+      COOKIE_SECURE: "false"
+      CARGA_CONTRASENA: ${CARGA_CONTRASENA:-CargaSta2026}
+    # Sin --reload y con varios procesos, como en un despliegue. La base la prepara el sembrado.
+    command: >
+      uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
+      --workers ${CARGA_WORKERS:-4} --no-access-log
+    ports:
+      - "${CARGA_BACKEND_PORT:-8001}:8000"
+    volumes:
+      - ./backend:/app
+    depends_on:
+      db:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
+      interval: 3s
+      timeout: 5s
+      retries: 40
+
+  k6:
+    profiles: ["carga"]
+    image: grafana/k6:2.4.0
+    user: "1000:1000"
+    command: ["run", "/carga/busqueda.js"]
+    environment:
+      BASE_URL: http://backend-carga:8000/api/v1
+      CARGA_CONTRASENA: ${CARGA_CONTRASENA:-CargaSta2026}
+    volumes:
+      - ./carga:/carga:ro
+      - ./carga/resultados:/resultados
+    depends_on:
+      backend-carga:
+        condition: service_healthy
+
 volumes:
   db-data:
   archivos:
