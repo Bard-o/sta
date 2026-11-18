@@ -1,7 +1,7 @@
 """Endpoints del módulo monedero. Contrato: docs/api/iteracion-2.md (HU-28 a HU-31).
 
-Los endpoints que responden NoImplementado (501) son stubs del contrato: ya validan la sesión,
-el rol y el cuerpo, y su implementación llega con el issue #119.
+Comprueban la sesión, el rol y el cuerpo; la lógica de tarjetas, recargas, saldo y movimientos
+vive en `service.py`. Todo es solo del cliente y cada cliente ve únicamente lo suyo.
 """
 
 from datetime import date
@@ -11,8 +11,9 @@ from fastapi import APIRouter, Depends, Query, status
 
 from app.core.auth import UsuarioActual, require_role
 from app.core.db import DbSession
-from app.core.errors import NoImplementado, respuestas_error
+from app.core.errors import respuestas_error
 from app.core.security import Rol
+from app.modules.monedero import service
 from app.modules.monedero.schemas import (
     Monedero,
     Movimiento,
@@ -34,7 +35,7 @@ router = APIRouter(prefix="/monedero", tags=["monedero"])
 @router.get("", response_model=Monedero)
 def consultar_saldo(usuario: Cliente, db: DbSession) -> Monedero:
     """Saldo del monedero (HU-31, RF-48)."""
-    raise NoImplementado()
+    return Monedero(saldo=service.saldo_de(db, usuario.id))
 
 
 @router.get("/movimientos", response_model=PaginaMovimientos)
@@ -48,19 +49,29 @@ def listar_movimientos(
     por_pagina: PorPagina = 20,
 ) -> PaginaMovimientos:
     """Movimientos del más reciente al más antiguo, con filtros por tipo y fecha (HU-31)."""
-    raise NoImplementado()
+    return service.listar_movimientos(
+        db,
+        usuario.id,
+        tipo=tipo,
+        desde=desde,
+        hasta=hasta,
+        pagina=pagina,
+        por_pagina=por_pagina,
+    )
 
 
 @router.get("/tarjetas", response_model=list[Tarjeta])
 def listar_tarjetas(usuario: Cliente, db: DbSession) -> list[Tarjeta]:
     """Tarjetas registradas y no eliminadas, enmascaradas (HU-29, RF-46)."""
-    raise NoImplementado()
+    return service.listar_tarjetas(db, usuario.id)
 
 
 @router.post("/tarjetas", status_code=status.HTTP_201_CREATED, response_model=Tarjeta)
 def registrar_tarjeta(datos: TarjetaEntrada, usuario: Cliente, db: DbSession) -> Tarjeta:
     """Registra una tarjeta simulada: Luhn y vencimiento; guarda solo los últimos 4 (HU-28)."""
-    raise NoImplementado()
+    tarjeta = service.registrar_tarjeta(db, usuario.id, datos)
+    db.commit()
+    return tarjeta
 
 
 @router.delete(
@@ -70,7 +81,8 @@ def registrar_tarjeta(datos: TarjetaEntrada, usuario: Cliente, db: DbSession) ->
 )
 def eliminar_tarjeta(tarjeta_id: int, usuario: Cliente, db: DbSession) -> None:
     """Elimina una tarjeta; sus recargas conservan la referencia (HU-29)."""
-    raise NoImplementado()
+    service.eliminar_tarjeta(db, usuario.id, tarjeta_id)
+    db.commit()
 
 
 @router.post(
@@ -81,4 +93,6 @@ def eliminar_tarjeta(tarjeta_id: int, usuario: Cliente, db: DbSession) -> None:
 )
 def recargar_monedero(datos: RecargaEntrada, usuario: Cliente, db: DbSession) -> Movimiento:
     """Recarga el monedero desde una tarjeta vigente; aprobación simulada (HU-30, RF-47)."""
-    raise NoImplementado()
+    movimiento = service.recargar(db, usuario.id, datos)
+    db.commit()
+    return movimiento
