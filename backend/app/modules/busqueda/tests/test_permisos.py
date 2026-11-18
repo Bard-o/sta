@@ -1,29 +1,39 @@
 """RNF-10, Apéndice B: la búsqueda es pública para todos los roles, también sin sesión.
 
-Matriz del contrato en docs/api/iteracion-2.md. Mientras sean stubs responden 501 (o 422 si
-falta un parámetro obligatorio): lo importante es que nunca respondan 401 ni 403.
+Matriz del contrato en docs/api/iteracion-2.md: visitantes, clientes, administradores y root
+reciben 200; nunca 401 ni 403.
 """
 
 from collections.abc import Callable
+from datetime import UTC, datetime
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 
 from app.core.security import Rol
+from app.modules.vuelos.tests.fabricas import crear_vuelo
 
-RUTAS = [
-    "/api/v1/busqueda/vuelos",
-    "/api/v1/busqueda/vuelos?origen=PEI&precio_min=200000&precio_max=400000",
-    "/api/v1/busqueda/regresos?vuelo_ida_id=1&destino=CTG&fecha=2027-04-22",
-]
+IDA = datetime(2027, 4, 15, 15, 0, tzinfo=UTC)
+REGRESO = datetime(2027, 4, 22, 15, 0, tzinfo=UTC)
 
 
 @pytest.mark.parametrize("rol", [None, *Rol], ids=lambda r: r or "visitante")
 def test_la_busqueda_es_publica(
-    rol: Rol | None, client: TestClient, client_como: Callable[[Rol], TestClient]
-):
+    rol: Rol | None,
+    client: TestClient,
+    client_como: Callable[[Rol], TestClient],
+    db: Session,
+) -> None:
     # RF-27, Apéndice B: buscar vuelos está permitido a visitantes, clientes, admin y root.
+    ida = crear_vuelo(db, origen="PEI", destino="JFK", salida=IDA, duracion_minutos=330)
+    crear_vuelo(db, origen="JFK", destino="CTG", salida=REGRESO)
+
     cliente_http = client_como(rol) if rol else client
-    for ruta in RUTAS:
-        estado = cliente_http.get(ruta).status_code
-        assert estado not in (401, 403), f"GET {ruta} como {rol}: {estado}"
+    rutas = [
+        "/api/v1/busqueda/vuelos?origen=PEI",
+        f"/api/v1/busqueda/regresos?vuelo_ida_id={ida.id}&destino=CTG&fecha=2027-04-22",
+    ]
+    for ruta in rutas:
+        respuesta = cliente_http.get(ruta)
+        assert respuesta.status_code == 200, f"GET {ruta} como {rol}: {respuesta.text}"
