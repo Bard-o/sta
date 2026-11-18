@@ -1,7 +1,7 @@
 """RNF-10: cada endpoint del módulo responde 401 o 403 a los roles que no lo tienen permitido.
 
-Matriz del contrato en docs/api/iteracion-2.md. Los endpoints que todavía son stubs responden
-501 (o 422 si el cuerpo vacío no pasa la validación) al rol permitido.
+Matriz del contrato en docs/api/iteracion-2.md. Al rol permitido se le prueba con cuerpos
+vacíos o ids inexistentes: lo que importa aquí es que no responda 401 ni 403.
 """
 
 from collections.abc import Callable
