@@ -1,9 +1,10 @@
 """Interfaz pública del módulo reservas. Otros módulos solo llaman a estas funciones.
 
 Aquí viven las reglas de los viajeros (RF-31 a RF-35), la creación de una reserva (HU-24,
-RF-36, RF-41 y RF-42), el vencimiento automático (RF-37) y la anulación al cancelar un vuelo
-(HU-16), además de las consultas que usan vuelos, usuarios y carrito. La compra (#124) y el
-trayecto completo (#130) reutilizan estas mismas piezas.
+RF-36, RF-41 y RF-42), la compra con el monedero (HU-25), el trayecto completo (HU-26), el pago
+de una reserva completa o por viajero (HU-27, RF-38), Mis viajes (HU-27, RF-45), el vencimiento
+automático (RF-37) y la anulación al cancelar un vuelo (HU-16), además de las consultas que
+usan vuelos, usuarios y carrito.
 
 Ninguna función hace commit: van en la transacción de quien llama.
 """
@@ -11,13 +12,13 @@ Ninguna función hace commit: van en la transacción de quien llama.
 import random
 import re
 import secrets
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
-from typing import Literal
+from typing import Any, Literal
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import and_, distinct, func, or_, select, text, update
+from sqlalchemy import and_, distinct, exists, func, or_, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -42,6 +43,9 @@ from app.modules.reservas.models import (
 )
 from app.modules.reservas.schemas import (
     CiudadViaje,
+    EstadoViaje,
+    PaginaViajes,
+    TipoViaje,
     TiqueteViaje,
     TramoViaje,
     Viaje,
@@ -74,6 +78,13 @@ _CODIGO_ALFABETO = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 _CODIGO_LARGO = 6
 # RF-42: si otra transacción tomó las sillas, se reintenta la asignación en la misma petición.
 _INTENTOS_DE_ASIGNACION = 3
+# RF-39: índice único del código entre reservas y compras directas (la compra de una reserva,
+# HU-27, repite el de su reserva y queda fuera). Si dos peticiones eligen el mismo código, falla.
+_RESTRICCION_CODIGO = "uq_transacciones_codigo_sin_reserva"
+
+# HU-27: textos de `campos.viajero_ids` al pagar una reserva, tal como los fija el contrato.
+_VIAJEROS_NO_PAGABLES = "Elige viajeros de esta reserva que sigan sin pagar."
+_MENOR_SOLO_EN_COMPRA = "Paga también a un adulto: un menor no puede quedar solo en la compra."
 
 # RF-31: mismo patrón que usa el registro de usuarios para el correo.
 _PATRON_EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -131,6 +142,19 @@ class CompraNoEncontrada(NoEncontrado):
     """HU-25: la compra no existe o es de otro cliente."""
 
     mensaje = "La compra no existe."
+
+
+class ReservaNoEncontrada(NoEncontrado):
+    """HU-27: la reserva no existe o es de otro cliente."""
+
+    mensaje = "La reserva no existe."
+
+
+class ReservaNoVigente(Conflicto):
+    """HU-27: la reserva venció, se canceló o ya está pagada."""
+
+    codigo = "reserva_no_vigente"
+    mensaje = "La reserva ya no está vigente: venció, se canceló o ya está pagada."
 
 
 class EstadoInvalido(Conflicto):
@@ -301,8 +325,17 @@ def anular_reservas_de_vuelo(db: Session, vuelo_id: int) -> int:
     except NoEncontrado:
         codigo_vuelo = "el vuelo"
 
+    anuladas = 0
     for transaccion in transacciones:
+        # Los ids se eligieron sin lock: una reserva pagada o una compra confirmada mientras
+        # tanto (HU-27, HU-25) ya no se anula, o quedaría cancelada con un cobro hecho.
+        if not (
+            (transaccion.tipo == "reserva" and transaccion.estado == "vigente")
+            or (transaccion.tipo == "compra" and transaccion.estado == "pendiente")
+        ):
+            continue
         transaccion.estado = "cancelada"
+        anuladas += 1
         _cambiar_estado_de_tiquetes(db, transaccion.id, "cancelado")
         nombre = "reserva" if transaccion.tipo == "reserva" else "compra"
         _encolar_aviso(
@@ -313,7 +346,7 @@ def anular_reservas_de_vuelo(db: Session, vuelo_id: int) -> int:
             "fue cancelado. No se hizo ningún cobro.",
         )
     db.flush()
-    return len(transacciones)
+    return anuladas
 
 
 # ---------- Reserva (HU-24, RF-36 a RF-42) ----------
@@ -409,12 +442,26 @@ def _crear_viaje(
 def viaje_de(db: Session, transaccion: Transaccion) -> Viaje:
     """Forma pública de una reserva o compra (HU-24 a HU-27).
 
-    La usan este endpoint y los de #124, #130 y #131 para responder siempre la misma forma.
+    La usan los endpoints de reservar, comprar y pagar para responder siempre la misma forma.
+    """
+    return _viaje_de(db, transaccion, {})
+
+
+def _viaje_de(db: Session, transaccion: Transaccion, detalles_por_vuelo: dict[int, Any]) -> Viaje:
+    """Arma el `Viaje`; `detalles_por_vuelo` es un caché del detalle de cada vuelo.
+
+    Una reserva pagada en parte (HU-27) tiene sus tiquetes repartidos: los que siguen
+    reservados viven en sus propios tramos y los pagados, en los de su compra, pero todos
+    apuntan a los viajeros de la reserva. Por eso se buscan por tramo propio o por viajero
+    propio, y la compra de una reserva muestra los viajeros ajenos cuyos tiquetes tiene.
     """
     from app.modules.vuelos import service as vuelos_service
 
     if transaccion.creado_en is None:
         db.refresh(transaccion)
+
+    def detalle_de(vuelo_id: int) -> Any:
+        return _detalle_de_vuelo(db, vuelo_id, detalles_por_vuelo)
 
     tramos = list(
         db.scalars(
@@ -423,40 +470,53 @@ def viaje_de(db: Session, transaccion: Transaccion) -> Viaje:
             .order_by(Tramo.orden, Tramo.clase)
         )
     )
-    viajeros = list(
+    propios = list(
         db.scalars(
             select(Viajero).where(Viajero.transaccion_id == transaccion.id).order_by(Viajero.id)
         )
     )
     tramos_por_id = {tramo.id: tramo for tramo in tramos}
+    condiciones = []
+    if tramos_por_id:
+        condiciones.append(Tiquete.tramo_id.in_(list(tramos_por_id)))
+    if propios:
+        condiciones.append(Tiquete.viajero_id.in_([viajero.id for viajero in propios]))
     tiquetes = (
-        list(db.scalars(select(Tiquete).where(Tiquete.tramo_id.in_(list(tramos_por_id)))))
-        if tramos_por_id
+        list(db.scalars(select(Tiquete).where(or_(*condiciones)).order_by(Tiquete.id)))
+        if condiciones
         else []
     )
+
+    # Tramos y viajeros ajenos de esos tiquetes: dan la clase, el precio y los datos personales.
+    faltan_tramos = {tiquete.tramo_id for tiquete in tiquetes} - set(tramos_por_id)
+    if faltan_tramos:
+        for tramo in db.scalars(select(Tramo).where(Tramo.id.in_(faltan_tramos))):
+            tramos_por_id[tramo.id] = tramo
+    ids_propios = {viajero.id for viajero in propios}
+    faltan_viajeros = {tiquete.viajero_id for tiquete in tiquetes} - ids_propios
+    viajeros = list(propios)
+    if faltan_viajeros:
+        viajeros += db.scalars(select(Viajero).where(Viajero.id.in_(faltan_viajeros)))
+    viajeros.sort(key=lambda viajero: viajero.id)
 
     # Un tramo de la respuesta por vuelo (ida y regreso), aunque haya dos clases en el mismo.
     por_orden: dict[int, Tramo] = {}
     for tramo in tramos:
         por_orden.setdefault(tramo.orden, tramo)
     ordenes = sorted(por_orden)
-    detalles = {
-        orden: vuelos_service.obtener_vuelo_detalle(db, por_orden[orden].vuelo_id)
-        for orden in ordenes
-    }
+    detalles = {orden: detalle_de(por_orden[orden].vuelo_id) for orden in ordenes}
     indice_de_vuelo = {detalles[orden].vuelo.id: indice for indice, orden in enumerate(ordenes)}
 
     tiquetes_por_viajero: dict[int, list[TiqueteViaje]] = {viajero.id: [] for viajero in viajeros}
     for tiquete in tiquetes:
         tramo = tramos_por_id[tiquete.tramo_id]
-        detalle = detalles[tramo.orden]
         tiquetes_por_viajero[tiquete.viajero_id].append(
             TiqueteViaje(
                 id=tiquete.id,
                 tramo=indice_de_vuelo[tiquete.vuelo_id],
                 clase=tramo.clase,
                 silla=vuelos_service.nombre_de_silla(
-                    detalle.vuelo.tipo, tramo.clase, tiquete.numero_silla
+                    detalle_de(tiquete.vuelo_id).vuelo.tipo, tramo.clase, tiquete.numero_silla
                 ),
                 numero_silla=tiquete.numero_silla,
                 precio=tramo.precio,
@@ -482,13 +542,20 @@ def viaje_de(db: Session, transaccion: Transaccion) -> Viaje:
     else:
         vence_en = transaccion.bloqueo_hasta
 
+    # HU-27: la reserva pagada (toda o en parte) apunta a su compra y la compra, a su reserva.
+    compra_id = (
+        db.scalar(select(Transaccion.id).where(Transaccion.reserva_id == transaccion.id))
+        if transaccion.tipo == "reserva"
+        else None
+    )
+
     return Viaje(
         id=transaccion.id,
         tipo=transaccion.tipo,
         codigo=transaccion.codigo or "",
         estado=transaccion.estado,
-        reserva_id=None,
-        compra_id=None,
+        reserva_id=transaccion.reserva_id,
+        compra_id=compra_id,
         creada_en=transaccion.creado_en,
         vence_en=vence_en,
         pagada_en=transaccion.pagada_en,
@@ -520,20 +587,22 @@ def vencer_reservas(db: Session, ahora: datetime) -> int:
 
     Las deja `vencida`, pasa sus tiquetes a `vencido` (liberan las sillas) y encola el correo
     al cliente. Procesa todo lo vencido hasta `ahora`, es idempotente y no hace commit: la
-    ejecuta el planificador cada minuto.
+    ejecuta el planificador cada minuto. En una reserva pagada en parte solo vencen los
+    tiquetes que siguen reservados: los pagados ya viven en su compra (HU-27).
     """
-    reservas = list(
-        db.scalars(
-            select(Transaccion)
-            .where(
-                Transaccion.tipo == "reserva",
-                Transaccion.estado == "vigente",
-                Transaccion.vence_en <= ahora,
-            )
-            .order_by(Transaccion.id)
-            .with_for_update(skip_locked=True)
-        )
+    return _vencer_reservas(db, ahora)
+
+
+def _vencer_reservas(db: Session, ahora: datetime, *, cliente_id: int | None = None) -> int:
+    """`vencer_reservas`, opcionalmente solo las de un cliente (estado efectivo de Mis viajes)."""
+    consulta = select(Transaccion).where(
+        Transaccion.tipo == "reserva",
+        Transaccion.estado == "vigente",
+        Transaccion.vence_en <= ahora,
     )
+    if cliente_id is not None:
+        consulta = consulta.where(Transaccion.cliente_id == cliente_id)
+    reservas = list(db.scalars(consulta.order_by(Transaccion.id).with_for_update(skip_locked=True)))
     for reserva in reservas:
         reserva.estado = "vencida"
         _cambiar_estado_de_tiquetes(db, reserva.id, "vencido")
@@ -546,6 +615,275 @@ def vencer_reservas(db: Session, ahora: datetime) -> int:
         )
     db.flush()
     return len(reservas)
+
+
+# ---------- Pago de una reserva (HU-27, RF-38, RF-39) ----------
+
+
+def pagar_reserva(
+    db: Session,
+    usuario_id: int,
+    reserva_id: int,
+    viajero_ids: Sequence[int] | None = None,
+    *,
+    ahora: datetime | None = None,
+) -> tuple[Transaccion, Transaccion]:
+    """Paga la reserva completa o algunos viajeros al precio congelado (HU-27, RF-38, RF-39).
+
+    Devuelve `(reserva, compra)`. La primera vez crea la compra con el mismo código; los pagos
+    siguientes le agregan tiquetes. Los tiquetes pagados pasan a los tramos de la compra con su
+    silla; los demás siguen reservados con el mismo vencimiento. Débito, tiquetes, correos y
+    promociones agotadas van en una sola transacción (RNF-17). No hace commit.
+
+    Valida en el orden del contrato: reserva del cliente (404), correo verificado (403), reserva
+    vigente (409), viajeros que siguen sin pagar (422), menores con un adulto en la compra (422)
+    y saldo (409). Hasta el débito no se escribe nada.
+    """
+    from app.modules.monedero import service as monedero_service
+    from app.modules.vuelos import service as vuelos_service
+
+    momento = ahora or datetime.now(UTC)
+    reserva = _reserva_del_cliente(db, usuario_id, reserva_id)
+    _exigir_correo_verificado(db, usuario_id)
+
+    # Estado efectivo: una reserva con el plazo pasado ya venció aunque el planificador no corra.
+    if reserva.estado != "vigente" or reserva.vence_en is None or reserva.vence_en <= momento:
+        raise ReservaNoVigente()
+
+    tramos = {
+        tramo.id: tramo
+        for tramo in db.scalars(select(Tramo).where(Tramo.transaccion_id == reserva.id))
+    }
+    pendientes: dict[int, list[Tiquete]] = {}
+    for tiquete in db.scalars(
+        select(Tiquete)
+        .where(Tiquete.tramo_id.in_(list(tramos)), Tiquete.estado == "reservado")
+        .order_by(Tiquete.id)
+    ):
+        pendientes.setdefault(tiquete.viajero_id, []).append(tiquete)
+    if not pendientes:
+        raise ReservaNoVigente()
+
+    elegidos = sorted(pendientes) if viajero_ids is None else list(viajero_ids)
+    if (
+        not elegidos
+        or len(set(elegidos)) != len(elegidos)
+        or any(viajero_id not in pendientes for viajero_id in elegidos)
+    ):
+        raise DatosInvalidos(campos={"viajero_ids": _VIAJEROS_NO_PAGABLES})
+
+    _validar_menores_del_pago(db, reserva, elegidos)
+
+    tiquetes = [tiquete for viajero_id in elegidos for tiquete in pendientes[viajero_id]]
+    total = sum(tramos[tiquete.tramo_id].precio for tiquete in tiquetes)
+    monedero_service.debitar(db, usuario_id, total, referencia=reserva.codigo or "")
+
+    compra = _compra_de_reserva(db, reserva)
+    compra.pagada_en = momento
+    db.flush()
+    _mover_a_la_compra(db, compra, tramos, tiquetes)
+    if len(elegidos) == len(pendientes):
+        reserva.estado = "pagada"
+    db.flush()
+
+    _enviar_correos_de_compra(db, compra, momento, viajero_ids=set(elegidos))
+    for vuelo_id in _vuelos_de_transaccion(db, compra.id):
+        vuelos_service.marcar_promociones_agotadas(db, vuelo_id, ahora=momento)
+    db.flush()
+    return reserva, compra
+
+
+def _reserva_del_cliente(db: Session, usuario_id: int, reserva_id: int) -> Transaccion:
+    """Reserva del cliente con lock; 404 si no existe, es de otro o es una compra."""
+    reserva = db.scalar(
+        select(Transaccion)
+        .where(
+            Transaccion.id == reserva_id,
+            Transaccion.cliente_id == usuario_id,
+            Transaccion.tipo == "reserva",
+        )
+        .with_for_update()
+    )
+    if reserva is None:
+        raise ReservaNoEncontrada()
+    return reserva
+
+
+def _validar_menores_del_pago(db: Session, reserva: Transaccion, elegidos: Sequence[int]) -> None:
+    """RF-35: un menor que se paga necesita un adulto en la compra de la reserva.
+
+    El adulto puede estar ya pagado o pagarse en esta misma operación; se revisa en cada vuelo
+    de la reserva, porque la edad se mide el día de la salida.
+    """
+    grupo = db.scalars(
+        select(Viajero)
+        .where(
+            Viajero.transaccion_id == reserva.id,
+            or_(
+                Viajero.id.in_(list(elegidos)),
+                exists().where(Tiquete.viajero_id == Viajero.id, Tiquete.estado == "comprado"),
+            ),
+        )
+        .order_by(Viajero.id)
+    ).all()
+    viajeros = [_a_viajero_para_validar(viajero) for viajero in grupo]
+    for vuelo_id in _vuelos_de_transaccion(db, reserva.id):
+        try:
+            validar_menores(db, vuelo_id, viajeros)
+        except MenorSinAdulto:
+            raise MenorSinAdulto(campos={"viajero_ids": _MENOR_SOLO_EN_COMPRA}) from None
+
+
+def _compra_de_reserva(db: Session, reserva: Transaccion) -> Transaccion:
+    """La compra de la reserva; la primera vez se crea con el mismo código (HU-27)."""
+    compra = db.scalar(
+        select(Transaccion).where(Transaccion.reserva_id == reserva.id).with_for_update()
+    )
+    if compra is None:
+        compra = Transaccion(
+            cliente_id=reserva.cliente_id,
+            tipo="compra",
+            estado="activa",
+            codigo=reserva.codigo,
+            reserva_id=reserva.id,
+        )
+        db.add(compra)
+        db.flush()
+    return compra
+
+
+def _mover_a_la_compra(
+    db: Session, compra: Transaccion, tramos: dict[int, Tramo], tiquetes: Sequence[Tiquete]
+) -> None:
+    """Pasa los tiquetes pagados al tramo copiado de la compra y los deja `comprado`.
+
+    Cada tramo de la compra copia el vuelo, la clase, el precio congelado y el orden del tramo
+    original (uno por orden y clase, reutilizado en los pagos siguientes). El tiquete conserva
+    su id, su silla y su viajero, así que los índices únicos de silla y documento no cambian.
+    """
+    copias = {
+        (tramo.orden, tramo.clase): tramo
+        for tramo in db.scalars(select(Tramo).where(Tramo.transaccion_id == compra.id))
+    }
+    for tiquete in tiquetes:
+        original = tramos[tiquete.tramo_id]
+        copia = copias.get((original.orden, original.clase))
+        if copia is None:
+            copia = Tramo(
+                transaccion_id=compra.id,
+                vuelo_id=original.vuelo_id,
+                clase=original.clase,
+                precio=original.precio,
+                orden=original.orden,
+            )
+            db.add(copia)
+            db.flush()
+            copias[(original.orden, original.clase)] = copia
+        tiquete.tramo_id = copia.id
+        tiquete.estado = "comprado"
+    db.flush()
+
+
+# ---------- Mis viajes (HU-27, RF-45) ----------
+
+
+def listar_mis_viajes(
+    db: Session,
+    usuario_id: int,
+    *,
+    tipo: TipoViaje,
+    estado: EstadoViaje | None = None,
+    desde: date | None = None,
+    hasta: date | None = None,
+    pagina: int = 1,
+    por_pagina: int = 20,
+    ahora: datetime | None = None,
+) -> PaginaViajes:
+    """Reservas o compras del cliente, de la más reciente a la más antigua (HU-27, RF-45).
+
+    `desde` y `hasta` filtran por el día de salida del primer tramo en hora de Colombia, ambos
+    incluidos. Las compras sin pagar no se listan. Una reserva con el plazo pasado se vence
+    antes de listar, para informar su estado efectivo. No hace commit.
+    """
+    if desde is not None and hasta is not None and hasta < desde:
+        raise DatosInvalidos(
+            "Revisa los rangos marcados.",
+            codigo="rango_invalido",
+            campos={"hasta": "La fecha final no puede ser anterior a la inicial."},
+        )
+
+    momento = ahora or datetime.now(UTC)
+    if tipo == "reserva":
+        _vencer_reservas(db, momento, cliente_id=usuario_id)
+
+    consulta = select(Transaccion.id).where(
+        Transaccion.cliente_id == usuario_id, Transaccion.tipo == tipo
+    )
+    if tipo == "compra":
+        consulta = consulta.where(Transaccion.pagada_en.is_not(None))
+    if estado is not None:
+        consulta = consulta.where(Transaccion.estado == estado)
+    ids = list(db.scalars(consulta.order_by(Transaccion.creado_en.desc(), Transaccion.id.desc())))
+
+    detalles: dict[int, Any] = {}
+    if (desde is not None or hasta is not None) and ids:
+        primer_vuelo = {
+            transaccion_id: vuelo_id
+            for transaccion_id, vuelo_id in db.execute(
+                select(Tramo.transaccion_id, Tramo.vuelo_id)
+                .where(Tramo.transaccion_id.in_(ids), Tramo.orden == 1)
+                .distinct()
+            )
+        }
+        ids = [
+            transaccion_id
+            for transaccion_id in ids
+            if transaccion_id in primer_vuelo
+            and _sale_entre(db, primer_vuelo[transaccion_id], detalles, desde, hasta)
+        ]
+
+    inicio = (pagina - 1) * por_pagina
+    ids_de_la_pagina = ids[inicio : inicio + por_pagina]
+    por_id = (
+        {
+            transaccion.id: transaccion
+            for transaccion in db.scalars(
+                select(Transaccion).where(Transaccion.id.in_(ids_de_la_pagina))
+            )
+        }
+        if ids_de_la_pagina
+        else {}
+    )
+    return PaginaViajes(
+        items=[_viaje_de(db, por_id[viaje_id], detalles) for viaje_id in ids_de_la_pagina],
+        total=len(ids),
+        pagina=pagina,
+        por_pagina=por_pagina,
+    )
+
+
+def _sale_entre(
+    db: Session,
+    vuelo_id: int,
+    detalles: dict[int, Any],
+    desde: date | None,
+    hasta: date | None,
+) -> bool:
+    """El día de salida del vuelo en hora de Colombia cae entre `desde` y `hasta` (inclusive)."""
+    salida = _detalle_de_vuelo(db, vuelo_id, detalles).vuelo.salida
+    dia = salida.astimezone(_ZONA_NEGOCIO).date()
+    return (desde is None or dia >= desde) and (hasta is None or dia <= hasta)
+
+
+def _detalle_de_vuelo(db: Session, vuelo_id: int, detalles: dict[int, Any]) -> Any:
+    """Detalle público del vuelo; `detalles` guarda lo ya consultado para no repetirlo."""
+    from app.modules.vuelos import service as vuelos_service
+
+    detalle = detalles.get(vuelo_id)
+    if detalle is None:
+        detalle = vuelos_service.obtener_vuelo_detalle(db, vuelo_id)
+        detalles[vuelo_id] = detalle
+    return detalle
 
 
 # ---------- Compra (HU-25, RF-39 a RF-42, SUP-15) ----------
@@ -703,12 +1041,28 @@ def _vuelos_de_transaccion(db: Session, transaccion_id: int) -> list[int]:
     )
 
 
-def _enviar_correos_de_compra(db: Session, compra: Transaccion, momento: datetime) -> None:
-    """Encola el código a cada viajero y el comprobante PDF al comprador (RF-39, HU-25)."""
+def _enviar_correos_de_compra(
+    db: Session,
+    compra: Transaccion,
+    momento: datetime,
+    *,
+    viajero_ids: Collection[int] | None = None,
+) -> None:
+    """Encola el código a cada viajero y el comprobante PDF al comprador (RF-39, HU-25).
+
+    Con `viajero_ids` solo se incluyen esos viajeros: al pagar una reserva (HU-27) la compra
+    puede tener viajeros de pagos anteriores y el correo y el comprobante son de lo pagado ahora.
+    """
     from app.modules.usuarios import service as usuarios_service
 
     codigo = compra.codigo or ""
     viaje = viaje_de(db, compra)
+    if viajero_ids is not None:
+        viaje = viaje.model_copy(
+            update={
+                "viajeros": [viajero for viajero in viaje.viajeros if viajero.id in viajero_ids]
+            }
+        )
     for viajero in viaje.viajeros:
         encolar_correo(
             db,
@@ -1239,7 +1593,7 @@ def _insertar_transaccion(
                 for detalle in detalles:
                     validar_documentos_en_vuelo(db, detalle.vuelo.id, viajeros)
                 raise ViajeroDuplicado() from None
-            if restriccion == "uq_transacciones_codigo":
+            if restriccion == _RESTRICCION_CODIGO:
                 # Colisión de código (1 en mil millones): se genera otro en el siguiente intento.
                 if intento == _INTENTOS_DE_ASIGNACION - 1:
                     raise
