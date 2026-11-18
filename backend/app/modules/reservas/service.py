@@ -74,6 +74,9 @@ _CODIGO_ALFABETO = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 _CODIGO_LARGO = 6
 # RF-42: si otra transacción tomó las sillas, se reintenta la asignación en la misma petición.
 _INTENTOS_DE_ASIGNACION = 3
+# RF-39: índice único del código entre reservas y compras directas (la compra de una reserva,
+# HU-27, repite el de su reserva y queda fuera). Si dos peticiones eligen el mismo código, falla.
+_RESTRICCION_CODIGO = "uq_transacciones_codigo_sin_reserva"
 
 # RF-31: mismo patrón que usa el registro de usuarios para el correo.
 _PATRON_EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -1239,7 +1242,7 @@ def _insertar_transaccion(
                 for detalle in detalles:
                     validar_documentos_en_vuelo(db, detalle.vuelo.id, viajeros)
                 raise ViajeroDuplicado() from None
-            if restriccion == "uq_transacciones_codigo":
+            if restriccion == _RESTRICCION_CODIGO:
                 # Colisión de código (1 en mil millones): se genera otro en el siguiente intento.
                 if intento == _INTENTOS_DE_ASIGNACION - 1:
                     raise

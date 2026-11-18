@@ -8,6 +8,10 @@ Las sillas y los documentos se protegen con índices únicos parciales: solo com
 tiquetes activos (`bloqueado`, `reservado`, `comprado`). Así la base de datos hace cumplir
 RF-34 y RF-42 aunque dos peticiones lleguen al mismo tiempo, y un tiquete cancelado o vencido
 libera su silla y su documento.
+
+Pagar una reserva (HU-27) crea una única compra (`Transaccion.reserva_id`) que repite el código
+de la reserva y recibe los tiquetes pagados: pasan al tramo copiado de la compra y conservan su
+viajero y su silla.
 """
 
 from datetime import date, datetime
@@ -65,6 +69,9 @@ class Transaccion(TimestampMixin, Base):
     `vence_en` es el vencimiento de la reserva (RF-36). `bloqueo_hasta` es la ventana corta
     de la compra mientras se confirma el pago (SUP-15). Son campos distintos: una reserva
     puede durar 24 horas y un bloqueo de pago, 15 minutos.
+
+    `reserva_id` solo lo tiene la compra que nace de pagar una reserva (HU-27): es única, porque
+    los pagos sucesivos se acumulan en ella, y repite el código de su reserva.
     """
 
     __tablename__ = "transacciones"
@@ -73,7 +80,17 @@ class Transaccion(TimestampMixin, Base):
         CheckConstraint(
             "tipo <> 'reserva' OR vence_en IS NOT NULL", name="reserva_con_vencimiento"
         ),
+        # HU-27: solo una compra puede venir de pagar una reserva.
+        CheckConstraint("reserva_id IS NULL OR tipo = 'compra'", name="compra_de_reserva"),
         Index("ix_transacciones_cliente_estado", "cliente_id", "estado"),
+        # RF-39, HU-27: el código es único entre reservas y compras directas; la compra de una
+        # reserva repite el de su reserva (los pagos se acumulan en ella).
+        Index(
+            "uq_transacciones_codigo_sin_reserva",
+            "codigo",
+            unique=True,
+            postgresql_where=text("reserva_id IS NULL"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -105,14 +122,17 @@ class Transaccion(TimestampMixin, Base):
             create_constraint=True,
         )
     )
-    # RF-39: código alfanumérico único de 6 caracteres; se genera al confirmar la compra.
-    codigo: Mapped[str | None] = mapped_column(String(6), unique=True)
+    # RF-39: código alfanumérico de 6 caracteres; se genera al reservar o al iniciar la compra.
+    # Es único salvo en la compra de una reserva, que repite el de su reserva (`__table_args__`).
+    codigo: Mapped[str | None] = mapped_column(String(6))
     # RF-36: vencimiento de la reserva (24 horas o el límite de cancelación del vuelo).
     vence_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # SUP-15: la compra bloquea las sillas 15 minutos mientras se confirma el pago.
     bloqueo_hasta: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # HU-25, HU-27: hora del último pago de una compra; null mientras no se haya pagado.
     pagada_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # HU-27: en la compra de una reserva, esa reserva. Única: los pagos se acumulan en una compra.
+    reserva_id: Mapped[int | None] = mapped_column(ForeignKey("transacciones.id"), unique=True)
 
 
 class Tramo(Base):
@@ -201,6 +221,9 @@ class Tiquete(TimestampMixin, Base):
     `vuelo_id`, `tipo_documento` y `numero_documento` se repiten desde el tramo y el viajero
     para que PostgreSQL pueda imponer los índices únicos parciales sin subconsultas: una
     silla activa por vuelo y un documento activo por vuelo (RF-34, RF-42).
+
+    Al pagar una reserva (HU-27) el tiquete pasa al tramo copiado de la compra y conserva su
+    viajero (que sigue en la reserva), su silla y su documento.
     """
 
     __tablename__ = "tiquetes"

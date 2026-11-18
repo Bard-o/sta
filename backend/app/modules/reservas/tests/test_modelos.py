@@ -1,4 +1,4 @@
-"""Restricciones de la base de datos del modelo de reservas (RF-34, RF-42)."""
+"""Restricciones de la base de datos del modelo de reservas (RF-34, RF-39, RF-42, HU-27)."""
 
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -10,7 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.security import Rol
-from app.modules.reservas.models import Tiquete, Tramo
+from app.modules.reservas.models import Tiquete, Tramo, Transaccion
 from app.modules.reservas.tests.fabricas import (
     crear_compra,
     crear_tiquete,
@@ -99,3 +99,66 @@ def test_los_tiquetes_cancelados_liberan_la_silla_y_el_documento(
         vuelo=vuelo,
         numero_silla=tiquete_uno.numero_silla,
     )
+
+
+def test_hu27_la_compra_de_una_reserva_comparte_su_codigo_y_es_unica(
+    db: Session, crear_usuario: Callable[..., Any]
+) -> None:
+    """HU-27 · RF-39: la compra que nace de pagar una reserva repite el código de su reserva,
+
+    solo puede haber una por reserva y ninguna otra compra puede usar un código ya tomado.
+    """
+    cliente = crear_usuario(Rol.CLIENTE, nombre_usuario="cliente_codigo_compartido")
+    reserva = crear_transaccion(db, cliente.id, tipo="reserva", codigo="ABCDEF")
+
+    compra = Transaccion(
+        cliente_id=cliente.id,
+        tipo="compra",
+        estado="activa",
+        codigo="ABCDEF",
+        reserva_id=reserva.id,
+    )
+    db.add(compra)
+    db.flush()
+    assert compra.codigo == reserva.codigo
+
+    segunda = Transaccion(
+        cliente_id=cliente.id,
+        tipo="compra",
+        estado="activa",
+        codigo="ABCDEF",
+        reserva_id=reserva.id,
+    )
+    with pytest.raises(IntegrityError), db.begin_nested():
+        db.add(segunda)
+        db.flush()
+
+    directa = Transaccion(cliente_id=cliente.id, tipo="compra", estado="activa", codigo="ABCDEF")
+    with pytest.raises(IntegrityError), db.begin_nested():
+        db.add(directa)
+        db.flush()
+
+    otra_reserva = Transaccion(
+        cliente_id=cliente.id,
+        tipo="reserva",
+        estado="vigente",
+        codigo="ABCDEF",
+        vence_en=datetime.now(UTC),
+    )
+    with pytest.raises(IntegrityError), db.begin_nested():
+        db.add(otra_reserva)
+        db.flush()
+
+    # Solo una compra puede venir de pagar una reserva.
+    libre = crear_transaccion(db, cliente.id, tipo="reserva", codigo="GHJKLM")
+    reserva_de_reserva = Transaccion(
+        cliente_id=cliente.id,
+        tipo="reserva",
+        estado="vigente",
+        codigo="NPQRST",
+        vence_en=datetime.now(UTC),
+        reserva_id=libre.id,
+    )
+    with pytest.raises(IntegrityError), db.begin_nested():
+        db.add(reserva_de_reserva)
+        db.flush()
