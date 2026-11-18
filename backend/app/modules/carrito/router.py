@@ -1,7 +1,7 @@
 """Endpoints del módulo carrito. Contrato: docs/api/iteracion-2.md (HU-22 y HU-23).
 
-Los endpoints que responden NoImplementado (501) son stubs del contrato: ya validan la sesión,
-el rol y el cuerpo, y su implementación llega con el issue #126.
+Comprueban la sesión, el rol y el cuerpo; la lógica del carrito vive en `service.py`. Todo
+es solo del cliente y cada cliente ve y modifica únicamente su propio carrito.
 """
 
 from typing import Annotated
@@ -10,8 +10,9 @@ from fastapi import APIRouter, Depends, status
 
 from app.core.auth import UsuarioActual, require_role
 from app.core.db import DbSession
-from app.core.errors import NoImplementado, respuestas_error
+from app.core.errors import respuestas_error
 from app.core.security import Rol
+from app.modules.carrito import service
 from app.modules.carrito.schemas import (
     Carrito,
     SeleccionCambio,
@@ -27,13 +28,14 @@ router = APIRouter(prefix="/carrito", tags=["carrito"])
 @router.get("", response_model=Carrito)
 def obtener_carrito(usuario: Cliente, db: DbSession) -> Carrito:
     """El carrito del cliente con el precio y la disponibilidad de hoy (HU-23, RF-30)."""
-    raise NoImplementado()
+    return service.obtener_carrito(db, usuario.id)
 
 
 @router.delete("", status_code=status.HTTP_204_NO_CONTENT)
 def vaciar_carrito(usuario: Cliente, db: DbSession) -> None:
     """Quita todas las selecciones del carrito (HU-23)."""
-    raise NoImplementado()
+    service.vaciar_carrito(db, usuario.id)
+    db.commit()
 
 
 @router.post(
@@ -44,7 +46,9 @@ def vaciar_carrito(usuario: Cliente, db: DbSession) -> None:
 )
 def agregar_seleccion(datos: SeleccionEntrada, usuario: Cliente, db: DbSession) -> SeleccionCarrito:
     """Agrega un trayecto único o completo; valida cupo y límite de 5 (HU-22, RF-32)."""
-    raise NoImplementado()
+    seleccion = service.agregar_seleccion(db, usuario.id, datos)
+    db.commit()
+    return seleccion
 
 
 @router.patch(
@@ -56,7 +60,9 @@ def modificar_seleccion(
     seleccion_id: int, datos: SeleccionCambio, usuario: Cliente, db: DbSession
 ) -> SeleccionCarrito:
     """Cambia la clase o la cantidad de viajeros y vuelve a validar (HU-23)."""
-    raise NoImplementado()
+    seleccion = service.modificar_seleccion(db, usuario.id, seleccion_id, datos)
+    db.commit()
+    return seleccion
 
 
 @router.delete(
@@ -66,4 +72,5 @@ def modificar_seleccion(
 )
 def quitar_seleccion(seleccion_id: int, usuario: Cliente, db: DbSession) -> None:
     """Quita una selección del carrito (HU-23)."""
-    raise NoImplementado()
+    service.quitar_seleccion(db, usuario.id, seleccion_id)
+    db.commit()
