@@ -110,6 +110,35 @@ def test_ocupacion_cuenta_vendidas_reservadas_y_reservas_activas(
     assert ocupacion[vuelo_sin_ventas.id] == service.OcupacionVuelo()
 
 
+def test_ocupacion_cuenta_las_compras_pendientes_como_reservas_activas(
+    db: Session, crear_usuario: Callable[..., Any]
+) -> None:
+    """HU-25 · HU-15 · HU-16: una compra pendiente ocupa sus sillas y cuenta como
+
+    `reservas_activas`, igual que una reserva vigente, porque impide editar o cancelar el vuelo.
+    """
+    cliente = crear_usuario(
+        Rol.CLIENTE, nombre_usuario="cliente_ocu_compra", email="ocucompra@example.com"
+    )
+    vuelo = crear_vuelo(db, salida=SALIDA)
+
+    crear_reserva(db, cliente.id, vuelo)
+    crear_compra(
+        db,
+        cliente.id,
+        vuelo,
+        estado="pendiente",
+        bloqueo_hasta=datetime.now(UTC),
+        estado_tiquete="bloqueado",
+    )
+
+    ocupacion = service.ocupacion_de_vuelos(db, [vuelo.id])[vuelo.id]
+
+    assert ocupacion.reservadas_economica == 2
+    assert ocupacion.vendidas_economica == 0
+    assert ocupacion.reservas_activas == 2
+
+
 def test_pasajeros_de_vuelo_solo_incluye_tiquetes_comprados(
     db: Session, crear_usuario: Callable[..., Any]
 ) -> None:

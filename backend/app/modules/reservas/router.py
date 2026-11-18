@@ -73,13 +73,17 @@ compras = APIRouter(prefix="/compras", tags=["reservas"])
 )
 def iniciar_compra(datos: ViajeEntrada, usuario: Cliente, db: DbSession) -> Viaje:
     """Asigna las sillas y las bloquea 15 minutos mientras el cliente paga (HU-25, SUP-15)."""
-    raise NoImplementado()
+    compra = service.crear_compra(db, usuario.id, datos)
+    db.commit()
+    return service.viaje_de(db, compra)
 
 
 @compras.get("/{compra_id}", response_model=Viaje, responses=respuestas_error(404))
 def obtener_compra(compra_id: int, usuario: Cliente, db: DbSession) -> Viaje:
     """Una compra del cliente, pendiente, vencida, cancelada o activa (HU-25)."""
-    raise NoImplementado()
+    compra = service.obtener_compra(db, usuario.id, compra_id)
+    db.commit()
+    return service.viaje_de(db, compra)
 
 
 @compras.post(
@@ -89,7 +93,9 @@ def obtener_compra(compra_id: int, usuario: Cliente, db: DbSession) -> Viaje:
 )
 def confirmar_compra(compra_id: int, usuario: Cliente, db: DbSession) -> Viaje:
     """Cobra con el monedero, emite los tiquetes y envía el código y el comprobante (HU-25)."""
-    raise NoImplementado()
+    compra = service.confirmar_compra(db, usuario.id, compra_id)
+    db.commit()
+    return service.viaje_de(db, compra)
 
 
 @compras.delete(
@@ -99,7 +105,8 @@ def confirmar_compra(compra_id: int, usuario: Cliente, db: DbSession) -> Viaje:
 )
 def soltar_compra(compra_id: int, usuario: Cliente, db: DbSession) -> None:
     """Suelta el bloqueo de una compra pendiente y libera sus sillas (HU-25)."""
-    raise NoImplementado()
+    service.soltar_compra(db, usuario.id, compra_id)
+    db.commit()
 
 
 # ---------- Mis viajes ----------
