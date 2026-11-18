@@ -467,7 +467,7 @@ Consultar (`GET /compras/{compra_id}`): cualquier compra del cliente, en el esta
 
 Confirmar (`POST /compras/{compra_id}/confirmar`, sin cuerpo), en una sola transacción (RNF-17):
 
-1. Valida en este orden: `404`, `403 correo_no_verificado`, `409 estado_invalido` (ya está `activa`), `409 bloqueo_vencido` (`vencida`, `cancelada` o `vence_en` pasado), `409 saldo_insuficiente`.
+1. Valida en este orden: `404`, `403 correo_no_verificado`, `409 estado_invalido` (ya está `activa`), `409 bloqueo_vencido` (`vencida`, `cancelada` o `vence_en` pasado), `409 vuelo_no_disponible` (algún vuelo ya no está `programado`), `409 saldo_insuficiente`. Antes de validar espera a que termine una cancelación o edición en curso de sus vuelos (HU-16, RNF-17): si el vuelo se canceló, la compra ya quedó `cancelada` y responde `bloqueo_vencido`.
 2. Cobra `total_pendiente` con `monedero.service.debitar(..., referencia=codigo)`. Con saldo insuficiente no cobra nada y las sillas siguen bloqueadas hasta que venza el bloqueo, para recargar y volver (S18).
 3. Los tiquetes pasan a `comprado`, la compra a `activa` y `pagada_en` toma la hora.
 4. Encola un correo con el código, el vuelo y su silla a cada viajero, y otro al comprador (correo de su cuenta) con el comprobante en PDF de `reservas.comprobante.generar_comprobante` adjunto como `comprobante-<codigo>.pdf` (RF-39).
@@ -482,8 +482,9 @@ Soltar (`DELETE /compras/{compra_id}`): una compra `pendiente` pasa a `cancelada
 | 403 | `correo_no_verificado` | Al iniciar o confirmar. |
 | 404 | `no_encontrado` | La compra no existe o es de otro cliente. Mensaje: «La compra no existe.» |
 | 409 | `saldo_insuficiente` | Con $ 500.000 de saldo, una compra de $ 800.000. El mensaje dice cuánto falta; el frontend lo calcula también con `total_pendiente − saldo`. |
-| 409 | `bloqueo_vencido` | Pasaron los 15 minutos o la compra se soltó. |
+| 409 | `bloqueo_vencido` | Pasaron los 15 minutos, la compra se soltó o se canceló el vuelo. |
 | 409 | `estado_invalido` | Confirmar o soltar una compra ya pagada. |
+| 409 | `vuelo_no_disponible` | Al confirmar, un vuelo de la compra ya no está `programado` y la compra sigue `pendiente`. No debería ocurrir porque la cancelación anula las compras pendientes, pero protege datos inconsistentes. Sin `campos`. |
 | 409 / 422 | | Al iniciar, los de las reglas comunes. |
 
 #### HU-26 Reservar o comprar un trayecto completo
@@ -563,10 +564,11 @@ Sin `viajero_ids` (o con `null`) se pagan todos los viajeros que siguen reservad
 Reglas:
 
 - Se paga una reserva `vigente`, completa o por viajero, al **precio congelado** de la reserva aunque hoy el vuelo tenga una promoción (RF-38).
-- Valida en este orden: `404`, `403 correo_no_verificado`, `409 reserva_no_vigente`, `422 datos_invalidos` (`campos.viajero_ids`: «Elige viajeros de esta reserva que sigan sin pagar.»), `422 menor_sin_adulto` y `409 saldo_insuficiente`.
+- Como al confirmar una compra, espera a que termine una cancelación o edición en curso de sus vuelos (HU-16, RNF-17).
+- Valida en este orden: `404`, `403 correo_no_verificado`, `409 reserva_no_vigente`, `409 vuelo_no_disponible` (algún vuelo ya no está `programado`), `422 datos_invalidos` (`campos.viajero_ids`: «Elige viajeros de esta reserva que sigan sin pagar.»), `422 menor_sin_adulto` y `409 saldo_insuficiente`.
 - Un menor que se paga necesita un adulto en la compra de esa reserva, ya pagado o pagado en esta misma operación (RF-35): si no, `menor_sin_adulto` con `campos.viajero_ids`: «Paga también a un adulto: un menor no puede quedar solo en la compra.»
 - Al pagar, los mismos efectos de la compra (HU-25) en una sola transacción: débito de lo pagado con el código como referencia, código por correo a los viajeros pagados y comprobante en PDF al comprador con lo pagado en esta operación.
-- **El código no cambia.** La primera vez se crea la compra de la reserva con el mismo código (`reserva_id`); los pagos siguientes agregan sus tiquetes a esa misma compra. Las sillas son las mismas de la reserva. (Ver la nota sobre `transacciones.codigo` en «Funciones entre módulos › `reservas.service`».)
+- **El código no cambia.** La primera vez se crea la compra de la reserva con el mismo código (`reserva_id`); los pagos siguientes agregan sus tiquetes a esa misma compra. Las sillas son las mismas de la reserva. (Ver cómo lo guarda el modelo en «Funciones entre módulos › `reservas.service`».)
 - Los viajeros que no se pagan siguen reservados con el **mismo vencimiento** (SUP-40): pagar 2 de 4 deja 2 tiquetes comprados y 2 reservados. Cuando no queda ninguno reservado, la reserva pasa a `pagada`.
 - Si se vendió la última silla de una clase, llama a `vuelos.service.marcar_promociones_agotadas`.
 - Con saldo insuficiente no cambia nada; el frontend ofrece recargar el valor faltante y volver (HU-30).
@@ -574,7 +576,8 @@ Reglas:
 | HTTP | `codigo` | Cuándo |
 |---|---|---|
 | 404 | `no_encontrado` | La reserva no existe o es de otro cliente. Mensaje: «La reserva no existe.» |
-| 409 | `reserva_no_vigente` | Reserva vencida, cancelada o ya pagada. |
+| 409 | `reserva_no_vigente` | Reserva vencida, cancelada (también por la cancelación del vuelo) o ya pagada. |
+| 409 | `vuelo_no_disponible` | Un vuelo de la reserva ya no está `programado` y la reserva sigue `vigente`. No debería ocurrir porque la cancelación anula las reservas vigentes, pero protege datos inconsistentes. Sin `campos`. |
 | 409 | `saldo_insuficiente` | Ver errores comunes. |
 | 422 | `datos_invalidos` | `campos.viajero_ids`. |
 | 422 | `menor_sin_adulto` | `campos.viajero_ids`. |
@@ -825,7 +828,8 @@ Ya existe desde #138 (modelo, consultas y reglas de los viajeros); #118 completa
 | Función | Comportamiento |
 |---|---|
 | `ocupacion_de_vuelos(db, vuelo_ids) -> dict[int, OcupacionVuelo]` | `vendidas_*`: tiquetes `comprado`. `reservadas_*`: tiquetes `reservado` y `bloqueado` (de reservas vigentes y de compras pendientes), para que vuelos y búsqueda los descuenten de `disponibles`. `reservas_activas`: hoy cuenta solo las reservas `vigente`; para cumplir este contrato también debe contar las compras `pendiente` (sus sillas bloqueadas impiden editar el vuelo, HU-15): lo ajusta #124. Lo vencido, cancelado, reembolsado o reubicado no cuenta. |
-| `anular_reservas_de_vuelo(db, vuelo_id) -> int` | Hoy devuelve 0: #118 lo implementa. Reservas vigentes → `cancelada` y compras pendientes → `cancelada`; sus tiquetes pasan a `cancelado`, libera las sillas y encola el correo a cada cliente. Devuelve cuántas anuló, contando ambas (cuadra con `reservas_activas`). |
+| `bloquear_ventas_de_vuelo(db, vuelo_id) -> None` | Espera a que terminen las ventas en curso del vuelo y frena las nuevas hasta el fin de la transacción (lock de asesoría que comparten reservar, comprar, confirmar y pagar; HU-16, RNF-17). `vuelos.service` lo llama al cancelar y al editar un vuelo, **antes** de bloquear la fila del vuelo; al revés se interbloquearía con una venta en curso. Orden global de locks: vuelos (por id) → fila del vuelo → `transacciones` (por id) → monedero del cliente. |
+| `anular_reservas_de_vuelo(db, vuelo_id) -> int` | Reservas vigentes → `cancelada` y compras pendientes → `cancelada`; sus tiquetes pasan a `cancelado`, libera las sillas y encola el correo a cada cliente. Con las filas ya bloqueadas vuelve a revisar el estado: no anula lo que se pagó mientras tanto. Devuelve cuántas anuló, contando ambas (cuadra con `reservas_activas`). |
 | `pasajeros_de_vuelo(db, vuelo_id) -> list[PasajeroVuelo]` | Viajeros con tiquete `comprado`, ordenados por silla. Una reserva o un bloqueo todavía no es un pasajero. |
 | `tiquetes_activos_futuros_de_cliente(db, usuario_id) -> list[TiqueteActivo]` | Una entrada por transacción y vuelo con tiquetes activos del cliente (reservas vigentes, compras activas y compras pendientes) en vuelos que no han salido. `codigo_reserva` es `str \| None` por el modelo, pero desde #118 y #124 toda reserva y compra tiene código. |
 | `tiquetes_activos_en_vuelo(db, usuario_id, vuelo_id) -> int` | Tiquetes activos del cliente en el vuelo (reservados, comprados y bloqueados; RF-32, SUP-09). Lo vencido o cancelado no cuenta. Lo usa carrito para el límite de 5. |
@@ -892,7 +896,7 @@ def validar_menores(db: Session, vuelo_id: int, viajeros: Sequence[ViajeroParaVa
 
 Lo que el modelo de #138 deja resuelto para #118, #124 y #131, sin cambiar el contrato:
 
-- `transacciones.codigo` es `unique` y admite `null`. Reservas y compras directas guardan su código al crearse. Para que la compra de una reserva conserve su código (HU-27), #131 necesita relajar esa restricción en su migración (por ejemplo, única por `codigo` y `tipo`) o modelar el pago sin crear otra fila; el contrato fija lo que ve el cliente, no la tabla.
+- `transacciones.codigo` admite `null` y es único entre reservas y compras directas, que lo guardan al crearse. Pagar una reserva (HU-27, #131) crea una sola compra con `reserva_id` (único) que repite el código de la reserva: el índice único del código es parcial (`WHERE reserva_id IS NULL`). Los tiquetes pagados pasan a un tramo copiado de esa compra y conservan su silla, su documento y su viajero, que sigue en la reserva.
 - `Viaje.vence_en` sale de `transacciones.vence_en` en una reserva y de `bloqueo_hasta` en una compra pendiente o vencida.
 - El modelo guarda un `Tramo` por vuelo y clase (`orden` 1 o 2); `Viaje.tramos` trae uno por vuelo y cada tiquete de `viajeros[].tiquetes` lleva su clase y su precio.
 
@@ -994,8 +998,8 @@ def saldo_de(db: Session, usuario_id: int) -> int:
 def debitar(db: Session, usuario_id: int, valor: int, *, referencia: str) -> MovimientoMonedero:
     """Registra un movimiento `compra` por -valor con su saldo resultante (RF-39). `valor` > 0.
 
-    Bloquea el saldo del cliente (SELECT … FOR UPDATE) para que dos compras simultáneas no lo
-    dejen negativo. Si no alcanza, lanza SaldoInsuficiente («Tu saldo no alcanza: te faltan
+    Toma un lock de asesoría por cliente, el mismo de las recargas y los reembolsos, para que
+    dos compras simultáneas no lo dejen negativo. Si no alcanza, lanza SaldoInsuficiente («Tu saldo no alcanza: te faltan
     $ 300.000.») sin registrar nada. No hace commit."""
 
 
