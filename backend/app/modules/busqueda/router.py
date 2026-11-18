@@ -1,8 +1,4 @@
-"""Endpoints del módulo búsqueda. Contrato: docs/api/iteracion-2.md (HU-20 y HU-21).
-
-Los endpoints que responden NoImplementado (501) son stubs del contrato: ya validan la sesión
-opcional y los parámetros, y su implementación llega con el issue #125.
-"""
+"""Endpoints del módulo búsqueda. Contrato: docs/api/iteracion-2.md (HU-20 y HU-21)."""
 
 from datetime import date, time
 from typing import Annotated
@@ -11,7 +7,8 @@ from fastapi import APIRouter, Query
 
 from app.core.auth import UsuarioOpcional
 from app.core.db import DbSession
-from app.core.errors import NoImplementado, respuestas_error
+from app.core.errors import respuestas_error
+from app.modules.busqueda import service
 from app.modules.busqueda.schemas import Clase, OrdenBusqueda, PaginaVuelosBusqueda, TipoVuelo
 
 Pagina = Annotated[int, Query(ge=1)]
@@ -51,7 +48,28 @@ def buscar_vuelos(
 
     Público. La primera página de la búsqueda de un cliente se registra (RF-29).
     """
-    raise NoImplementado()
+    return service.buscar_vuelos(
+        db,
+        service.FiltrosBusqueda(
+            codigo=codigo,
+            origen=origen,
+            destino=destino,
+            tipo=tipo,
+            fecha_desde=fecha_desde,
+            fecha_hasta=fecha_hasta,
+            hora_desde=hora_desde,
+            hora_hasta=hora_hasta,
+            duracion_min=duracion_min,
+            duracion_max=duracion_max,
+            precio_min=precio_min,
+            precio_max=precio_max,
+            clase=clase,
+        ),
+        usuario=usuario,
+        orden=orden,
+        pagina=pagina,
+        por_pagina=por_pagina,
+    )
 
 
 @router.get("/regresos", response_model=PaginaVuelosBusqueda, responses=respuestas_error(404))
@@ -75,4 +93,14 @@ def buscar_regresos(
     por_pagina: PorPagina = 20,
 ) -> PaginaVuelosBusqueda:
     """Regresos desde el destino de la ida que salen después de su llegada (HU-21, RF-28)."""
-    raise NoImplementado()
+    return service.buscar_regresos(
+        db,
+        vuelo_ida_id,
+        destino,
+        fecha,
+        usuario=usuario,
+        clase=clase,
+        orden=orden,
+        pagina=pagina,
+        por_pagina=por_pagina,
+    )
