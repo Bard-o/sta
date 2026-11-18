@@ -69,8 +69,11 @@ NOMBRE_TAREA_VENCER = "reservas.vencer_reservas"
 # SUP-15, RNF-18: nombre de la tarea programada que libera los bloqueos de las compras.
 NOMBRE_TAREA_LIBERAR = "reservas.liberar_bloqueos"
 
-# RF-42: las asignaciones de un vuelo se serializan con un lock de asesoría por vuelo.
-# Es la primera clave del par; la segunda es el id del vuelo.
+# RF-42, HU-16: las ventas de un vuelo (reservar, comprar, confirmar, pagar) se serializan entre
+# sí y con su cancelación y su edición con un lock de asesoría por vuelo. Es la primera clave del
+# par; la segunda es el id del vuelo. Orden global de locks, para que nunca haya interbloqueos:
+# 1) los locks de asesoría de los vuelos, en orden de id; 2) la fila del vuelo (cancelar, editar);
+# 3) las filas de `transacciones`, en orden de id; 4) el lock del monedero del cliente.
 _CLAVE_LOCK_VUELOS = 1_240
 
 # RF-39: código alfanumérico de 6 caracteres sin letras ni dígitos que se confunden.
@@ -285,6 +288,17 @@ def ocupacion_de_vuelos(db: Session, vuelo_ids: Sequence[int]) -> dict[int, Ocup
         acumulado["reservas_activas"] = max(acumulado["reservas_activas"], reservas_activas)
 
     return {vuelo_id: OcupacionVuelo(**valores[vuelo_id]) for vuelo_id in set(vuelo_ids)}
+
+
+def bloquear_ventas_de_vuelo(db: Session, vuelo_id: int) -> None:
+    """Espera a que terminen las ventas en curso del vuelo y frena las nuevas (HU-16, RF-18).
+
+    Toma el lock de asesoría que comparten reservar, comprar, confirmar y pagar; se suelta al
+    terminar la transacción. Vuelos lo pide al cancelar o editar, antes de bloquear la fila del
+    vuelo: así lee la ocupación ya confirmada y la venta que esperaba vuelve a leer el vuelo.
+    Tomarlo después de la fila interbloquearía con una venta que espera la llave foránea.
+    """
+    _bloquear_vuelo(db, vuelo_id)
 
 
 def anular_reservas_de_vuelo(db: Session, vuelo_id: int) -> int:
@@ -637,18 +651,23 @@ def pagar_reserva(
 
     Valida en el orden del contrato: reserva del cliente (404), correo verificado (403), reserva
     vigente (409), viajeros que siguen sin pagar (422), menores con un adulto en la compra (422)
-    y saldo (409). Hasta el débito no se escribe nada.
+    y saldo (409). Hasta el débito no se escribe nada. Como al confirmar una compra, toma el
+    lock de ventas de sus vuelos antes que la fila de la reserva (HU-16).
     """
     from app.modules.monedero import service as monedero_service
     from app.modules.vuelos import service as vuelos_service
 
     momento = ahora or datetime.now(UTC)
+    # Orden global de locks (`_CLAVE_LOCK_VUELOS`): los vuelos antes que la fila de la reserva.
+    vuelo_ids = _vuelos_de_transaccion(db, reserva_id)
+    _bloquear_vuelos(db, vuelo_ids)
     reserva = _reserva_del_cliente(db, usuario_id, reserva_id)
     _exigir_correo_verificado(db, usuario_id)
 
     # Estado efectivo: una reserva con el plazo pasado ya venció aunque el planificador no corra.
     if reserva.estado != "vigente" or reserva.vence_en is None or reserva.vence_en <= momento:
         raise ReservaNoVigente()
+    _exigir_vuelos_programados(db, vuelo_ids, momento)
 
     tramos = {
         tramo.id: tramo
@@ -912,12 +931,19 @@ def confirmar_compra(
 
     Todo ocurre en la transacción de quien llama: el débito, los tiquetes, el estado, los
     correos y las promociones agotadas. Si algo falla no queda nada. Los bloqueos vigentes
-    impiden que otra petición tome las sillas, así que aquí no se reasignan.
+    impiden que otra petición tome las sillas, así que aquí no se reasignan. Toma el lock de
+    ventas de sus vuelos antes que la fila de la compra: una cancelación del vuelo en curso
+    termina primero y deja la compra `cancelada` (HU-16).
     """
     from app.modules.monedero import service as monedero_service
     from app.modules.vuelos import service as vuelos_service
 
     momento = ahora or datetime.now(UTC)
+    # Orden global de locks (`_CLAVE_LOCK_VUELOS`): los vuelos van antes que la fila de la
+    # compra. Los tramos nunca cambian de vuelo, así que se leen sin lock; una compra que no
+    # existe no tiene vuelos y responde 404 abajo.
+    vuelo_ids = _vuelos_de_transaccion(db, compra_id)
+    _bloquear_vuelos(db, vuelo_ids)
     compra = _compra_del_cliente(db, usuario_id, compra_id, para_actualizar=True)
     _exigir_correo_verificado(db, usuario_id)
 
@@ -925,6 +951,7 @@ def confirmar_compra(
         raise EstadoInvalido()
     if compra.estado != "pendiente" or _bloqueo_vencido(compra, momento):
         raise BloqueoVencido()
+    _exigir_vuelos_programados(db, vuelo_ids, momento)
 
     total = _total_pendiente(db, compra)
     if total <= 0:
@@ -938,7 +965,7 @@ def confirmar_compra(
     db.flush()
 
     _enviar_correos_de_compra(db, compra, momento)
-    for vuelo_id in _vuelos_de_transaccion(db, compra.id):
+    for vuelo_id in vuelo_ids:
         vuelos_service.marcar_promociones_agotadas(db, vuelo_id, ahora=momento)
     db.flush()
     return compra
@@ -1484,10 +1511,11 @@ def _a_viajero_para_validar(viajero: object) -> ViajeroParaValidar:
 
 
 def _bloquear_vuelo(db: Session, vuelo_id: int) -> None:
-    """Serializa las asignaciones del vuelo con un lock de asesoría (RF-42).
+    """Serializa las ventas del vuelo con un lock de asesoría (RF-42, HU-16).
 
-    No bloquea la fila de `vuelos`, que es de otro módulo: solo reserva y compra compiten
-    entre sí por las sillas del mismo vuelo. El lock se libera al terminar la transacción.
+    No bloquea la fila de `vuelos`, que es de otro módulo: las ventas compiten entre sí por las
+    sillas y con la cancelación y la edición del vuelo, que toman este mismo lock antes que la
+    fila (`bloquear_ventas_de_vuelo`). El lock se libera al terminar la transacción.
     """
     db.execute(
         text("SELECT pg_advisory_xact_lock(:clave, :vuelo_id)"),
@@ -1495,13 +1523,41 @@ def _bloquear_vuelo(db: Session, vuelo_id: int) -> None:
     )
 
 
-def _bloquear_y_validar_tramos(db: Session, datos: ViajeEntrada, momento: datetime) -> list:
-    """Bloquea los vuelos en orden de id y valida que se vendan (HU-24)."""
+def _bloquear_vuelos(db: Session, vuelo_ids: Collection[int]) -> None:
+    """Locks de asesoría de varios vuelos, en orden de id (ver `_CLAVE_LOCK_VUELOS`).
+
+    El orden fijo evita que dos ventas con los mismos dos vuelos se esperen la una a la otra.
+    """
+    for vuelo_id in sorted(set(vuelo_ids)):
+        _bloquear_vuelo(db, vuelo_id)
+
+
+def _exigir_vuelos_programados(db: Session, vuelo_ids: Sequence[int], momento: datetime) -> None:
+    """HU-16: no se cobra una venta abierta de un vuelo que ya no está programado.
+
+    Se llama con los locks de los vuelos tomados. La cancelación anula lo pendiente bajo el
+    mismo lock, así que solo atrapa datos que quedaron inconsistentes antes de este cambio.
+    """
     from app.modules.vuelos import service as vuelos_service
 
-    # Los locks van en orden de id para que dos reservas con dos vuelos no se bloqueen entre sí.
-    for vuelo_id in sorted({tramo.vuelo_id for tramo in datos.tramos}):
-        _bloquear_vuelo(db, vuelo_id)
+    for vuelo_id in vuelo_ids:
+        try:
+            detalle = vuelos_service.obtener_vuelo_detalle(db, vuelo_id, ahora=momento)
+        except NoEncontrado:
+            raise VueloNoDisponible() from None
+        if detalle.vuelo.estado != "programado":
+            raise VueloNoDisponible()
+
+
+def _bloquear_y_validar_tramos(db: Session, datos: ViajeEntrada, momento: datetime) -> list:
+    """Bloquea los vuelos en orden de id y valida que se vendan (HU-24).
+
+    El vuelo se lee después del lock: si una cancelación lo tenía, ya confirmó y aquí se ve
+    `cancelado` (HU-16).
+    """
+    from app.modules.vuelos import service as vuelos_service
+
+    _bloquear_vuelos(db, [tramo.vuelo_id for tramo in datos.tramos])
 
     detalles = []
     for indice, tramo in enumerate(datos.tramos):
