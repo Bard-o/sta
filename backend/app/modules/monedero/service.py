@@ -13,7 +13,7 @@ from datetime import UTC, date, datetime, time, timedelta
 from typing import Literal
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.core.errors import Conflicto, DatosInvalidos, NoEncontrado
@@ -22,6 +22,11 @@ from app.modules.monedero.models import Franquicia, Movimiento, Tarjeta
 
 # La tarjeta sirve hasta el último día de su mes de vencimiento, en hora de Colombia.
 _ZONA_NEGOCIO = ZoneInfo("America/Bogota")
+
+# RNF-17, RF-48: los débitos y créditos de un cliente se serializan con un lock de asesoría
+# por cliente. Es la primera clave del par; la segunda es el id del cliente. Debe ser distinta
+# de la de `reservas` (_CLAVE_LOCK_VUELOS = 1_240): comparten espacio de claves en PostgreSQL.
+_CLAVE_LOCK_MONEDERO = 4_860
 
 
 class SaldoInsuficiente(Conflicto):
@@ -189,9 +194,9 @@ def saldo_de(db: Session, usuario_id: int) -> int:
 def debitar(db: Session, usuario_id: int, valor: int, *, referencia: str) -> MovimientoMonedero:
     """Registra un movimiento `compra` por -valor con su saldo resultante (RF-39).
 
-    Bloquea los movimientos del cliente (`SELECT … FOR UPDATE`) para que dos compras
-    simultáneas no lo dejen en negativo. Si el saldo no alcanza, lanza `SaldoInsuficiente`
-    sin registrar nada. `valor` debe ser mayor que 0. No hace commit.
+    Toma el lock del monedero del cliente (`_bloquear_movimientos`) antes de leer el saldo,
+    para que dos compras simultáneas no lo dejen en negativo. Si el saldo no alcanza, lanza
+    `SaldoInsuficiente` sin registrar nada. `valor` debe ser mayor que 0. No hace commit.
     """
     if valor <= 0:
         raise ValueError("El valor del débito debe ser mayor que 0.")
@@ -214,8 +219,8 @@ def debitar(db: Session, usuario_id: int, valor: int, *, referencia: str) -> Mov
 def acreditar(db: Session, usuario_id: int, valor: int, *, referencia: str) -> MovimientoMonedero:
     """Registra un movimiento `reembolso` por +valor con su saldo resultante.
 
-    Se usa en la iteración 3 para devolver el dinero de una compra cancelada. Bloquea los
-    movimientos del cliente para que el saldo resultante quede en orden. `valor` debe ser
+    Se usa en la iteración 3 para devolver el dinero de una compra cancelada. Toma el lock
+    del monedero del cliente para que el saldo resultante quede en orden. `valor` debe ser
     mayor que 0. No hace commit.
     """
     if valor <= 0:
@@ -243,8 +248,8 @@ def recargar(
 
     La recarga se aprueba si la tarjeta es del cliente, no está eliminada y no está vencida.
     Registra un movimiento `recarga` con la referencia `**** 1234` y el saldo resultante.
-    Bloquea los movimientos del cliente para que el saldo resultante quede en orden (RNF-17).
-    No hace commit.
+    Toma el lock del monedero del cliente para que el saldo resultante quede en orden, incluso
+    en su primera recarga (RNF-17). No hace commit.
     """
     momento = ahora or datetime.now(UTC)
     tarjeta = _obtener_tarjeta(db, usuario_id, datos.tarjeta_id)
@@ -367,19 +372,18 @@ def _inicio_del_dia(fecha: date) -> datetime:
 
 
 def _bloquear_movimientos(db: Session, usuario_id: int) -> None:
-    """Bloquea las filas que respaldan el saldo del cliente hasta el fin de la transacción.
+    """Serializa los débitos y créditos del cliente con un lock de asesoría (RNF-17, RF-48).
 
-    El saldo no es una fila: es la suma de los movimientos. Bloquearlos, en orden de id para
-    no generar interbloqueos, serializa los débitos y los créditos del mismo cliente. Un
-    cliente sin movimientos tiene saldo 0, así que cualquier débito falla y no hay riesgo de
-    dejarlo en negativo.
+    El saldo no es una fila: es la suma de los movimientos. Bloquear los movimientos
+    existentes no sirve cuando el cliente aún no tiene ninguno: dos recargas simultáneas leen
+    saldo 0 y registran el mismo saldo resultante. El lock de asesoría no depende de que
+    existan filas, así que cubre también la primera recarga. Se libera al terminar la
+    transacción. Toda función que escriba en `movimientos` lo toma antes de leer `saldo_de`.
     """
     db.execute(
-        select(Movimiento.id)
-        .where(Movimiento.cliente_id == usuario_id)
-        .order_by(Movimiento.id)
-        .with_for_update()
-    ).all()
+        text("SELECT pg_advisory_xact_lock(:clave, :cliente_id)"),
+        {"clave": _CLAVE_LOCK_MONEDERO, "cliente_id": usuario_id},
+    )
 
 
 def _registrar_movimiento(
