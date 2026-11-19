@@ -1,11 +1,13 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, useSearchParams } from "react-router";
 import { ApiError } from "@/api/client";
-import { inicioDe } from "@/auth/roles";
+import { esRutaInterna, inicioDe } from "@/auth/roles";
 import { usePerfil } from "@/auth/perfil";
 import { useSesion } from "@/auth/sesion";
 import {
   RUTA_VERIFICACION,
+  rutaVerificacion,
+  tomarRegreso,
   useReenviarVerificacion,
   useVerificarCorreo,
 } from "@/auth/verificacion";
@@ -18,11 +20,21 @@ const ENLACE_VENCIDO =
   "Este enlace venció o ya fue usado. Pide uno nuevo para verificar tu correo.";
 
 /** S02 · Verificación de correo (HU-02). Con `?token=` confirma el enlace del correo; sin él,
- *  muestra el estado de la cuenta y permite reenviar el enlace. */
+ *  muestra el estado de la cuenta y permite reenviar el enlace. Con `?volver=<ruta interna>` (la
+ *  compra o la reserva que falló por el correo sin verificar) avisa y ofrece volver a ella. */
 export function VerificarCorreoPage() {
   const [params] = useSearchParams();
   const token = params.get("token");
-  return token ? <ConfirmarEnlace token={token} /> : <EstadoDeLaCuenta />;
+  const crudo = params.get("volver");
+  const volver = esRutaInterna(crudo) ? crudo : null;
+  return token ? <ConfirmarEnlace token={token} /> : <EstadoDeLaCuenta volver={volver} />;
+}
+
+/** Cómo se nombra el destino de `volver` (HU-02: «luego vuelves a tu compra»). */
+function lugarDe(ruta: string) {
+  if (ruta.startsWith("/compra/")) return "tu compra";
+  if (ruta.startsWith("/mis-viajes")) return "Mis viajes";
+  return "donde estabas";
 }
 
 function Encabezado({ titulo, subtitulo }: { titulo: string; subtitulo: string }) {
@@ -62,6 +74,8 @@ function ConfirmarEnlace({ token }: { token: string }) {
   const { data: usuario } = useSesion();
   const verificar = useVerificarCorreo();
   const reenvio = useReenviarVerificacion();
+  // HU-02: la compra que quedó pendiente al pedir la verificación, si esta pestaña la recuerda.
+  const [regreso, setRegreso] = useState<string | null>(null);
 
   // El enlace es de un solo uso: la guarda evita que el doble montaje de React en desarrollo
   // gaste el token con una primera petición y falle la segunda.
@@ -69,7 +83,7 @@ function ConfirmarEnlace({ token }: { token: string }) {
   useEffect(() => {
     if (enviado.current) return;
     enviado.current = true;
-    verificar.mutate(token);
+    verificar.mutate(token, { onSuccess: () => setRegreso(tomarRegreso()) });
   }, [token, verificar]);
 
   if (verificar.isSuccess) {
@@ -85,11 +99,15 @@ function ConfirmarEnlace({ token }: { token: string }) {
             <span className="text-ink">Ya puedes reservar, comprar y suscribirte a noticias.</span>
           </p>
           {usuario ? (
-            <Button variant="primary" href={inicioDe(usuario)}>
-              Ir a mi inicio
+            <Button variant="primary" href={regreso ?? inicioDe(usuario)}>
+              {regreso ? `Volver a ${lugarDe(regreso)}` : "Ir a mi inicio"}
             </Button>
           ) : (
-            <Button variant="primary" href="/login">
+            // Sin sesión el destino viaja en `next`: el login lo valida y lleva a la compra.
+            <Button
+              variant="primary"
+              href={regreso ? `/login?next=${encodeURIComponent(regreso)}` : "/login"}
+            >
               Iniciar sesión
             </Button>
           )}
@@ -151,7 +169,7 @@ function ConfirmarEnlace({ token }: { token: string }) {
   );
 }
 
-function EstadoDeLaCuenta() {
+function EstadoDeLaCuenta({ volver }: { volver: string | null }) {
   const { data: usuario, isPending } = useSesion();
   const aplica = usuario?.rol === "cliente" || usuario?.rol === "admin";
   const perfil = usePerfil(aplica);
@@ -159,7 +177,9 @@ function EstadoDeLaCuenta() {
 
   if (isPending) return null;
   if (!usuario) {
-    return <Navigate to={`/login?next=${encodeURIComponent(RUTA_VERIFICACION)}`} replace />;
+    // Tras iniciar sesión vuelve a la verificación, con `?volver=` si lo traía.
+    const despues = volver ? rutaVerificacion(volver) : RUTA_VERIFICACION;
+    return <Navigate to={`/login?next=${encodeURIComponent(despues)}`} replace />;
   }
   if (!aplica) return <Navigate to={inicioDe(usuario)} replace />;
   if (perfil.isPending) return null;
@@ -193,8 +213,8 @@ function EstadoDeLaCuenta() {
             <strong>{email}</strong> está confirmado. Ya puedes reservar, comprar y suscribirte a
             noticias.
           </p>
-          <Button variant="primary" href={inicioDe(usuario)}>
-            Ir a mi inicio
+          <Button variant="primary" href={volver ?? inicioDe(usuario)}>
+            {volver ? `Volver a ${lugarDe(volver)}` : "Ir a mi inicio"}
           </Button>
         </Glass>
       </div>
@@ -204,6 +224,19 @@ function EstadoDeLaCuenta() {
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
       {encabezado}
+      {volver && (
+        <Notice tone="info">
+          <div className="flex flex-col items-start gap-1">
+            <span>
+              Verifica tu correo para reservar o comprar. Abre el enlace que te enviamos y luego
+              vuelve a {lugarDe(volver)}.
+            </span>
+            <Link className="sta-link" to={volver}>
+              Volver a {lugarDe(volver)}
+            </Link>
+          </div>
+        </Notice>
+      )}
       <Glass as="div" title="Te enviamos un enlace">
         <p className="mb-4">
           Lo enviamos a <strong>{destino}</strong>. Vence en 24 horas y solo funciona una vez.

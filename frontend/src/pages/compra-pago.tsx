@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import { ApiError } from "@/api/client";
 import { useQuitarSeleccion } from "@/auth/carrito";
+import { esCorreoNoVerificado, useIrAVerificacion } from "@/auth/verificacion";
 import { Button } from "@/components/ui/button";
 import { Glass } from "@/components/ui/glass";
 import { Notice } from "@/components/ui/notice";
@@ -108,6 +109,7 @@ function CompraPagada({ compra }: { compra: Compra }) {
 
 function PagoPendiente({ compra, id }: { compra: Compra; id: number }) {
   const navigate = useNavigate();
+  const irAVerificacion = useIrAVerificacion();
   const ubicacion = useLocation();
   const [params] = useSearchParams();
   const seleccion = Number(params.get("seleccion"));
@@ -126,11 +128,10 @@ function PagoPendiente({ compra, id }: { compra: Compra; id: number }) {
   if (vencidaEnServidor || restantes === 0) return <SillasLiberadas />;
 
   const errorDePago = confirmar.error;
-  const sinVerificar =
-    errorDePago instanceof ApiError && errorDePago.codigo === "correo_no_verificado";
+  // Sin el correo verificado se va a la verificación (HU-02): no se muestra el mensaje genérico.
   const mensajeDeError =
     errorDePago &&
-    !sinVerificar &&
+    !esCorreoNoVerificado(errorDePago) &&
     !(errorDePago instanceof ApiError && errorDePago.codigo === "bloqueo_vencido")
       ? errorDePago.message
       : null;
@@ -142,7 +143,8 @@ function PagoPendiente({ compra, id }: { compra: Compra; id: number }) {
         if (Number.isInteger(seleccion) && seleccion > 0) quitar.mutate(seleccion);
       },
       onError: (error) => {
-        if (error instanceof ApiError && error.codigo === "bloqueo_vencido") {
+        if (esCorreoNoVerificado(error)) irAVerificacion(volver);
+        else if (error instanceof ApiError && error.codigo === "bloqueo_vencido") {
           setVencidaEnServidor(true);
         }
       },
@@ -189,7 +191,6 @@ function PagoPendiente({ compra, id }: { compra: Compra; id: number }) {
           saldo={saldo.data?.saldo}
           total={compra.total_pendiente}
           pagando={confirmar.isPending}
-          sinVerificar={sinVerificar}
           error={mensajeDeError}
           onPagar={pagar}
         />

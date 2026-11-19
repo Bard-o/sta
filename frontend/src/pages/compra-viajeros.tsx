@@ -1,12 +1,12 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useState } from "react";
 import { useForm, useWatch, type FieldPath } from "react-hook-form";
-import { Link, useNavigate, useSearchParams } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { ApiError } from "@/api/client";
 import { useCarrito, useQuitarSeleccion, type SeleccionCarrito } from "@/auth/carrito";
 import { usePerfil } from "@/auth/perfil";
-import { RUTA_VERIFICACION } from "@/auth/verificacion";
+import { esCorreoNoVerificado, useIrAVerificacion } from "@/auth/verificacion";
 import { useIniciarCompra, useReservar, type ViajeEntrada } from "@/auth/viajes";
 import { Button } from "@/components/ui/button";
 import { Form } from "@/components/ui/form";
@@ -35,7 +35,8 @@ const fechaLocalIso = (iso: string, zona: string) =>
 
 /** S17 Datos de viajeros y elección entre reservar o comprar (HU-24, HU-25, HU-26). La selección
  *  llega del carrito (`?seleccion=<id>`). Reservar crea la reserva y vuelve a Mis viajes; comprar
- *  inicia la compra (bloquea las sillas) y sigue al pago (S18, #134). */
+ *  inicia la compra (bloquea las sillas) y sigue al pago (S18, #134). Sin el correo verificado lleva a
+ *  la verificación (HU-02). */
 export function CompraViajerosPage() {
   const [params] = useSearchParams();
   const seleccionId = Number(params.get("seleccion"));
@@ -79,12 +80,12 @@ export function CompraViajerosPage() {
 
 function FormularioViajeros({ seleccion }: { seleccion: SeleccionCarrito }) {
   const navigate = useNavigate();
+  const irAVerificacion = useIrAVerificacion();
   const reservar = useReservar();
   const comprar = useIniciarCompra();
   const quitar = useQuitarSeleccion();
   const { data: perfil } = usePerfil();
   const [modo, setModo] = useState<Modo>("reservar");
-  const [sinVerificar, setSinVerificar] = useState(false);
   const [errorGeneral, setErrorGeneral] = useState<string | null>(null);
 
   const tramos = seleccion.tramos;
@@ -126,25 +127,27 @@ function FormularioViajeros({ seleccion }: { seleccion: SeleccionCarrito }) {
   const codigos = tramos.map((t) => t.vuelo.codigo).join(" y ");
 
   function aplicarError(error: unknown) {
-    setSinVerificar(false);
     setErrorGeneral(null);
+    // HU-02: sin el correo verificado va a la verificación; la selección sigue en el carrito.
+    if (esCorreoNoVerificado(error)) {
+      irAVerificacion(`/compra/viajeros?seleccion=${seleccion.id}`);
+      return;
+    }
     if (!(error instanceof ApiError)) {
       setErrorGeneral("No pudimos completar la solicitud. Intenta de nuevo.");
       return;
     }
-    if (error.codigo === "correo_no_verificado") setSinVerificar(true);
     for (const [campo, mensaje] of Object.entries(error.campos)) {
       if (campo.startsWith("viajeros.")) {
         form.setError(campo as FieldPath<Entrada>, { message: mensaje });
       }
     }
     // Un error con campo del viajero se pinta junto al campo y, además, el resumen arriba;
-    // los demás (cupo, límite, vuelo cerrado, correo sin verificar) solo tienen el aviso general.
+    // los demás (cupo, límite, vuelo cerrado) solo tienen el aviso general.
     setErrorGeneral(error.message);
   }
 
   const enviar = form.handleSubmit((datos) => {
-    setSinVerificar(false);
     setErrorGeneral(null);
     const cuerpo: ViajeEntrada = {
       tramos: tramos.map((t) => ({ vuelo_id: t.vuelo.id })),
@@ -242,17 +245,7 @@ function FormularioViajeros({ seleccion }: { seleccion: SeleccionCarrito }) {
                 fechas de nacimiento.
               </Notice>
             )}
-            {sinVerificar && (
-              <Notice tone="danger">
-                <div className="flex flex-col items-start gap-1">
-                  <span>Verifica tu correo para reservar o comprar.</span>
-                  <Link className="sta-link" to={RUTA_VERIFICACION}>
-                    Reenviar la verificación
-                  </Link>
-                </div>
-              </Notice>
-            )}
-            {errorGeneral && !sinVerificar && <Notice tone="danger">{errorGeneral}</Notice>}
+            {errorGeneral && <Notice tone="danger">{errorGeneral}</Notice>}
 
             <Glass variant="inset" aria-label="Total">
               <p className="overline sta-muted">TOTAL</p>

@@ -1,6 +1,7 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { Schemas } from "@/api/client";
+import { recordarRegreso, tomarRegreso } from "@/auth/verificacion";
 import { VerificarCorreoPage } from "@/pages/verificar-correo";
 import { CLIENTE, ROOT, responderApi, SIN_SESION, sesionDe } from "@/test/api";
 import { renderRutas } from "@/test/render";
@@ -11,6 +12,8 @@ const rutas = [
   { path: "/perfil", element: <p>Perfil</p> },
   { path: "/cliente", element: <p>Inicio del cliente</p> },
   { path: "/root", element: <p>Inicio del root</p> },
+  { path: "/compra/viajeros", element: <p>Datos de los viajeros</p> },
+  { path: "/mis-viajes", element: <p>Mis viajes</p> },
 ];
 
 const SIN_VERIFICAR = { ...CLIENTE, email_verificado: false };
@@ -226,5 +229,178 @@ describe("S02 · Estado de la cuenta y reenvío (HU-02)", () => {
     renderRutas(rutas, "/verificar-correo");
 
     expect(await screen.findByText("Inicio del root")).toBeVisible();
+  });
+});
+
+const DESTINO = "/compra/viajeros?seleccion=71";
+const conVolver = (destino: string) => `/verificar-correo?volver=${encodeURIComponent(destino)}`;
+
+// HU-02: lo que no es una ruta interna. El tabulador y el salto de línea los quita el navegador al
+// resolver la URL y `\` lo lee como `/`, así que `/\t/malicioso.example` saldría de la aplicación.
+const EXTERNOS = [
+  "https://malicioso.example",
+  "//malicioso.example",
+  "/\\malicioso.example",
+  "/\t/malicioso.example",
+  "/\n/malicioso.example",
+];
+
+describe("S02 · Volver a la compra tras verificar (HU-02)", () => {
+  it("HU-02: al llegar desde una compra muestra el aviso y el enlace para volver", async () => {
+    // HU-02: «Verifica tu correo para comprar. Te llevamos a la verificación y luego vuelves».
+    responderApi({ [SESION]: sesionDe(SIN_VERIFICAR), [PERFIL]: { status: 200, body: perfil() } });
+    renderRutas(rutas, conVolver(DESTINO));
+
+    expect(await screen.findByText(/Verifica tu correo para reservar o comprar\./)).toBeVisible();
+    expect(screen.getByRole("link", { name: "Volver a tu compra" })).toHaveAttribute(
+      "href",
+      DESTINO,
+    );
+    expect(screen.getByRole("button", { name: "Reenviar enlace" })).toBeVisible();
+  });
+
+  it("HU-02: pulsar «Volver a tu compra» lleva al destino con la selección intacta", async () => {
+    // HU-02: el cliente regresa a /compra/viajeros?seleccion=<id>, donde está su selección.
+    responderApi({ [SESION]: sesionDe(SIN_VERIFICAR), [PERFIL]: { status: 200, body: perfil() } });
+    const { router } = renderRutas(rutas, conVolver(DESTINO));
+
+    await userEvent.click(await screen.findByRole("link", { name: "Volver a tu compra" }));
+
+    expect(await screen.findByText("Datos de los viajeros")).toBeVisible();
+    expect(router.state.location.pathname).toBe("/compra/viajeros");
+    expect(router.state.location.search).toBe("?seleccion=71");
+  });
+
+  it("HU-02: con el correo ya verificado ofrece volver a la compra como acción principal", async () => {
+    // HU-02: si verificó en otra pestaña, esta pantalla deja de pedir el enlace y ofrece volver.
+    responderApi({
+      [SESION]: sesionDe(CLIENTE),
+      [PERFIL]: { status: 200, body: perfil({ email_verificado: true }) },
+    });
+    renderRutas(rutas, conVolver(DESTINO));
+
+    expect(await screen.findByText("Tu correo ya está verificado")).toBeVisible();
+    expect(screen.getByRole("link", { name: "Volver a tu compra" })).toHaveAttribute(
+      "href",
+      DESTINO,
+    );
+    expect(screen.queryByRole("link", { name: "Ir a mi inicio" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/Verifica tu correo para reservar o comprar/),
+    ).not.toBeInTheDocument();
+  });
+
+  it.each(EXTERNOS)(
+    "HU-02: un destino externo (%j) se ignora y la pantalla se comporta como siempre",
+    async (externo) => {
+      // HU-02: solo se vuelve a rutas internas; un `volver` externo no ofrece ningún enlace.
+      responderApi({
+        [SESION]: sesionDe(SIN_VERIFICAR),
+        [PERFIL]: { status: 200, body: perfil() },
+      });
+      renderRutas(rutas, conVolver(externo));
+
+      expect(await screen.findByRole("button", { name: "Reenviar enlace" })).toBeVisible();
+      expect(screen.queryByRole("link", { name: /Volver a/ })).not.toBeInTheDocument();
+      expect(
+        screen.queryByText(/Verifica tu correo para reservar o comprar/),
+      ).not.toBeInTheDocument();
+    },
+  );
+
+  it.each(EXTERNOS)(
+    "HU-02: verificado y con un destino externo (%j), ofrece ir al inicio",
+    async (externo) => {
+      // HU-02: un `volver` externo tampoco cambia la acción principal del correo ya verificado.
+      responderApi({
+        [SESION]: sesionDe(CLIENTE),
+        [PERFIL]: { status: 200, body: perfil({ email_verificado: true }) },
+      });
+      renderRutas(rutas, conVolver(externo));
+
+      expect(await screen.findByRole("link", { name: "Ir a mi inicio" })).toHaveAttribute(
+        "href",
+        "/cliente",
+      );
+      expect(screen.queryByRole("link", { name: /Volver a/ })).not.toBeInTheDocument();
+    },
+  );
+
+  it("HU-02: si el destino es Mis viajes, el enlace lo nombra", async () => {
+    // HU-02: pagar una reserva sin verificar vuelve a Mis viajes, no a «tu compra».
+    const destino = "/mis-viajes?tipo=reserva&pagar=41";
+    responderApi({ [SESION]: sesionDe(SIN_VERIFICAR), [PERFIL]: { status: 200, body: perfil() } });
+    renderRutas(rutas, conVolver(destino));
+
+    expect(await screen.findByRole("link", { name: "Volver a Mis viajes" })).toHaveAttribute(
+      "href",
+      destino,
+    );
+  });
+
+  it("HU-02: la pestaña del enlace del correo ofrece volver a la compra una sola vez", async () => {
+    // HU-02: el enlace llega sin `?volver=`; el destino sale de la copia que dejó la redirección.
+    recordarRegreso(DESTINO);
+    responderApi({ [SESION]: sesionDe(SIN_VERIFICAR), [VERIFICAR]: { status: 204 } });
+    renderRutas(rutas, "/verificar-correo?token=abc123");
+
+    expect(await screen.findByRole("heading", { name: "Correo verificado" })).toBeVisible();
+    expect(await screen.findByRole("link", { name: "Volver a tu compra" })).toHaveAttribute(
+      "href",
+      DESTINO,
+    );
+    expect(tomarRegreso()).toBeNull();
+  });
+
+  it("HU-02: sin un destino guardado, la pestaña del enlace ofrece ir al inicio", async () => {
+    // HU-02: sin copia (otro dispositivo o navegador) el comportamiento es el de siempre.
+    responderApi({ [SESION]: sesionDe(SIN_VERIFICAR), [VERIFICAR]: { status: 204 } });
+    renderRutas(rutas, "/verificar-correo?token=abc123");
+
+    expect(await screen.findByRole("link", { name: "Ir a mi inicio" })).toHaveAttribute(
+      "href",
+      "/cliente",
+    );
+    expect(screen.queryByRole("link", { name: /Volver a/ })).not.toBeInTheDocument();
+  });
+
+  it("HU-02: un destino guardado externo o vencido no se ofrece", () => {
+    // HU-02: la copia solo guarda rutas internas y deja de valer a las 24 horas, como el enlace.
+    recordarRegreso("https://malicioso.example");
+    expect(tomarRegreso()).toBeNull();
+
+    // Solo la fecha: se guarda el 19/11/2026 y se lee 25 horas después.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(new Date("2026-11-19T15:00:00Z"));
+      recordarRegreso(DESTINO);
+      vi.setSystemTime(new Date("2026-11-20T16:00:00Z"));
+      expect(tomarRegreso()).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("HU-02: sin sesión, la pestaña del enlace lleva a iniciar sesión y de ahí a la compra", async () => {
+    // HU-02: el destino guardado viaja como `next` del login, que lo valida como ruta interna.
+    recordarRegreso(DESTINO);
+    responderApi({ [SESION]: SIN_SESION, [VERIFICAR]: { status: 204 } });
+    renderRutas(rutas, "/verificar-correo?token=abc123");
+
+    await screen.findByRole("heading", { name: "Correo verificado" });
+    expect(screen.getByRole("link", { name: "Iniciar sesión" })).toHaveAttribute(
+      "href",
+      `/login?next=${encodeURIComponent(DESTINO)}`,
+    );
+  });
+
+  it("HU-02: sin sesión, la verificación con `volver` pide iniciar sesión sin perder el destino", async () => {
+    // HU-02: tras el login vuelve a /verificar-correo?volver=<destino> y de ahí a la compra.
+    responderApi({ [SESION]: SIN_SESION });
+    const { router } = renderRutas(rutas, conVolver(DESTINO));
+
+    await screen.findByText("Pantalla de inicio de sesión");
+    expect(router.state.location.pathname).toBe("/login");
+    expect(new URLSearchParams(router.state.location.search).get("next")).toBe(conVolver(DESTINO));
   });
 });

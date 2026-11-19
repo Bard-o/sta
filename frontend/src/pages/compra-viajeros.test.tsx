@@ -2,6 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { Schemas } from "@/api/client";
 import type { SeleccionCarrito } from "@/auth/carrito";
+import { tomarRegreso } from "@/auth/verificacion";
 import { CompraViajerosPage } from "@/pages/compra-viajeros";
 import { CLIENTE, responderApi, sesionDe } from "@/test/api";
 import { renderRutas } from "@/test/render";
@@ -369,7 +370,8 @@ describe("S17 · Datos de los viajeros y reservar o comprar (HU-24, HU-25, HU-26
     expect(viajero(1).getByLabelText("Nombres")).toHaveValue("Daniel");
   });
 
-  it("HU-02: sin el correo verificado avisa y ofrece reenviar la verificación", async () => {
+  it("HU-02: reservar sin el correo verificado lleva a la verificación con el destino", async () => {
+    // HU-02: el 403 correo_no_verificado redirige a la verificación y conserva a dónde volver.
     responderApi(
       base({
         [RESERVAR]: error(
@@ -379,17 +381,47 @@ describe("S17 · Datos de los viajeros y reservar o comprar (HU-24, HU-25, HU-26
         ),
       }),
     );
-    abrir();
+    const { router } = abrir();
     await screen.findByRole("group", { name: "Viajero 1" });
     await llenar(1);
 
     await userEvent.click(screen.getByRole("button", { name: "Reservar 1 tiquete" }));
 
-    expect(await screen.findByText("Verifica tu correo para reservar o comprar.")).toBeVisible();
-    expect(screen.getByRole("link", { name: "Reenviar la verificación" })).toHaveAttribute(
-      "href",
-      "/verificar-correo",
+    expect(await screen.findByText("Verificar correo")).toBeVisible();
+    expect(router.state.location.pathname).toBe("/verificar-correo");
+    expect(new URLSearchParams(router.state.location.search).get("volver")).toBe(
+      "/compra/viajeros?seleccion=71",
     );
+    // La selección sigue en el carrito: no se quita.
+    expect(llamadas("DELETE", "/api/v1/carrito/selecciones/71")).toHaveLength(0);
+    expect(tomarRegreso()).toBe("/compra/viajeros?seleccion=71");
+  });
+
+  it("HU-02: comprar sin el correo verificado lleva a la verificación con el destino", async () => {
+    // HU-02: igual que al reservar, el 403 de iniciar la compra lleva a la verificación.
+    responderApi(
+      base({
+        [COMPRAR]: error(
+          403,
+          "correo_no_verificado",
+          "Verifica tu correo para reservar o comprar.",
+        ),
+      }),
+    );
+    const { router } = abrir();
+    await screen.findByRole("group", { name: "Viajero 1" });
+    await userEvent.click(screen.getByRole("radio", { name: /Comprar ahora/ }));
+    await llenar(1);
+
+    await userEvent.click(screen.getByRole("button", { name: "Comprar 1 tiquete" }));
+
+    expect(await screen.findByText("Verificar correo")).toBeVisible();
+    expect(router.state.location.pathname).toBe("/verificar-correo");
+    expect(new URLSearchParams(router.state.location.search).get("volver")).toBe(
+      "/compra/viajeros?seleccion=71",
+    );
+    expect(llamadas("DELETE", "/api/v1/carrito/selecciones/71")).toHaveLength(0);
+    expect(tomarRegreso()).toBe("/compra/viajeros?seleccion=71");
   });
 
   it("HU-26: en un trayecto completo los viajeros se llenan una vez y la clase se elige en cada tramo", async () => {
