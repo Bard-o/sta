@@ -126,6 +126,16 @@ describe("S14 · Resultados de búsqueda (HU-20)", () => {
     expect(screen.getByRole("heading", { level: 1, name: "2 vuelos" })).toBeVisible();
   });
 
+  it("lleva a la búsqueda de ida y regreso (HU-21)", async () => {
+    responderApi(base({ [BUSCAR]: ok(pagina([VUELO_31])) }));
+    renderRutas(rutas, "/buscar");
+
+    expect(await screen.findByRole("link", { name: "Ida y regreso" })).toHaveAttribute(
+      "href",
+      "/buscar/ida-y-regreso",
+    );
+  });
+
   it("pide primero por precio, de 20 en 20", async () => {
     responderApi(base({ [BUSCAR]: ok(pagina([VUELO_31])) }));
     renderRutas(rutas, "/buscar");

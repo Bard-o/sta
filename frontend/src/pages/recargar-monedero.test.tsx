@@ -102,6 +102,7 @@ describe("Recargar monedero (HU-30)", () => {
   // HU-30: el valor debe ser un entero mayor que 0.
   it.each([
     ["0", "Debe ser mayor que 0."],
+    ["-50000", "Debe ser mayor que 0."],
     ["", "Escribe el valor de la recarga."],
   ])("rechaza el valor «%s» sin llamar a la API", async (valor, mensaje) => {
     servidor();

@@ -130,12 +130,18 @@ export function BuscarPage() {
             <h1 className="sta-h1">{titulo}</h1>
             {resumen && <p className="sta-sub">{resumen}</p>}
           </div>
-          <Field
-            label="Ordenar por"
-            options={ORDENES}
-            value={orden}
-            onChange={(e) => cambiarOrden(e.target.value as Orden)}
-          />
+          <div className="flex flex-wrap items-end gap-3">
+            {/* HU-21: la búsqueda de ida y regreso arranca desde aquí. */}
+            <Button icon="plane" href="/buscar/ida-y-regreso">
+              Ida y regreso
+            </Button>
+            <Field
+              label="Ordenar por"
+              options={ORDENES}
+              value={orden}
+              onChange={(e) => cambiarOrden(e.target.value as Orden)}
+            />
+          </div>
         </div>
 
         {rangoInvalido && <Notice tone="danger">Revisa los rangos marcados en los filtros.</Notice>}

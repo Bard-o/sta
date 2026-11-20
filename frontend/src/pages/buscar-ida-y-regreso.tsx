@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useLocation, useSearchParams } from "react-router";
 import { ApiError } from "@/api/client";
 import { useSesion } from "@/auth/sesion";
+import { Button } from "@/components/ui/button";
 import { Glass } from "@/components/ui/glass";
 import { Notice } from "@/components/ui/notice";
 import { Pager } from "@/components/ui/pager";
@@ -105,12 +106,17 @@ export function BuscarIdaYRegresoPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
-      <div>
-        <h1 className="sta-h1">{titulo}</h1>
-        <p className="sta-sub">
-          {valida ? `${fechasDelTrayecto(p)} ` : ""}El regreso puede llegar a otra ciudad. Solo
-          mostramos regresos que salen después de tu llegada.
-        </p>
+      <div className="sta-between">
+        <div>
+          <h1 className="sta-h1">{titulo}</h1>
+          <p className="sta-sub">
+            {valida ? `${fechasDelTrayecto(p)} ` : ""}El regreso puede llegar a otra ciudad. Solo
+            mostramos regresos que salen después de tu llegada.
+          </p>
+        </div>
+        <Button icon="search" href="/buscar">
+          Solo ida
+        </Button>
       </div>
 
       <FormularioTrayecto
