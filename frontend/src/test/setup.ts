@@ -28,4 +28,7 @@ vi.stubGlobal("fetch", vi.fn());
 afterEach(() => {
   cleanup();
   vi.mocked(fetch).mockReset();
+  // HU-02: la copia del destino de la verificación (`sta-regreso-verificacion`) y el resto de
+  // lo que una pantalla guarde en el navegador no pasan de un test al siguiente.
+  localStorage.clear();
 });

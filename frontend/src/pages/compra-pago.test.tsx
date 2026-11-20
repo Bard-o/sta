@@ -1,5 +1,6 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { tomarRegreso } from "@/auth/verificacion";
 import { CompraPagoPage } from "@/pages/compra-pago";
 import type { Compra } from "@/pages/compra-pago/api";
 import { responderApi } from "@/test/api";
@@ -132,6 +133,7 @@ const rutas = [
   { path: "/compra/pago/:compraId", element: <CompraPagoPage /> },
   { path: "/carrito", element: <p>Tu carrito</p> },
   { path: "/mis-viajes", element: <p>Mis viajes</p> },
+  { path: "/verificar-correo", element: <p>Verificar correo</p> },
 ];
 
 const abrir = (url = "/compra/pago/901?seleccion=71") => renderRutas(rutas, url);
@@ -288,7 +290,8 @@ describe("S18 · Pago con monedero (HU-25, HU-26)", () => {
     expect(screen.getByRole("link", { name: "Recargar $ 300.000" })).toBeVisible();
   });
 
-  it("HU-02: sin el correo verificado avisa y ofrece reenviar la verificación", async () => {
+  it("HU-02: pagar sin el correo verificado lleva a la verificación y vuelve a esta compra", async () => {
+    // HU-02: el 403 al confirmar la compra lleva a la verificación sin soltar la selección.
     responderApi({
       [COMPRA]: { status: 200, body: compra() },
       [MONEDERO]: { status: 200, body: { saldo: 1_000_000 } },
@@ -298,12 +301,17 @@ describe("S18 · Pago con monedero (HU-25, HU-26)", () => {
         "Verifica tu correo para reservar o comprar.",
       ),
     });
-    abrir();
+    const { router } = abrir();
 
     await userEvent.click(await screen.findByRole("button", { name: "Pagar $ 800.000" }));
 
-    expect(await screen.findByText("Verifica tu correo para reservar o comprar.")).toBeVisible();
-    expect(screen.getByRole("link", { name: "Reenviar la verificación" })).toBeVisible();
+    expect(await screen.findByText("Verificar correo")).toBeVisible();
+    expect(router.state.location.pathname).toBe("/verificar-correo");
+    expect(new URLSearchParams(router.state.location.search).get("volver")).toBe(
+      "/compra/pago/901?seleccion=71",
+    );
+    expect(llamadas("DELETE", "/api/v1/carrito/selecciones/71")).toHaveLength(0);
+    expect(tomarRegreso()).toBe("/compra/pago/901?seleccion=71");
   });
 
   it("cancelar pide confirmación, suelta el bloqueo y vuelve al carrito", async () => {

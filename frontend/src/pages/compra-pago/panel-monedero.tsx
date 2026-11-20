@@ -1,8 +1,6 @@
-import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Glass } from "@/components/ui/glass";
 import { Notice } from "@/components/ui/notice";
-import { RUTA_VERIFICACION } from "@/auth/verificacion";
 import { cop } from "@/lib/format";
 
 /** Una fila «etiqueta … valor» del panel del monedero. */
@@ -21,14 +19,12 @@ export function PanelMonedero({
   saldo,
   total,
   pagando,
-  sinVerificar,
   error,
   onPagar,
 }: {
   saldo: number | undefined;
   total: number;
   pagando: boolean;
-  sinVerificar: boolean;
   error: string | null;
   onPagar: () => void;
 }) {
@@ -46,16 +42,6 @@ export function PanelMonedero({
         />
       </dl>
       <div className="mt-4 flex flex-col gap-3">
-        {sinVerificar && (
-          <Notice tone="danger">
-            <div className="flex flex-col items-start gap-1">
-              <span>Verifica tu correo para reservar o comprar.</span>
-              <Link className="sta-link" to={RUTA_VERIFICACION}>
-                Reenviar la verificación
-              </Link>
-            </div>
-          </Notice>
-        )}
         {error && <Notice tone="danger">{error}</Notice>}
         <Button variant="primary" block disabled={pagando || !alcanza} onClick={onPagar}>
           {pagando ? "Pagando…" : `Pagar ${cop(total)}`}

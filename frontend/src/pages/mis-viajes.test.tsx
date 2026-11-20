@@ -1,5 +1,6 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { tomarRegreso } from "@/auth/verificacion";
 import { MisViajesPage } from "@/pages/mis-viajes";
 import type { Viaje } from "@/pages/mis-viajes/api";
 import { responderApi } from "@/test/api";
@@ -159,6 +160,7 @@ const PAGAR = "POST /api/v1/reservas/41/pagar";
 const rutas = [
   { path: "/mis-viajes", element: <MisViajesPage /> },
   { path: "/buscar", element: <p>Buscador de vuelos</p> },
+  { path: "/verificar-correo", element: <p>Verificar correo</p> },
 ];
 
 const abrir = (url = "/mis-viajes?tipo=reserva") => renderRutas(rutas, url);
@@ -406,18 +408,23 @@ describe("S19 · Mis viajes (HU-27)", () => {
     ).toBeVisible();
   });
 
-  it("HU-02: sin el correo verificado avisa y ofrece reenviar la verificación", async () => {
+  it("HU-02: pagar una reserva sin el correo verificado lleva a la verificación y vuelve a Mis viajes", async () => {
+    // HU-02: el 403 al pagar una reserva lleva a la verificación con el destino de Mis viajes.
     responderApi({
       [MIS_VIAJES]: ok([reserva()]),
       [MONEDERO]: { status: 200, body: { saldo: 1_000_000 } },
       [PAGAR]: error(403, "correo_no_verificado", "Verifica tu correo para reservar o comprar."),
     });
-    abrir();
+    const { router } = abrir();
 
     await userEvent.click(await screen.findByRole("button", { name: /Pagar 3 viajeros/ }));
 
-    expect(await screen.findByText("Verifica tu correo para reservar o comprar.")).toBeVisible();
-    expect(screen.getByRole("link", { name: "Reenviar la verificación" })).toBeVisible();
+    expect(await screen.findByText("Verificar correo")).toBeVisible();
+    expect(router.state.location.pathname).toBe("/verificar-correo");
+    expect(new URLSearchParams(router.state.location.search).get("volver")).toBe(
+      "/mis-viajes?tipo=reserva&pagar=41",
+    );
+    expect(tomarRegreso()).toBe("/mis-viajes?tipo=reserva&pagar=41");
   });
 
   it("filtra por estado y por mes: manda el primer y el último día del mes", async () => {

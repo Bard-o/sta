@@ -57,9 +57,11 @@ export const NAV_ROL: Record<Rol, NavItem[]> = {
   ],
 };
 
-/** Ruta interna segura: empieza por `/` y no por `//` ni `/\` (contrato de la iteración 2). */
+/** Ruta interna segura: empieza por `/`, no por `//` y no lleva `\`, tabulador ni saltos de línea
+ *  (contrato de la iteración 2). El navegador quita `\t`, `\n` y `\r` al resolver una URL y lee `\`
+ *  como `/`, así que `/\t/sitio.example` o `/a\b` terminarían fuera de la aplicación. */
 export function esRutaInterna(ruta: string | null | undefined): ruta is string {
-  return !!ruta && ruta.startsWith("/") && !ruta.startsWith("//") && !ruta.startsWith("/\\");
+  return !!ruta && ruta.startsWith("/") && !ruta.startsWith("//") && !/[\\\t\n\r]/.test(ruta);
 }
 
 /** A dónde ir tras iniciar sesión: `?next=` si es una ruta interna, o el inicio del rol. */

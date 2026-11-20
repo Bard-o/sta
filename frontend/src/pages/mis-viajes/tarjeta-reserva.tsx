@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router";
 import { toast } from "sonner";
 import { ApiError } from "@/api/client";
-import { RUTA_VERIFICACION } from "@/auth/verificacion";
+import { esCorreoNoVerificado, useIrAVerificacion } from "@/auth/verificacion";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { FlightPass } from "@/components/ui/flight-pass";
@@ -34,6 +33,7 @@ export function TarjetaReserva({
   destacada: boolean;
 }) {
   const pagar = usePagarReserva(reserva.id);
+  const irAVerificacion = useIrAVerificacion();
   const ahora = useAhora();
   const [desmarcados, setDesmarcados] = useState<Set<number>>(new Set());
   const ref = useRef<HTMLDivElement>(null);
@@ -55,10 +55,10 @@ export function TarjetaReserva({
   const urlRecarga = `/monedero/recargar?faltante=${faltante}&codigo=${encodeURIComponent(reserva.codigo)}&volver=${encodeURIComponent(volver)}`;
 
   const error = pagar.error;
-  const sinVerificar = error instanceof ApiError && error.codigo === "correo_no_verificado";
   // El error de los viajeros elegidos (`campos.viajero_ids`) trae el texto exacto del contrato.
+  // Sin el correo verificado se va a la verificación (HU-02): no se muestra el mensaje genérico.
   const mensaje =
-    error && !sinVerificar
+    error && !esCorreoNoVerificado(error)
       ? (error instanceof ApiError && error.campos.viajero_ids) || error.message
       : null;
 
@@ -81,6 +81,9 @@ export function TarjetaReserva({
           toast.success(
             `Pagamos ${elegidos.length} ${elegidos.length === 1 ? "viajero" : "viajeros"} de la reserva ${reserva.codigo}. Enviamos el código a los viajeros y el comprobante a tu correo.`,
           );
+        },
+        onError: (e) => {
+          if (esCorreoNoVerificado(e)) irAVerificacion(volver);
         },
       },
     );
@@ -197,16 +200,6 @@ export function TarjetaReserva({
             <Button size="sm" href={urlRecarga}>
               Recargar {cop(faltante)}
             </Button>
-          </div>
-        </Notice>
-      )}
-      {sinVerificar && (
-        <Notice tone="danger">
-          <div className="flex flex-col items-start gap-1">
-            <span>Verifica tu correo para reservar o comprar.</span>
-            <Link className="sta-link" to={RUTA_VERIFICACION}>
-              Reenviar la verificación
-            </Link>
           </div>
         </Notice>
       )}
