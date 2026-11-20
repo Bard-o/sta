@@ -715,3 +715,29 @@ def test_una_promocion_vencida_o_programada_no_cambia_el_precio(db: Session) -> 
     assert detalle.economica.promocion is None
     assert detalle.primera.precio == 750_000
     assert detalle.primera.promocion is None
+
+
+def test_el_precio_con_promocion_de_un_vuelo_caro_no_se_desborda(db: Session) -> None:
+    """HU-20 · $ 30.000.000 × 90 no cabe en un entero de 32 bits: la búsqueda no falla."""
+    vuelo = crear_vuelo(
+        db,
+        salida=datetime(2026, 12, 10, 11, 0, tzinfo=UTC),
+        precio_economica=30_000_000,
+        precio_primera=2_000_000_000,
+    )
+    crear_promocion_bd(
+        db,
+        vuelo,
+        porcentaje=10,
+        clases=["economica", "primera"],
+        inicio=AHORA - timedelta(hours=1),
+        fin=AHORA + timedelta(days=30),
+    )
+
+    pagina = service.buscar_vuelos(
+        db, service.FiltrosBusqueda(precio_min=27_000_000, precio_max=27_000_000), ahora=AHORA
+    )
+
+    assert [item.vuelo.id for item in pagina.items] == [vuelo.id]
+    assert pagina.items[0].economica.precio == 27_000_000
+    assert pagina.items[0].primera.precio == 1_800_000_000

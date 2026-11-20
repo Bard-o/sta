@@ -15,7 +15,7 @@ from math import asin, ceil, cos, radians, sin, sqrt
 from typing import Literal
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import Date, Time, and_, case, func, literal, or_, select
+from sqlalchemy import BigInteger, Date, Time, and_, case, cast, func, literal, or_, select
 from sqlalchemy.orm import Session, aliased
 from sqlalchemy.orm.util import AliasedClass
 
@@ -1719,9 +1719,15 @@ def _promocion_vigente_condicion(
 
 
 def _precio_con_promocion(precio: object, promocion: AliasedClass[Promocion]) -> object:
-    """Precio vigente en SQL; redondea hacia abajo, igual que `precio_con_descuento`."""
+    """Precio vigente en SQL; redondea hacia abajo, igual que `precio_con_descuento`.
+
+    La multiplicación va en `bigint`: en `integer` se desborda desde unos $ 21,7 millones.
+    """
     return case(
-        (promocion.id.is_not(None), precio * (100 - promocion.porcentaje) / 100),
+        (
+            promocion.id.is_not(None),
+            cast(precio, BigInteger) * (100 - promocion.porcentaje) / 100,
+        ),
         else_=precio,
     )
 
