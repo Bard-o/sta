@@ -22,6 +22,7 @@ from app.modules.reservas.tests.fabricas import crear_compra, crear_reserva
 from app.modules.vuelos.tests.fabricas import crear_vuelo
 
 SALIDA = datetime(2027, 4, 15, 11, 0, tzinfo=UTC)
+SALIDA_INTERNACIONAL = datetime(2027, 4, 15, 16, 0, tzinfo=UTC)
 
 
 def test_hu22_la_seleccion_sigue_en_el_carrito_despues_de_cerrar_sesion(
@@ -134,6 +135,66 @@ def test_hu22_un_regreso_que_no_sale_del_destino_de_la_ida_responde_regreso_inva
         "Elige un regreso que salga después de tu llegada."
         in error_de(respuesta)["campos"]["tramos.1.vuelo_id"]
     )
+
+
+def _ida_a_nueva_york(db: Session) -> Any:
+    """Ida Pereira → Nueva York: sale 11:00 hora de Pereira y llega 21:30 UTC (17:30 en NY)."""
+    return crear_vuelo(
+        db,
+        origen="PEI",
+        destino="JFK",
+        tipo="internacional",
+        salida=SALIDA_INTERNACIONAL,
+        duracion_minutos=330,
+    )
+
+
+def test_hu22_un_regreso_a_la_misma_hora_de_la_llegada_responde_regreso_invalido(
+    db: Session, client: TestClient, crear_usuario: Callable[..., Any]
+) -> None:
+    """HU-22 · HU-21 · RF-28: el regreso que sale al aterrizar la ida se rechaza."""
+    cliente = crear_cliente(db, crear_usuario, "cliente_regreso_igual")
+    ida = _ida_a_nueva_york(db)
+    regreso = crear_vuelo(db, origen="JFK", destino="CTG", tipo="internacional", salida=ida.llegada)
+    cliente_http = entrar(client, cliente)
+
+    respuesta = agregar(cliente_http, [tramo(ida.id), tramo(regreso.id)])
+
+    assert respuesta.status_code == 422
+    assert error_de(respuesta)["codigo"] == "regreso_invalido"
+    assert (
+        error_de(respuesta)["mensaje"]
+        == "El regreso debe salir de Nueva York después de la llegada de la ida."
+    )
+    assert (
+        error_de(respuesta)["campos"]["tramos.1.vuelo_id"]
+        == "Elige un regreso que salga después de tu llegada."
+    )
+    assert cliente_http.get(RUTA_CARRITO).json()["selecciones"] == []
+
+
+def test_hu22_un_regreso_un_minuto_despues_de_la_llegada_se_agrega(
+    db: Session, client: TestClient, crear_usuario: Callable[..., Any]
+) -> None:
+    """HU-22 · HU-21 · RF-28: un minuto después de la llegada ya es un regreso válido."""
+    cliente = crear_cliente(db, crear_usuario, "cliente_regreso_minuto")
+    ida = _ida_a_nueva_york(db)
+    regreso = crear_vuelo(
+        db,
+        origen="JFK",
+        destino="CTG",
+        tipo="internacional",
+        salida=ida.llegada + timedelta(minutes=1),
+    )
+    cliente_http = entrar(client, cliente)
+
+    respuesta = agregar(cliente_http, [tramo(ida.id), tramo(regreso.id)])
+
+    assert respuesta.status_code == 201, respuesta.text
+    seleccion = respuesta.json()
+    assert [item["vuelo"]["id"] for item in seleccion["tramos"]] == [ida.id, regreso.id]
+    assert seleccion["avisos"] == []
+    assert seleccion["confirmable"] is True
 
 
 def test_hu22_un_vuelo_cancelado_no_se_agrega(
