@@ -201,10 +201,13 @@ def _validar_tramos(
 
 
 def _validar_regreso(detalles: Sequence[vuelos_service.VueloDetalleGestion]) -> None:
-    """RF-28: el regreso sale del destino de la ida, después de su llegada y es otro vuelo.
+    """RF-28: el regreso es otro vuelo y sale del destino de la ida después de su llegada.
 
-    La regla vive hoy en `reservas.service` como función privada; el carrito la aplica con
-    los detalles públicos de `vuelos.service` y lanza la misma excepción del contrato.
+    «Después» es estricto (`<=` rechaza), como en la búsqueda de regresos (HU-21) y en
+    `reservas.service`: un regreso que sale en el mismo instante en que aterriza la ida no se
+    puede abordar y responde `regreso_invalido`. La regla vive en `reservas.service` como
+    función privada; el carrito la aplica con los detalles públicos de `vuelos.service` y lanza
+    la misma excepción del contrato.
     """
     if len(detalles) != 2:
         return
@@ -212,7 +215,7 @@ def _validar_regreso(detalles: Sequence[vuelos_service.VueloDetalleGestion]) -> 
     if (
         regreso.vuelo.id == ida.vuelo.id
         or regreso.vuelo.origen_codigo != ida.vuelo.destino_codigo
-        or regreso.vuelo.salida < ida.vuelo.llegada
+        or regreso.vuelo.salida <= ida.vuelo.llegada
     ):
         raise reservas_service.RegresoInvalido(
             f"El regreso debe salir de {ida.destino.nombre} después de la llegada de la ida.",

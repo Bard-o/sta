@@ -48,7 +48,7 @@ Además de los de [`README.md`](README.md) y de la [iteración 1](iteracion-1.md
 | 404 | `no_encontrado` | La selección, reserva, compra o tarjeta no existe o es de otro cliente. |
 | 409 | `vuelo_no_disponible` | Un vuelo del cuerpo no existe, está cancelado o ya se realizó. Mensaje: «Uno de los vuelos ya no está a la venta.»; `campos["tramos.N.vuelo_id"]`: «El vuelo no existe o ya no está programado.» |
 | 409 | `fuera_de_plazo` | El vuelo está programado pero ya pasó su límite de venta (SUP-07). Mensaje: «La venta de STA-00076 ya cerró: cierra 1 hora antes de la salida (3 horas si es internacional).»; `campos["tramos.N.vuelo_id"]`: «Ya no se puede reservar ni comprar.» |
-| 422 | `regreso_invalido` | El regreso no sale del destino de la ida, sale antes de su llegada o es el mismo vuelo (RF-28). Mensaje: «El regreso debe salir de Nueva York después de la llegada de la ida.»; `campos["tramos.1.vuelo_id"]`: «Elige un regreso que salga después de tu llegada.» |
+| 422 | `regreso_invalido` | El regreso no sale del destino de la ida, sale antes de su llegada o a la misma hora, o es el mismo vuelo (RF-28). Mensaje: «El regreso debe salir de Nueva York después de la llegada de la ida.»; `campos["tramos.1.vuelo_id"]`: «Elige un regreso que salga después de tu llegada.» |
 | 409 | `clase_agotada` | No quedan sillas suficientes en la clase de algún tramo (RF-33, SUP-12). Sin `campos`. Mensaje: «No quedan sillas suficientes en esta clase.» (`reservas.sillas.SillasInsuficientes`) |
 | 409 | `limite_tiquetes` | El cliente pasaría de 5 tiquetes activos en algún vuelo, sumando reservados, comprados y bloqueados (RF-32, SUP-09). Sin `campos`. Mensaje: «Un cliente puede tener máximo 5 tiquetes activos en el mismo vuelo.» (`reservas.service.LimiteDeTiquetes`) |
 | 409 | `viajero_duplicado` | Un documento ya tiene un tiquete activo en el vuelo, de este o de otro cliente, o está repetido en la solicitud (RF-34, SUP-10). Nunca dice quién tiene el otro tiquete. Mensaje: «Uno de los documentos ya tiene un tiquete activo en este vuelo.»; `campos["viajeros.N.numero_documento"]`: «Este documento ya tiene un tiquete activo en este vuelo.», también para un documento repetido en la lista (`reservas.service.ViajeroDuplicado`). |
@@ -160,7 +160,7 @@ Paso 2, el regreso: `GET /api/v1/busqueda/regresos?vuelo_ida_id=101&destino=CTG&
 
 Reglas:
 
-- Devuelve los vuelos a la venta que salen del destino de la ida hacia `destino`, el día `fecha`, y **estrictamente después de la llegada** de la ida (RF-28). Si la ida llega el 10/12 a las 16:30, ningún regreso que salga antes aparece. Los que salen antes no se devuelven; si el frontend quiere dibujarlos deshabilitados como el wireframe S15, lo decide con los datos de la ida.
+- Devuelve los vuelos a la venta que salen del destino de la ida hacia `destino`, el día `fecha`, y **estrictamente después de la llegada** de la ida (RF-28). Si la ida llega el 10/12 a las 16:30, ningún regreso que salga antes o a las 16:30 aparece. Los que salen antes o a esa hora no se devuelven; si el frontend quiere dibujarlos deshabilitados como el wireframe S15, lo decide con los datos de la ida.
 - Sin regresos para esa fecha, la respuesta es una página vacía: el frontend lo informa y deja cambiar la fecha o la ciudad sin perder la ida.
 - El precio del trayecto es la suma de los precios vigentes de ambos vuelos, sin descuento combinado (RF-40): lo suma el frontend y el carrito lo confirma en `subtotal`.
 - Con sesión de cliente, la primera página se registra igual que en HU-20, con `vuelo_ida_id`, `destino` y `fecha` como criterios.
@@ -517,7 +517,7 @@ Soltar (`DELETE /compras/{compra_id}`): una compra `pendiente` pasa a `cancelada
 ```
 
 - Un trayecto completo es **una** reserva o compra con un solo código y dos tiquetes por viajero, uno por tramo, cada uno con su silla (SUP-14).
-- El regreso sale del destino de la ida, después de su llegada, y es otro vuelo; si no, `regreso_invalido` (RF-28). La ciudad de llegada del regreso puede ser distinta del origen de la ida.
+- El regreso sale del destino de la ida, estrictamente después de su llegada (no a la misma hora), y es otro vuelo; si no, `regreso_invalido` (RF-28). La ciudad de llegada del regreso puede ser distinta del origen de la ida.
 - La clase se elige por viajero en cada tramo (`clases`). El total es la suma de los precios vigentes de ambos tramos, sin descuento combinado (RF-40): Pereira → Nueva York en primera ($ 4.100.000) y Nueva York → Cartagena en económica ($ 1.750.000) suman $ 5.850.000 por viajero.
 - Las reglas comunes se validan en cada tramo; si uno falla, no se crea ninguno de los dos.
 - La reserva vence en `min(creada_en + 24 h, límite de venta del tramo más próximo)` y el bloqueo de la compra en `min(creada_en + 15 min, ese mismo límite)`. En la práctica es el de la ida, salvo que el regreso salga muy pronto y sea internacional.
