@@ -7,6 +7,7 @@ import {
   fechaHora,
   fechaRelativa,
   hora,
+  pesos,
 } from "./format";
 
 describe("cop (IU-06)", () => {
@@ -19,6 +20,18 @@ describe("cop (IU-06)", () => {
   it("antepone el signo de los movimientos", () => {
     expect(cop(500000, { sign: true })).toBe("+ $ 500.000");
     expect(cop(-800000, { sign: true })).toBe("− $ 800.000");
+  });
+});
+
+describe("pesos", () => {
+  it("lee lo que escribe la persona o lo que muestra cop", () => {
+    expect(pesos("$ 1.250.000")).toBe(1250000);
+    expect(pesos("50000")).toBe(50000);
+  });
+
+  it("conserva el signo menos para que la validación lo rechace", () => {
+    expect(pesos("-50000")).toBe(-50000);
+    expect(pesos(cop(-800000))).toBe(-800000);
   });
 });
 

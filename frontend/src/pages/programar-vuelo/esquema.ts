@@ -1,5 +1,6 @@
 import type { FieldPath } from "react-hook-form";
 import { z } from "zod";
+import { pesos } from "@/lib/format";
 import { hoy } from "@/lib/persona";
 import type { SerieEntrada, VueloEntrada } from "./api";
 
@@ -25,9 +26,8 @@ export function maximoHasta(): string {
 const precio = (mensaje: string) =>
   z
     .string()
-    .transform((s) => s.replace(/\D/g, ""))
-    .pipe(z.string().min(1, mensaje))
-    .transform(Number)
+    .refine((s) => /\d/.test(s), mensaje)
+    .transform(pesos)
     .pipe(z.number().min(1, "El precio debe ser mayor que 0."));
 
 export const esquema = z

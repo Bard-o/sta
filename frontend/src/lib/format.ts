@@ -9,6 +9,13 @@ export function cop(n: number, opts: { sign?: boolean } = {}): string {
   return n < 0 ? `− ${valor}` : valor;
 }
 
+/** Lo inverso de `cop`: «$ 1.250.000» → 1250000. Con un signo menos («-», «−») es negativo,
+ *  para que la validación lo rechace en vez de tomar «-50000» como $ 50.000. */
+export function pesos(texto: string): number {
+  const monto = Number(texto.replace(/\D/g, ""));
+  return /[-−]/.test(texto) ? -monto : monto;
+}
+
 const dos = (n: number) => String(n).padStart(2, "0");
 
 /** Fecha dd/mm/aaaa en la zona horaria dada (por defecto, la del navegador). */

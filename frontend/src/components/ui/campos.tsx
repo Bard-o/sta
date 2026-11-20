@@ -1,7 +1,7 @@
 import type { ComponentProps, ReactNode } from "react";
 import { useFormContext, type FieldValues, type Path } from "react-hook-form";
 import { FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "./form";
-import { cop } from "@/lib/format";
+import { cop, pesos } from "@/lib/format";
 import { Input } from "./input";
 import { Select } from "./select";
 
@@ -111,7 +111,7 @@ export function CampoDinero<T extends FieldValues>({
               value={String(field.value ?? "")}
               onBlur={() => {
                 field.onBlur();
-                const monto = Number(String(field.value ?? "").replace(/\D/g, ""));
+                const monto = pesos(String(field.value ?? ""));
                 if (monto > 0) field.onChange(cop(monto));
               }}
             />

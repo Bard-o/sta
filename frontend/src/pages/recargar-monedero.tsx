@@ -11,22 +11,17 @@ import { CampoDinero, CampoLista } from "@/components/ui/campos";
 import { Form } from "@/components/ui/form";
 import { Glass } from "@/components/ui/glass";
 import { Notice } from "@/components/ui/notice";
-import { cop } from "@/lib/format";
-import { NOMBRE_FRANQUICIA, NOMBRE_TIPO, soloDigitos } from "@/lib/tarjeta";
+import { cop, pesos } from "@/lib/format";
+import { NOMBRE_FRANQUICIA, NOMBRE_TIPO } from "@/lib/tarjeta";
 
 const MENSAJE_RED = "No pudimos comunicarnos con el servidor. Intenta de nuevo.";
 
 const esquema = z.object({
   valor: z
     .string()
-    .transform(soloDigitos)
-    .pipe(
-      z
-        .string()
-        .min(1, "Escribe el valor de la recarga.")
-        .transform(Number)
-        .pipe(z.number().min(1, "Debe ser mayor que 0.")),
-    ),
+    .refine((s) => /\d/.test(s), "Escribe el valor de la recarga.")
+    .transform(pesos)
+    .pipe(z.number().min(1, "Debe ser mayor que 0.")),
   tarjeta_id: z.string().min(1, "Elige la tarjeta."),
 });
 
@@ -97,7 +92,7 @@ function FormularioRecarga({
   });
 
   const valor = useWatch({ control: form.control, name: "valor" });
-  const monto = Number(soloDigitos(String(valor ?? "")));
+  const monto = pesos(String(valor ?? ""));
 
   const opciones = tarjetas.map((tarjeta) => ({
     value: String(tarjeta.id),
